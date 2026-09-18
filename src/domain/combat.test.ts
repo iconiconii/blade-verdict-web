@@ -5,12 +5,12 @@ import { applyContinuousCut, createCombat, prepareRound, startVerdict, tapTarget
 describe('battle presentation state machine',()=>{
   it('uses Jelly V2 timing and split cadence without changing verdict rules',()=>{
     expect(jellyAttack.telegraphMs).toBe(700);expect(jellyAttack.missDamage).toBe(8);expect(jellyAttack.perfectMeterGain).toBe(34);expect(resolveParry(560,jellyAttack)).toBe('Perfect');expect(applyParry(newBattle(),'Miss',jellyAttack).playerHp).toBe(92);
-    let combat=createCombat(7319,'jelly');combat=tickCombat(combat,700);combat=tickCombat(combat,400);expect(combat.targets).toHaveLength(1);combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(180);
+    let combat=createCombat(7319,'jelly');combat=tickCombat(combat,700);combat=tickCombat(combat,400);expect(combat.targets).toHaveLength(1);combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(300);expect(resolveParry(820,jellyAttack,160)).toBe('Perfect');
   });
   it('uses deterministic target positions and a two-target cadence',()=>{
     expect(deterministicTarget(7319,0,0,1)).toEqual(deterministicTarget(7319,0,0,1));
     let combat=createCombat(7319);combat=tickCombat(combat,700);expect(combat.phase).toBe('telegraph');combat=tickCombat(combat,400);expect(combat.phase).toBe('targetActive');expect(combat.targets).toHaveLength(1);
-    combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(180);
+    combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(300);
   });
   it('resolves one target only once and ignores late duplicate input',()=>{
     let combat=prepareRound(createCombat());combat=tickCombat(combat,400);expect(combat.phase).toBe('targetActive');combat={...combat,elapsed:720};

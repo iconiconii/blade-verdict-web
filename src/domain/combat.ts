@@ -11,7 +11,8 @@ export const createCombat=(seed=7319,bossKind:BossKind='corn'):CombatState=>({ba
 const transition=(s:CombatState,phase:BattlePhase):CombatState=>({...s,phase,elapsed:0});
 export function prepareRound(s:CombatState):CombatState {
   const count=s.bossKind==='jelly'?(s.round>=2&&(s.round+1)%2===1?2:1):(s.round>0&&s.round%3===2?2:1);
-  return {...transition(s,'telegraph'),feedback:null,stroke:null,targets:Array.from({length:count},(_,i)=>({targetIndex:i,position:deterministicTarget(s.seed,s.round,i,count),startDelayMs:i*180,telegraphProgress:0,phase:'early',resolved:false}))};
+  const targetDelay=count>1?300:0;
+  return {...transition(s,'telegraph'),feedback:null,stroke:null,targets:Array.from({length:count},(_,i)=>({targetIndex:i,position:deterministicTarget(s.seed,s.round,i,count),startDelayMs:i*targetDelay,telegraphProgress:0,phase:'early',resolved:false}))};
 }
 function completeRound(s:CombatState,result:ParryResult,index:number):CombatState {
   const combo=result==='Miss'?0:s.combo+1;
@@ -23,7 +24,7 @@ export function tapTarget(s:CombatState,index:number):CombatState {
   if(s.paused||s.phase!=='targetActive')return s;
   const target=s.targets[index];
   if(!target||target.resolved||s.elapsed<target.startDelayMs)return s;
-  const result=resolveParry(s.elapsed-target.startDelayMs,s.attack);
+  const result=resolveParry(s.elapsed-target.startDelayMs,s.attack,s.targets.length>1?160:0);
   const next={...s,targets:s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t)};
   if(result==='Miss')return completeRound(next,'Miss',index);
   if(next.targets.every(t=>t.resolved))return completeRound(next,aggregateParryResults(next.targets.map(t=>t.result!)),index);
@@ -49,7 +50,8 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
     case 'telegraph':return next.elapsed>=durations.telegraph?transition(next,'targetActive'):next;
     case 'targetActive':{
       next.targets=next.targets.map(t=>{if(t.resolved)return t;const p=Math.max(0,Math.min(1,(next.elapsed-t.startDelayMs)/next.attack.telegraphMs));return{...t,telegraphProgress:p,phase:p<.35?'early':p<.7?'nice':p<=.9?'perfect':'late'}});
-      const timedOut=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>next.attack.telegraphMs);
+      const lateGrace=next.targets.length>1?160:0;
+      const timedOut=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>next.attack.telegraphMs+lateGrace);
       return timedOut>=0?completeRound(next,'Miss',timedOut):next;
     }
     case 'impact':return next.elapsed>=durations.impact?transition(next,'stagger'):next;

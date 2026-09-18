@@ -110,7 +110,7 @@ export class BattleScene {
       const target=state.targets[i],group=this.targetGroups[i],path=this.targetPaths[i];
       const show=!!target&&!target.resolved&&(phase==='telegraph'||phase==='targetActive'&&elapsed>=target.startDelayMs);
       group.visible=path.visible=show;if(!show)continue;
-      const center=targetCenter(target.position,w,h),d=targetDiameter(w,h);
+      const center=targetCenter(target.position,w,h),d=Math.max(targetDiameter(w,h),state.targets.length===2?72:0);
       group.position.set(center.x,-center.y,20);group.scale.set(d,d,1);
       const ring=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh;
       ring.scale.setScalar(1.5-target.telegraphProgress*.65);ring.material.color.setHex(colors[target.phase]);core.material.color.copy(ring.material.color);core.scale.setScalar(phase==='telegraph'?.55:1);

@@ -63,7 +63,7 @@ export function Battle(){
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
-        const center=targetCenter(target.position,size.width,size.height),diameter=targetDiameter(size.width,size.height);
+        const center=targetCenter(target.position,size.width,size.height),diameter=Math.max(targetDiameter(size.width,size.height),targets.length===2?72:0);
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&!target.resolved&&!paused;
         return <button key={`${combat.round}-${target.targetIndex}`} className="parry-target" aria-label={`招架核心 ${target.targetIndex+1}`} data-testid={`target-${target.targetIndex}`} data-phase={target.phase} data-resolved={target.resolved} disabled={!active} style={{left:center.x,top:center.y,width:diameter,height:diameter}} onPointerDown={e=>{e.stopPropagation();const rect=e.currentTarget.getBoundingClientRect();if(Math.hypot(e.clientX-rect.left-diameter/2,e.clientY-rect.top-diameter/2)>diameter/2)return;advanceNow();useGame.getState().tap(target.targetIndex)}} onClick={()=>useGame.getState().tap(target.targetIndex)}><span className="target-caption">{target.resolved?'✓':target.phase==='perfect'?'完美窗口':phase==='telegraph'?'即将落点':target.phase==='late'?'太晚了':'等待收环'}</span></button>
       })}
