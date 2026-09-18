@@ -15,24 +15,6 @@ export const ringRatio = (p:number) => { p=Math.max(0,Math.min(1,p)); const lerp
 export function resolveParry(elapsedMs:number, attack= cornAttack):ParryResult { if(elapsedMs>attack.telegraphMs) return 'Miss'; const phase=parryPhase(Math.max(0,elapsedMs/attack.telegraphMs)); return phase==='Perfect'?'Perfect':phase==='Nice'?'Nice':'Miss' }
 export function deterministicTarget(seed:number,round:number,index:number,targetCount:number){let value=(seed+Math.imul(round,1013904223)+Math.imul(index,2654435761))>>>0;const unit=()=>{value=(value+0x9e3779b9)>>>0;let v=value;v=Math.imul(v^(v>>>16),0x85ebca6b);v=Math.imul(v^(v>>>13),0xc2b2ae35);return ((v^(v>>>16))&0xffffff)/16777216};const x=targetCount>1?(index===0?.16+unit()*.18:.66+unit()*.18):.2+unit()*.6;return{x,y:.4+unit()*.26}}
 export function aggregateParryResults(results:ParryResult[]):ParryResult { if(results.some(result=>result==='Miss'))return'Miss';return results.length>0&&results.every(result=>result==='Perfect')?'Perfect':'Nice' }
-// Continuous segment-circle intersections: fast swipes must not skip weak points
-// between pointermove samples. Aspect converts normalized coordinates to height units.
-export function verdictStroke(points:VerdictPoint[],weakPoints:VerdictWeakPoint[],aspect=1):VerdictStroke {
-  let distance=0; const hitIds=new Set<string>();
-  for(let i=1;i<points.length;i++){
-    const a=points[i-1],b=points[i],dx=(b.x-a.x)*aspect,dy=b.y-a.y,length2=dx*dx+dy*dy;
-    distance+=Math.sqrt(length2);
-    for(const weak of weakPoints){
-      const wx=(weak.x-a.x)*aspect,wy=weak.y-a.y;
-      const t=length2?Math.max(0,Math.min(1,(wx*dx+wy*dy)/length2)):0;
-      if(Math.hypot(wx-t*dx,wy-t*dy)<=weak.radius)hitIds.add(weak.id);
-    }
-  }
-  const first=points[0],last=points.at(-1);
-  const displacement=first&&last?Math.hypot((last.x-first.x)*aspect,last.y-first.y):0;
-  const valid=points.length>=2&&distance>=.08&&displacement>=.06;
-  return{points,hitWeakPointIds:[...hitIds],score:scoreForHitCount(valid,hitIds.size),valid};
-}
 export const scoreForHitCount=(valid:boolean,hits:number)=>!valid?0:[10,35,67,90,100][Math.max(0,Math.min(4,hits))];
 export const damageForScore=(score:number)=>Math.round(160+Math.max(0,Math.min(100,score))*4.8);
 export const qualityForScore=(score:number):Quality=>score>=95?'Top':score>=85?'High':score>=50?'Normal':'Broken';

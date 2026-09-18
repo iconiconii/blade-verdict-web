@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateParryResults, applyParry, deterministicTarget, jellyAttack, newBattle, resolveParry, verdictStroke } from './v2';
-import { createCombat, finishStroke, prepareRound, tapTarget, tickCombat } from './combat';
+import { aggregateParryResults, applyParry, deterministicTarget, jellyAttack, newBattle, resolveParry } from './v2';
+import { applyContinuousCut, createCombat, prepareRound, startVerdict, tapTarget, tickCombat } from './combat';
 
 describe('battle presentation state machine',()=>{
   it('uses Jelly V2 timing and split cadence without changing verdict rules',()=>{
@@ -28,20 +28,15 @@ describe('battle presentation state machine',()=>{
   });
 });
 
-describe('verdict stroke scoring',()=>{
-  const weak=[{id:'a',x:.2,y:.5,radius:.06},{id:'b',x:.4,y:.5,radius:.06},{id:'c',x:.6,y:.5,radius:.06},{id:'d',x:.8,y:.5,radius:.06}];
-  it('scores 0 to 4 unique weak points using the existing V2 mapping',()=>{
-    expect(verdictStroke([{x:.5,y:.5,time:0},{x:.51,y:.5,time:1}],weak).score).toBe(0);
-    expect(verdictStroke([{x:.05,y:.15,time:0},{x:.05,y:.85,time:1}],weak).score).toBe(10);
-    expect(verdictStroke([{x:.1,y:.5,time:0},{x:.2,y:.5,time:1}],weak).score).toBe(35);
-    expect(verdictStroke([{x:.1,y:.5,time:0},{x:.4,y:.5,time:1}],weak).score).toBe(67);
-    expect(verdictStroke([{x:.1,y:.5,time:0},{x:.8,y:.5,time:1}],weak).score).toBe(100);
+describe('continuous subject cutting',()=>{
+  const ready=()=>startVerdict({...createCombat(),battle:{...createCombat().battle,meter:100},phase:'verdictReady'});
+  it('applies a fixed twelve damage per valid subject segment and ignores outside segments',()=>{
+    let combat=ready();combat=applyContinuousCut(combat,{x:.5,y:.5},false);expect(combat.battle.bossHp).toBe(800);combat=applyContinuousCut(combat,{x:.5,y:.5},true);expect(combat.battle.bossHp).toBe(788);expect(combat.verdictCombo).toBe(1);expect(combat.verdictDamageDealt).toBe(12);
   });
-  it('deduplicates a repeated weak point and rejects a short invalid stroke',()=>{
-    const repeated=verdictStroke([{x:.1,y:.5,time:0},{x:.2,y:.5,time:1},{x:.2,y:.5,time:2}],weak);expect(repeated.hitWeakPointIds).toEqual(['a']);expect(repeated.score).toBe(35);
-    const invalid=verdictStroke([{x:.2,y:.5,time:0}],weak);expect(invalid.valid).toBe(false);expect(invalid.score).toBe(0);
+  it('caps a verdict at two hundred damage and ends the phase',()=>{
+    let combat=ready();for(let i=0;i<17;i++)combat=applyContinuousCut(combat,{x:.5,y:.5},true);expect(combat.verdictDamageDealt).toBe(200);expect(combat.verdictCombo).toBe(17);expect(combat.phase).toBe('stagger');expect(combat.battle.bossHp).toBe(600);
   });
-  it('detects weak points between sparse pointer samples',()=>{
-    const stroke=verdictStroke([{x:.1,y:.5,time:0},{x:.9,y:.5,time:1}],weak);expect(stroke.hitWeakPointIds).toEqual(['a','b','c','d']);expect(stroke.score).toBe(100);
+  it('ends the four-point-five second window without applying a scored line hit',()=>{
+    let combat=ready();combat=tickCombat(combat,3001);expect(combat.phase).toBe('stagger');expect(combat.battle.bossHp).toBe(800);expect(combat.verdictDamageDealt).toBe(0);
   });
 });

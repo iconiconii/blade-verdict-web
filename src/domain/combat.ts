@@ -1,13 +1,13 @@
-import { aggregateParryResults, applyParry, applyVerdict, cornAttack, damageForScore, deterministicTarget, jellyAttack, newBattle, resolveParry, type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState, type BossKind, type ParryResult, type VerdictStroke, type VerdictWeakPoint } from './v2';
+import { aggregateParryResults, applyParry, cornAttack, deterministicTarget, jellyAttack, newBattle, resolveParry, type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState, type BossKind, type ParryResult, type VerdictStroke, type VerdictWeakPoint } from './v2';
 
-export interface CombatFeedback { id:number; kind:ParryResult|'Verdict'; amount:number; score?:number; position:{x:number;y:number} }
+export interface CombatFeedback { id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number; position:{x:number;y:number}; time:number }
 export interface CombatState {
   battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase; elapsed:number; time:number; round:number; seed:number;
   paused:boolean; targets:AttackPresentation[]; combo:number; bestCombo:number;
-  feedback:CombatFeedback|null; stroke:VerdictStroke|null; pointerId:number|null;
+  feedback:CombatFeedback|null; stroke:VerdictStroke|null; pointerId:number|null; verdictDamageDealt:number; verdictCombo:number;
 }
 export const durations={intro:700,telegraph:400,impact:280,stagger:300,verdict:3000,settle:1000};
-export const createCombat=(seed=7319,bossKind:BossKind='corn'):CombatState=>({battle:newBattle(),bossKind,attack:bossKind==='jelly'?jellyAttack:cornAttack,phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,feedback:null,stroke:null,pointerId:null});
+export const createCombat=(seed=7319,bossKind:BossKind='corn'):CombatState=>({battle:newBattle(),bossKind,attack:bossKind==='jelly'?jellyAttack:cornAttack,phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0});
 const transition=(s:CombatState,phase:BattlePhase):CombatState=>({...s,phase,elapsed:0});
 export function prepareRound(s:CombatState):CombatState {
   const count=s.bossKind==='jelly'?(s.round>=2&&(s.round+1)%2===1?2:1):(s.round>0&&s.round%3===2?2:1);
@@ -17,7 +17,7 @@ function completeRound(s:CombatState,result:ParryResult,index:number):CombatStat
   const combo=result==='Miss'?0:s.combo+1;
   const battle=applyParry(s.battle,result,s.attack);
   if(battle.playerHp===0)battle.loot=[];
-  return {...transition(s,'impact'),battle,combo,bestCombo:Math.max(s.bestCombo,combo),feedback:{id:s.round+1,kind:result,amount:result==='Miss'?s.attack.missDamage:result==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,position:s.targets[index].position}};
+  return {...transition(s,'impact'),battle,combo,bestCombo:Math.max(s.bestCombo,combo),feedback:{id:s.round+1,kind:result,amount:result==='Miss'?s.attack.missDamage:result==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,position:s.targets[index].position,time:s.time}};
 }
 export function tapTarget(s:CombatState,index:number):CombatState {
   if(s.paused||s.phase!=='targetActive')return s;
@@ -30,11 +30,16 @@ export function tapTarget(s:CombatState,index:number):CombatState {
   return next;
 }
 export function startVerdict(s:CombatState):CombatState {
-  return s.phase==='verdictReady'&&!s.paused&&s.battle.meter===100?{...transition(s,'verdictSlash'),feedback:null,stroke:null,pointerId:null}:s;
+  return s.phase==='verdictReady'&&!s.paused&&s.battle.meter===100?{...transition(s,'verdictSlash'),feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0}:s;
 }
-export function finishStroke(s:CombatState,stroke:VerdictStroke):CombatState {
-  if(s.phase!=='verdictSlash'||s.paused)return s;
-  return {...transition(s,'stagger'),pointerId:null,stroke,battle:applyVerdict(s.battle,stroke.score),feedback:{id:s.round+1,kind:'Verdict',score:stroke.score,amount:damageForScore(stroke.score),position:{x:.5,y:.5}}};
+export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean):CombatState {
+  if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=200)return s;
+  const damage=Math.min(12,200-s.verdictDamageDealt,s.battle.bossHp);if(damage<=0)return s;
+  const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage)};
+  const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
+  const feedback:CombatFeedback={id:s.round+verdictCombo,kind:'Cut',amount:damage,position,time:s.time};
+  const stroke=s.stroke?{...s.stroke,points:[...s.stroke.points],valid:true}:null;
+  return battle.bossHp<=0||verdictDamageDealt>=200?{...transition({...s,battle,verdictCombo,verdictDamageDealt,feedback,stroke},'stagger'),pointerId:null}:{...s,battle,verdictCombo,verdictDamageDealt,feedback,stroke};
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
   if(s.paused||delta<=0)return s;
@@ -55,7 +60,7 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
       if(next.battle.meter>=100)return transition(next,'verdictReady');
       return prepareRound({...next,round:next.round+1});
     }
-    case 'verdictSlash':return next.elapsed>=durations.verdict?finishStroke(next,next.stroke??{points:[],hitWeakPointIds:[],valid:false,score:0}):next;
+    case 'verdictSlash':return next.elapsed>=durations.verdict?transition(next,'stagger'):next;
     default:return next;
   }
 }

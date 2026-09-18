@@ -95,9 +95,15 @@ export class BattleScene {
     this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);this.lastStroke=null;
   }
+  isPointInsideMonster(point:{x:number;y:number}){
+    this.guardian.root.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(this.guardian.root),min=new THREE.Vector3(Infinity,Infinity,Infinity),max=new THREE.Vector3(-Infinity,-Infinity,-Infinity);
+    for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const projected=projectPoint(new THREE.Vector3(x,y,z),this.camera);min.x=Math.min(min.x,projected.x);min.y=Math.min(min.y,projected.y);max.x=Math.max(max.x,projected.x);max.y=Math.max(max.y,projected.y)}
+    const cx=(min.x+max.x)/2,cy=(min.y+max.y)/2,rx=Math.max(.12,(max.x-min.x)*.47),ry=Math.max(.12,(max.y-min.y)*.43);const dx=(point.x-cx)/rx,dy=(point.y-cy)/ry;return dx*dx+dy*dy<=1;
+  }
   render(state:CombatState,reducedMotion=false){
     if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
-    const impact=phase==='impact'||phase==='stagger';
+    const impact=phase==='impact'||phase==='stagger'||feedback?.kind==='Cut';
     this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
     const launch=this.guardian.root.localToWorld(new THREE.Vector3(-.65,1.15,.3));const source=projectPoint(launch,this.camera);
     for(let i=0;i<2;i++){
@@ -111,7 +117,7 @@ export class BattleScene {
       const positions=path.geometry.getAttribute('position') as THREE.BufferAttribute;
       positions.setXYZ(0,source.x*w,-source.y*h,0);positions.setXYZ(1,center.x,-center.y,0);positions.needsUpdate=true;path.frustumCulled=false;
     }
-    const verdict=phase==='verdictReady'||phase==='verdictSlash'||impact&&feedback?.kind==='Verdict';
+    const verdict=false;
     const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h,this.bossKind);
     const guidePoints=this.guide.geometry.getAttribute('position') as THREE.BufferAttribute;
     weak.forEach((point,i)=>{
@@ -120,7 +126,7 @@ export class BattleScene {
       guidePoints.setXYZ(i,point.x*w,-point.y*h,0);
     });guidePoints.needsUpdate=true;this.guide.visible=verdict;this.guide.frustumCulled=false;
     this.drawStroke(state);
-    const age=phase==='stagger'&&feedback?.kind!=='Verdict'?elapsed+280:elapsed,strength=Math.max(0,1-age/650);
+    const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
     this.shock.visible=this.slash.visible=!!feedback&&impact&&strength>0;
     const position=feedback?targetCenter(feedback.position,w,h):{x:w/2,y:h/2};
     if(feedback){
