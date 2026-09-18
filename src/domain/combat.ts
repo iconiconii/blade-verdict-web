@@ -31,7 +31,9 @@ export function tapTarget(s:CombatState,index:number):CombatState {
   return next;
 }
 export function startVerdict(s:CombatState):CombatState {
-  return s.phase==='verdictReady'&&!s.paused&&s.battle.meter===100?{...transition(s,'verdictSlash'),feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0}:s;
+  if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100)return s;
+  const battle={...s.battle,meter:0};
+  return {...transition({...s,battle},'verdictSlash'),feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0};
 }
 export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean):CombatState {
   if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=200)return s;

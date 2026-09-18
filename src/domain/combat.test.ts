@@ -4,7 +4,7 @@ import { applyContinuousCut, createCombat, prepareRound, startVerdict, tapTarget
 
 describe('battle presentation state machine',()=>{
   it('uses Jelly V2 timing and split cadence without changing verdict rules',()=>{
-    expect(jellyAttack.telegraphMs).toBe(700);expect(jellyAttack.missDamage).toBe(8);expect(jellyAttack.perfectMeterGain).toBe(34);expect(resolveParry(560,jellyAttack)).toBe('Perfect');expect(applyParry(newBattle(),'Miss',jellyAttack).playerHp).toBe(92);
+    expect(jellyAttack.telegraphMs).toBe(700);expect(jellyAttack.missDamage).toBe(8);expect(jellyAttack.perfectMeterGain).toBe(30);expect(jellyAttack.niceMeterGain).toBe(10);expect(resolveParry(560,jellyAttack)).toBe('Perfect');expect(applyParry(newBattle(),'Miss',jellyAttack).playerHp).toBe(92);
     let combat=createCombat(7319,'jelly');combat=tickCombat(combat,700);combat=tickCombat(combat,400);expect(combat.targets).toHaveLength(1);combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(300);expect(resolveParry(820,jellyAttack,160)).toBe('Perfect');
   });
   it('uses deterministic target positions and a two-target cadence',()=>{
@@ -37,6 +37,6 @@ describe('continuous subject cutting',()=>{
     let combat=ready();for(let i=0;i<17;i++)combat=applyContinuousCut(combat,{x:.5,y:.5},true);expect(combat.verdictDamageDealt).toBe(200);expect(combat.verdictCombo).toBe(17);expect(combat.phase).toBe('stagger');expect(combat.battle.bossHp).toBe(600);
   });
   it('ends the four-point-five second window without applying a scored line hit',()=>{
-    let combat=ready();combat=tickCombat(combat,3001);expect(combat.phase).toBe('stagger');expect(combat.battle.bossHp).toBe(800);expect(combat.verdictDamageDealt).toBe(0);
+    let combat=ready();expect(combat.battle.meter).toBe(0);combat=tickCombat(combat,3001);expect(combat.phase).toBe('stagger');expect(combat.battle.bossHp).toBe(800);expect(combat.verdictDamageDealt).toBe(0);combat=tickCombat(combat,300);expect(combat.phase).toBe('telegraph');expect(combat.battle.meter).toBe(0);
   });
 });
