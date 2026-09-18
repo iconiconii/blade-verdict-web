@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { BattleScene } from './BattleScene';
-import { targetCenter, targetDiameter, weakPointsFor } from './domain/combat';
+import { targetCenter, targetDiameter } from './domain/combat';
+import { projectedWeakPoints } from './scene/layout';
 import { verdictStroke, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 
@@ -35,7 +36,7 @@ export function Battle(){
     return()=>{alive=false;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('keydown',key);scene.current?.dispose();scene.current=null;readyRef.current=false};
   },[]);
 
-  const weakPoints=weakPointsFor(battle.verdictCount,size.width,size.height);
+  const weakPoints=projectedWeakPoints(battle.verdictCount,size.width,size.height);
   useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:[8];navigator.vibrate(pattern)},[feedback?.id]);
   const point=(event:ReactPointerEvent<HTMLDivElement>):VerdictPoint=>{const rect=event.currentTarget.getBoundingClientRect();return{x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,time:performance.now()}};
   const begin=(event:ReactPointerEvent<HTMLDivElement>)=>{

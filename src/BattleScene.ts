@@ -1,151 +1,154 @@
 import * as THREE from 'three';
-import { targetCenter, targetDiameter, weakPointsFor, type CombatState } from './domain/combat';
+import { targetCenter, targetDiameter, type CombatState } from './domain/combat';
+import { CornGuardian } from './scene/CornGuardian';
+import { makeBattleCamera, projectPoint, projectedWeakPoints } from './scene/layout';
 
-const colors={early:0xff845c,nice:0xffd369,perfect:0x74ffe4,late:0xff665c};
-const vertexShader=`varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
-// Original Unity animation frames have a flat green screen. Key only saturated
-// green, preserving the dark olive leaf armour; no modified source artwork.
-const fragmentShader=`uniform sampler2D map; uniform float flash; uniform float fade; varying vec2 vUv;
- void main(){vec4 c=texture2D(map,vUv);float green=c.g-max(c.r,c.b);float key=smoothstep(.20,.40,green)*smoothstep(.45,.65,c.g);float a=c.a*(1.-key)*fade;if(a<.04)discard;gl_FragColor=vec4(mix(c.rgb,vec3(1.),flash),a);}`;
+const colors={early:0xff9466,nice:0xffd369,perfect:0x74ffe4,late:0xff665c};
+type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
+const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:opacity<1,opacity,depthWrite:false,toneMapped:false});
 
+/** Perspective world plus a pixel-space Three.js effects pass. React owns text. */
 export class BattleScene {
   private renderer:THREE.WebGLRenderer;
-  private scene=new THREE.Scene();
-  private camera=new THREE.OrthographicCamera(0,1,0,-1,.1,1000);
-  private textures:THREE.Texture[]=[];
-  private manager=new THREE.LoadingManager();
-  private frames:THREE.Texture[]=[];
-  private boss:THREE.Mesh<THREE.PlaneGeometry,THREE.ShaderMaterial>;
-  private background:THREE.Mesh;
-  private shadow:THREE.Mesh;
+  private world=new THREE.Scene();
+  private overlay=new THREE.Scene();
+  private camera=makeBattleCamera(1,1);
+  private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
+  private guardian=new CornGuardian();
   private targetGroups:THREE.Group[]=[];
+  private targetPaths:THREE.Line[]=[];
   private weakGroups:THREE.Group[]=[];
   private guide:THREE.Line;
-  private trail:THREE.Mesh;
-  private burst:THREE.Mesh<THREE.PlaneGeometry,THREE.MeshBasicMaterial>;
-  private shock:THREE.Mesh<THREE.RingGeometry,THREE.MeshBasicMaterial>;
-  private sparks:THREE.Mesh[]=[];
-  private leaves:THREE.Mesh[]=[];
-  private width=1; private height=1; private disposed=false;
-  private onFailure:()=>void;
+  private trail:EffectMesh;
+  private slash:EffectMesh;
+  private shock:EffectMesh;
+  private sparks:EffectMesh[]=[];
+  private width=1;private height=1;private disposed=false;
+  private lineBuffer=new Float32Array(512*6*3);
+  private lastStroke:CombatState['stroke']=null;
 
-  constructor(private host:HTMLElement,onFailure:()=>void,onReady:()=>void){
-    this.onFailure=onFailure;
-    this.manager.onLoad=()=>{if(!this.disposed)onReady()};
-    this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void){
+    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
-    this.renderer.setClearColor(0x0b1719);
-    host.appendChild(this.renderer.domElement);
+    this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure=1.1;
+    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.autoClear=false;this.renderer.setClearColor(0x101e23);
+    this.renderer.domElement.dataset.scene='true-3d';
+    this.host.appendChild(this.renderer.domElement);
     this.renderer.domElement.addEventListener('webglcontextlost',this.contextLost);
-    this.camera.position.z=100;
-    this.background=this.plane(this.texture('/assets/corn-battlefield.png'),0);
-    this.shadow=new THREE.Mesh(new THREE.CircleGeometry(1,48),new THREE.MeshBasicMaterial({color:0x091112,transparent:true,opacity:.65,depthWrite:false}));this.shadow.position.z=1;this.scene.add(this.shadow);
-    this.frames=['idle','attack','hit','defeated'].map(name=>this.texture(`/assets/corn/${name}.png`));
-    this.boss=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{map:{value:this.frames[0]},flash:{value:0},fade:{value:1}},transparent:true,depthWrite:false}));this.boss.position.z=10;this.scene.add(this.boss);
+    this.world.fog=new THREE.FogExp2(0x101e23,.055);
+    this.world.add(this.guardian.root);this.setupArena();
+    this.overlayCamera.position.z=100;
     for(let i=0;i<2;i++){
-      const group=new THREE.Group();group.position.z=40;
-      const halo=new THREE.Mesh(new THREE.RingGeometry(.63,.66,64),new THREE.MeshBasicMaterial({color:0xffd369,transparent:true,opacity:.3}));
-      const ring=new THREE.Mesh(new THREE.RingGeometry(.48,.515,64),new THREE.MeshBasicMaterial({color:0xffd369}));
-      const core=new THREE.Mesh(new THREE.CircleGeometry(.36,6),new THREE.MeshBasicMaterial({color:0xffd369}));core.rotation.z=Math.PI/6;core.position.z=1;
-      const inner=new THREE.Mesh(new THREE.RingGeometry(.15,.18,32),new THREE.MeshBasicMaterial({color:0x182225}));inner.position.z=2;
-      group.add(halo,ring,core,inner);this.targetGroups.push(group);this.scene.add(group);
-      const path=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:0xfce59b,transparent:true,opacity:.3}));path.name=`attack-path-${i}`;path.position.z=15;this.scene.add(path);
+      const group=new THREE.Group();group.position.z=20;group.visible=false;
+      const halo=new THREE.Mesh(new THREE.RingGeometry(.69,.72,48),basic(0xffd369,.25));
+      const ring=new THREE.Mesh(new THREE.RingGeometry(.48,.51,48),basic(0xffd369));
+      const core=new THREE.Mesh(new THREE.CircleGeometry(.32,6),basic(0xffd369));core.rotation.z=Math.PI/6;core.position.z=1;
+      const inner=new THREE.Mesh(new THREE.RingGeometry(.13,.17,4),basic(0x243531));inner.position.z=2;
+      group.add(halo,ring,core,inner);this.targetGroups.push(group);this.overlay.add(group);
+      const path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:0xffdc96,transparent:true,opacity:.35,toneMapped:false}));path.position.z=10;this.targetPaths.push(path);this.overlay.add(path);
     }
     for(let i=0;i<4;i++){
-      const group=new THREE.Group();group.position.z=42;
-      const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1,4),new THREE.MeshBasicMaterial({color:0xfadf91}));
-      const dot=new THREE.Mesh(new THREE.CircleGeometry(.24,4),new THREE.MeshBasicMaterial({color:0xffffff}));group.add(ring,dot);this.weakGroups.push(group);this.scene.add(group);
+      const group=new THREE.Group();group.position.z=25;
+      group.add(new THREE.Mesh(new THREE.RingGeometry(.8,.95,4),basic(0xffdf8b)),new THREE.Mesh(new THREE.CircleGeometry(.22,4),basic(0xffffff)));
+      this.weakGroups.push(group);this.overlay.add(group);
     }
-    this.guide=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xf9dc83,transparent:true,opacity:.28}));this.guide.position.z=38;this.scene.add(this.guide);
-    this.trail=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({color:0xb6fff4,transparent:true,opacity:1,side:THREE.DoubleSide,depthWrite:false}));this.trail.position.z=50;this.scene.add(this.trail);
-    this.burst=this.plane(this.texture('/assets/corn-vfx/perfect-burst.png'),55) as typeof this.burst;
-    this.shock=new THREE.Mesh(new THREE.RingGeometry(.94,1,64),new THREE.MeshBasicMaterial({color:0x74ffe4,transparent:true,opacity:0,depthWrite:false}));this.shock.position.z=54;this.scene.add(this.shock);
-    for(let i=0;i<24;i++){const spark=new THREE.Mesh(new THREE.CircleGeometry(1,3),new THREE.MeshBasicMaterial({color:0xffe6a5,transparent:true,depthWrite:false}));spark.position.z=52;this.sparks.push(spark);this.scene.add(spark)}
-    for(let i=0;i<10;i++){const leaf=new THREE.Mesh(new THREE.CircleGeometry(1,3),new THREE.MeshBasicMaterial({color:i%2?0x94b858:0xffd267,transparent:true,opacity:.35,depthWrite:false}));leaf.position.z=8;this.leaves.push(leaf);this.scene.add(leaf)}
-    this.resize();
+    this.guide=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(12),3)),new THREE.LineBasicMaterial({color:0xffdf8b,transparent:true,opacity:.28,toneMapped:false}));this.guide.position.z=23;this.overlay.add(this.guide);
+    const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute('position',new THREE.BufferAttribute(this.lineBuffer,3).setUsage(THREE.DynamicDrawUsage));trailGeo.setDrawRange(0,0);
+    this.trail=new THREE.Mesh(trailGeo,basic(0xb6fff4,.95));this.trail.material.side=THREE.DoubleSide;this.trail.frustumCulled=false;this.trail.position.z=40;this.overlay.add(this.trail);
+    this.slash=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0xd9fff3,.9));this.slash.position.z=38;this.slash.rotation.z=-.65;this.overlay.add(this.slash);
+    this.shock=new THREE.Mesh(new THREE.RingGeometry(.94,1,48),basic(0x74ffe4,.9));this.shock.position.z=35;this.overlay.add(this.shock);
+    const sparkGeometry=new THREE.CircleGeometry(1,3),sparkMaterial=basic(0xffe6a5,.9);
+    for(let i=0;i<24;i++){const spark=new THREE.Mesh(sparkGeometry,sparkMaterial);spark.position.z=36;this.sparks.push(spark);this.overlay.add(spark)}
+    this.resize();queueMicrotask(()=>{if(!this.disposed)onReady()});
+  }
+
+  private setupArena(){
+    const hemi=new THREE.HemisphereLight(0x9accc9,0x40341d,1.8);this.world.add(hemi);
+    const key=new THREE.DirectionalLight(0xffe4aa,3.3);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
+    const rim=new THREE.DirectionalLight(0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
+    const floorMat=new THREE.MeshStandardMaterial({color:0x324238,roughness:.94});
+    const floor=new THREE.Mesh(new THREE.CircleGeometry(24,64),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
+    const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.67,1.76,.17,48),new THREE.MeshStandardMaterial({color:0x4e5740,roughness:.9}));plinth.position.y=-.085;plinth.receiveShadow=true;this.world.add(plinth);
+    const rimRing=new THREE.Mesh(new THREE.TorusGeometry(1.6,.024,6,64),new THREE.MeshStandardMaterial({color:0xb89550,metalness:.3,roughness:.65}));rimRing.rotation.x=-Math.PI/2;rimRing.position.y=.015;this.world.add(rimRing);
+    const stalkGeometry=new THREE.CylinderGeometry(.025,.04,1.25,5),stalkMat=new THREE.MeshStandardMaterial({color:0x315440,roughness:1});
+    const earGeo=new THREE.CapsuleGeometry(.075,.19,2,6),earMat=new THREE.MeshStandardMaterial({color:0xa68b3d,roughness:.9});
+    for(let i=0;i<26;i++){
+      const side=i%2?1:-1,x=side*(2.3+(i%5)*.48),z=-.5-Math.floor(i/5)*.85;
+      const stalk=new THREE.Mesh(stalkGeometry,stalkMat);stalk.position.set(x,.45,z);stalk.rotation.z=side*.15;this.world.add(stalk);
+      const ear=new THREE.Mesh(earGeo,earMat);ear.position.set(x-side*.07,.94,z);ear.rotation.z=side*.15;this.world.add(ear);
+    }
+    // Low-poly stones at the arena perimeter establish depth and scale.
+    const stoneGeo=new THREE.DodecahedronGeometry(.16,0),stoneMat=new THREE.MeshStandardMaterial({color:0x384944,roughness:1});
+    for(let i=0;i<16;i++){const a=i/16*Math.PI*2;const stone=new THREE.Mesh(stoneGeo,stoneMat);stone.position.set(Math.cos(a)*2.02,-.09,Math.sin(a)*2.02);stone.scale.set(1.1,.6,.8);stone.rotation.y=i;this.world.add(stone)}
   }
   private contextLost=(event:Event)=>{event.preventDefault();this.onFailure()};
-  private texture(url:string){const t=new THREE.TextureLoader(this.manager).load(url,()=>{if(this.disposed)t.dispose()},undefined,()=>{if(!this.disposed)this.onFailure()});t.colorSpace=THREE.SRGBColorSpace;this.textures.push(t);return t}
-  private plane(map:THREE.Texture,z:number){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false}));mesh.position.z=z;this.scene.add(mesh);return mesh}
   resize(){
     const {width,height}=this.host.getBoundingClientRect();if(width<=0||height<=0)return;
-    this.width=width;this.height=height;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);
-    this.camera.right=width;this.camera.bottom=-height;this.camera.updateProjectionMatrix();
-    const bgWidth=Math.max(width,height*941/1672),bgHeight=bgWidth*1672/941;
-    this.background.scale.set(bgWidth,bgHeight,1);this.background.position.set(width/2,-height/2+(bgHeight-height)*.08,0);
+    this.width=width;this.height=height;this.camera=makeBattleCamera(width,height);
+    this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);this.lastStroke=null;
   }
-  render(s:CombatState,reducedMotion=false){
-    if(this.disposed)return;const w=this.width,h=this.height,t=s.time/1000;
-    const verdict=s.phase==='verdictReady'||s.phase==='verdictSlash'||s.feedback?.kind==='Verdict';
-    const feedback=s.feedback,impact=s.phase==='impact'||s.phase==='stagger';
-    const hit=impact&&feedback&&feedback.kind!=='Miss';
-    const hitStop=feedback?.kind==='Perfect'&&s.phase==='impact'&&s.elapsed<100;
-    const animTime=hitStop?(s.time-s.elapsed)/1000:t;
-    const size=Math.min(w*1.45,h*1.12,860);
-    const pose=s.battle.bossHp<=0?3:hit?2:s.phase==='telegraph'||s.phase==='targetActive'?1:0;
-    this.boss.material.uniforms.map.value=this.frames[pose];
-    this.boss.material.uniforms.flash.value=hit&&s.phase==='impact'?Math.max(0,.7-s.elapsed/210):0;
-    this.boss.material.uniforms.fade.value=s.phase==='settle'&&s.battle.bossHp<=0?Math.max(0,1-s.elapsed/900):1;
-    const bob=reducedMotion?0:Math.sin(animTime*2)*5;
-    const recoil=!reducedMotion&&hit?Math.sin(s.elapsed/35)*Math.max(0,12-s.elapsed/30):0;
-    const charge=s.phase==='telegraph'?Math.sin(s.elapsed/400*Math.PI)*.06:0;
-    this.boss.position.set(w*.5+recoil,-h*.49+bob,10);this.boss.scale.set(size*(1-charge),size*(1+charge),1);
-    this.boss.rotation.z=reducedMotion?0:s.battle.bossHp<=0?-.15:Math.sin(animTime*1.6)*.012;
-    this.shadow.position.set(w*.5,-h*.49-size*.245,1);this.shadow.scale.set(size*.28,size*.045,1);
+  render(state:CombatState,reducedMotion=false){
+    if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
+    const impact=phase==='impact'||phase==='stagger';
+    this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
+    const launch=this.guardian.root.localToWorld(new THREE.Vector3(-.65,1.15,.3));const source=projectPoint(launch,this.camera);
     for(let i=0;i<2;i++){
-      const group=this.targetGroups[i],target=s.targets[i];
-      const path=this.scene.getObjectByName(`attack-path-${i}`) as THREE.Line;
-      const show=!!target&&!target.resolved&&(s.phase==='telegraph'||s.phase==='targetActive'&&s.elapsed>=target.startDelayMs);
+      const target=state.targets[i],group=this.targetGroups[i],path=this.targetPaths[i];
+      const show=!!target&&!target.resolved&&(phase==='telegraph'||phase==='targetActive'&&elapsed>=target.startDelayMs);
       group.visible=path.visible=show;if(!show)continue;
-      const center=targetCenter(target.position,w,h),d=targetDiameter(w,h),p=target.telegraphProgress,color=colors[target.phase];
-      group.position.set(center.x,-center.y,40);group.scale.setScalar(d);
-      const ring=group.children[1] as THREE.Mesh<THREE.RingGeometry,THREE.MeshBasicMaterial>;
-      const core=group.children[2] as THREE.Mesh<THREE.CircleGeometry,THREE.MeshBasicMaterial>;
-      ring.scale.setScalar(1.5-p*.65);ring.material.color.setHex(color);core.material.color.setHex(color);
-      core.scale.setScalar(s.phase==='telegraph'?.45:1);ring.material.opacity=s.phase==='telegraph'?.5:1;
-      const positions=new Float32Array([w*.5,-h*.51,0,center.x,-center.y,0]);path.geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+      const center=targetCenter(target.position,w,h),d=targetDiameter(w,h);
+      group.position.set(center.x,-center.y,20);group.scale.set(d,d,1);
+      const ring=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh;
+      ring.scale.setScalar(1.5-target.telegraphProgress*.65);ring.material.color.setHex(colors[target.phase]);core.material.color.copy(ring.material.color);core.scale.setScalar(phase==='telegraph'?.55:1);
+      const positions=path.geometry.getAttribute('position') as THREE.BufferAttribute;
+      positions.setXYZ(0,source.x*w,-source.y*h,0);positions.setXYZ(1,center.x,-center.y,0);positions.needsUpdate=true;path.frustumCulled=false;
     }
-    const weak=weakPointsFor(s.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h);
-    for(let i=0;i<4;i++){
-      const group=this.weakGroups[i],point=weak[i];group.visible=verdict;
-      group.position.set(point.x*w,-point.y*h,42);group.scale.setScalar(point.radius*h*.8);
-      const caught=s.stroke?.hitWeakPointIds.includes(point.id),ring=group.children[0] as THREE.Mesh<THREE.RingGeometry,THREE.MeshBasicMaterial>;
-      ring.material.color.setHex(caught?0x7dffdf:0xffdf8b);group.rotation.z=caught?Math.PI/4:Math.sin(t*2)*.08;
-    }
-    this.guide.visible=verdict;this.guide.geometry.setFromPoints(weak.map(p=>new THREE.Vector3(p.x*w,-p.y*h,0)));
-    this.drawStroke(s);
-    const effect=impact&&feedback!==null,age=s.phase==='stagger'&&feedback?.kind!=='Verdict'?s.elapsed+280:s.elapsed;
-    const strength=Math.max(0,1-age/650),radius=25+age*.18;
-    this.shock.visible=this.burst.visible=!!effect&&strength>0;
+    const verdict=phase==='verdictReady'||phase==='verdictSlash'||impact&&feedback?.kind==='Verdict';
+    const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h);
+    const guidePoints=this.guide.geometry.getAttribute('position') as THREE.BufferAttribute;
+    weak.forEach((point,i)=>{
+      const group=this.weakGroups[i];group.visible=verdict;group.position.set(point.x*w,-point.y*h,25);group.scale.set(point.radius*h,point.radius*h,1);
+      const caught=state.stroke?.hitWeakPointIds.includes(point.id);(group.children[0] as EffectMesh).material.color.setHex(caught?0x74ffe4:0xffdf8b);group.rotation.z=caught?Math.PI/4:0;
+      guidePoints.setXYZ(i,point.x*w,-point.y*h,0);
+    });guidePoints.needsUpdate=true;this.guide.visible=verdict;this.guide.frustumCulled=false;
+    this.drawStroke(state);
+    const age=phase==='stagger'&&feedback?.kind!=='Verdict'?elapsed+280:elapsed,strength=Math.max(0,1-age/650);
+    this.shock.visible=this.slash.visible=!!feedback&&impact&&strength>0;
+    const position=feedback?targetCenter(feedback.position,w,h):{x:w/2,y:h/2};
     if(feedback){
       const color=feedback.kind==='Miss'?0xff695e:feedback.kind==='Nice'?0xffd369:0x85ffdf;
-      const x=feedback.position.x*w,y=-feedback.position.y*h;
-      this.shock.position.set(x,y,54);this.shock.scale.setScalar(radius);this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
-      this.burst.position.set(x,y,55);this.burst.scale.setScalar(70+age*.14);this.burst.material.opacity=strength*.65;
-      this.burst.material.color.setHex(feedback.kind==='Miss'?0xff5142:0xffffff);
-      this.sparks.forEach((spark,i)=>{spark.visible=!!effect&&strength>0;const angle=i*2.39996;const speed=radius*(.8+(i%4)*.15);spark.position.set(x+Math.cos(angle)*speed,y+Math.sin(angle)*speed-age*age*.00009,52);spark.scale.setScalar((i%3+1)*1.7*strength);(spark.material as THREE.MeshBasicMaterial).color.setHex(color)});
+      this.shock.position.set(position.x,-position.y,35);this.shock.scale.setScalar(25+age*.18);this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
+      this.slash.visible=this.slash.visible&&feedback.kind!=='Miss';this.slash.position.set(w/2,-h*.48,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
+      this.sparks.forEach((spark,i)=>{spark.visible=impact&&strength>0;const a=i*2.39996,r=(25+age*.17)*(.7+(i%4)*.14);spark.position.set(position.x+Math.cos(a)*r,-position.y+Math.sin(a)*r-age*age*.00005,36);spark.scale.setScalar((i%3+1)*1.7*strength);spark.material.color.setHex(color)});
     }else this.sparks.forEach(spark=>spark.visible=false);
-    this.leaves.forEach((leaf,i)=>{const motion=reducedMotion?0:t*.018;leaf.position.x=((i*.113+motion)%1)*w;leaf.position.y=-((i*.219+motion*.7)%1)*h;leaf.rotation.z=i+t*.15;leaf.scale.set(3+(i%3)*2,7+(i%2)*3,1)});
-    const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(s.elapsed*.13)*Math.max(0,7-age/45):0;
-    this.camera.position.x=shake;this.renderer.render(this.scene,this.camera);
+    const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
+    this.camera.position.x=shake;this.camera.updateMatrixWorld();
+    this.renderer.clear();this.renderer.render(this.world,this.camera);this.renderer.clearDepth();this.renderer.render(this.overlay,this.overlayCamera);
+    this.camera.position.x=0;this.camera.updateMatrixWorld();
   }
-  private drawStroke(s:CombatState){
-    const points=s.stroke?.points??[];this.trail.visible=points.length>1;if(points.length<2)return;
-    const vertices:number[]=[];const half=3;
-    for(let i=1;i<points.length;i++){
-      const a=points[i-1],b=points[i],ax=a.x*this.width,ay=-a.y*this.height,bx=b.x*this.width,by=-b.y*this.height;
-      const len=Math.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/len*half,ny=(bx-ax)/len*half;
-      vertices.push(ax+nx,ay+ny,0,ax-nx,ay-ny,0,bx+nx,by+ny,0,bx+nx,by+ny,0,ax-nx,ay-ny,0,bx-nx,by-ny,0);
+  private drawStroke(state:CombatState){
+    const stroke=state.stroke,points=stroke?.points??[];this.trail.visible=points.length>1;
+    if(stroke!==this.lastStroke){
+      let count=0;
+      for(let i=1;i<Math.min(points.length,513);i++){
+        const a=points[i-1],b=points[i],ax=a.x*this.width,ay=-a.y*this.height,bx=b.x*this.width,by=-b.y*this.height;
+        const len=Math.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/len*3,ny=(bx-ax)/len*3;
+        this.lineBuffer.set([ax+nx,ay+ny,0,ax-nx,ay-ny,0,bx+nx,by+ny,0,bx+nx,by+ny,0,ax-nx,ay-ny,0,bx-nx,by-ny,0],count);count+=18;
+      }
+      this.trail.geometry.getAttribute('position').needsUpdate=true;this.trail.geometry.setDrawRange(0,count/3);this.lastStroke=stroke;
     }
-    this.trail.geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));this.trail.geometry.computeBoundingSphere();
-    (this.trail.material as THREE.MeshBasicMaterial).opacity=s.phase==='verdictSlash'?1:Math.max(0,1-s.elapsed/900);
+    this.trail.material.opacity=state.phase==='verdictSlash'?1:Math.max(0,1-state.elapsed/900);
   }
   dispose(){
-    this.disposed=true;this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);
+    if(this.disposed)return;this.disposed=true;this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);
     const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();
-    this.scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.Line){geometries.add(object.geometry);const m=object.material;if(Array.isArray(m))m.forEach(x=>materials.add(x));else materials.add(m)}});
-    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());this.renderer.dispose();this.renderer.domElement.remove();
+    for(const scene of [this.world,this.overlay])scene.traverse(object=>{
+      if(object instanceof THREE.Mesh||object instanceof THREE.Line){geometries.add(object.geometry);const m=object.material;if(Array.isArray(m))m.forEach(item=>materials.add(item));else materials.add(m);}
+      if(object instanceof THREE.InstancedMesh)object.dispose();
+      if(object instanceof THREE.DirectionalLight)object.shadow.dispose();
+    });geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());this.renderer.dispose();this.renderer.domElement.remove();
   }
 }

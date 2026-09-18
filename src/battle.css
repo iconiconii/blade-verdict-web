@@ -18,10 +18,6 @@
 .phase-ribbon{position:absolute;top:calc(143px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;color:#d5d0b6;font-size:10px;letter-spacing:.18em;white-space:nowrap;pointer-events:none}
 .phase-dot{width:4px;height:4px;border-radius:50%;background:#f4d18b;box-shadow:0 0 10px #edc788}
 .parry-target{position:absolute;transform:translate(-50%,-50%);border:0;background:transparent;border-radius:50%;padding:0;touch-action:none;cursor:crosshair;color:#f6dfbd;z-index:3}
-.parry-target:before{content:'';position:absolute;left:35%;top:35%;width:30%;height:30%;background:#ffe3a0;box-shadow:0 0 14px 5px #ffc75b99;transform:rotate(45deg);transition:background .15s,box-shadow .15s;pointer-events:none}
-.parry-target[data-phase=perfect]:before{background:#b8ffed;box-shadow:0 0 18px 7px #63ffe399}
-.parry-target[data-phase=late]:before{background:#ff8d75;box-shadow:0 0 15px 5px #ff5e4c88}
-.parry-target[data-phase=early]:before{animation:target-pulse .8s ease-in-out infinite alternate}
 .parry-target:disabled{cursor:default}
 .parry-target[data-resolved=true]{pointer-events:none;opacity:.3}
 .target-caption{pointer-events:none;position:absolute;top:calc(100% + 9px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;letter-spacing:.08em;text-shadow:0 1px 6px #000;background:#06151b96;padding:3px 7px;border-radius:2px}
