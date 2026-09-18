@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { targetCenter, targetDiameter, type CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
+import { JellyGuardian } from './scene/JellyGuardian';
 import { makeBattleCamera, projectPoint, projectedWeakPoints } from './scene/layout';
+import type { BossKind } from './domain/v2';
 
 const colors={early:0xff9466,nice:0xffd369,perfect:0x74ffe4,late:0xff665c};
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
@@ -14,7 +16,8 @@ export class BattleScene {
   private overlay=new THREE.Scene();
   private camera=makeBattleCamera(1,1);
   private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
-  private guardian=new CornGuardian();
+  private guardian:CornGuardian|JellyGuardian;
+  private bossKind:BossKind;
   private targetGroups:THREE.Group[]=[];
   private targetPaths:THREE.Line[]=[];
   private weakGroups:THREE.Group[]=[];
@@ -27,7 +30,8 @@ export class BattleScene {
   private lineBuffer=new Float32Array(512*6*3);
   private lastStroke:CombatState['stroke']=null;
 
-  constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void){
+  constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
+    this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
     this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -65,22 +69,23 @@ export class BattleScene {
   }
 
   private setupArena(){
-    const hemi=new THREE.HemisphereLight(0x9accc9,0x40341d,1.8);this.world.add(hemi);
-    const key=new THREE.DirectionalLight(0xffe4aa,3.3);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
-    const rim=new THREE.DirectionalLight(0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
-    const floorMat=new THREE.MeshStandardMaterial({color:0x324238,roughness:.94});
+    const jelly=this.bossKind==='jelly';
+    const hemi=new THREE.HemisphereLight(jelly?0xb799d9:0x9accc9,jelly?0x241d3b:0x40341d,1.8);this.world.add(hemi);
+    const key=new THREE.DirectionalLight(jelly?0xe1c7ff:0xffe4aa,3.3);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
+    const rim=new THREE.DirectionalLight(jelly?0x9f80ff:0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
+    const floorMat=new THREE.MeshStandardMaterial({color:jelly?0x2d2948:0x324238,roughness:.94});
     const floor=new THREE.Mesh(new THREE.CircleGeometry(24,64),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
-    const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.67,1.76,.17,48),new THREE.MeshStandardMaterial({color:0x4e5740,roughness:.9}));plinth.position.y=-.085;plinth.receiveShadow=true;this.world.add(plinth);
-    const rimRing=new THREE.Mesh(new THREE.TorusGeometry(1.6,.024,6,64),new THREE.MeshStandardMaterial({color:0xb89550,metalness:.3,roughness:.65}));rimRing.rotation.x=-Math.PI/2;rimRing.position.y=.015;this.world.add(rimRing);
-    const stalkGeometry=new THREE.CylinderGeometry(.025,.04,1.25,5),stalkMat=new THREE.MeshStandardMaterial({color:0x315440,roughness:1});
+    const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.67,1.76,.17,48),new THREE.MeshStandardMaterial({color:jelly?0x49416b:0x4e5740,roughness:.9}));plinth.position.y=-.085;plinth.receiveShadow=true;this.world.add(plinth);
+    const rimRing=new THREE.Mesh(new THREE.TorusGeometry(1.6,.024,6,64),new THREE.MeshStandardMaterial({color:jelly?0xb697ed:0xb89550,metalness:.3,roughness:.65}));rimRing.rotation.x=-Math.PI/2;rimRing.position.y=.015;this.world.add(rimRing);
+    const stalkGeometry=new THREE.CylinderGeometry(.025,.04,1.25,5),stalkMat=new THREE.MeshStandardMaterial({color:jelly?0x463d62:0x315440,roughness:1});
     const earGeo=new THREE.CapsuleGeometry(.075,.19,2,6),earMat=new THREE.MeshStandardMaterial({color:0xa68b3d,roughness:.9});
     for(let i=0;i<26;i++){
       const side=i%2?1:-1,x=side*(2.3+(i%5)*.48),z=-.5-Math.floor(i/5)*.85;
       const stalk=new THREE.Mesh(stalkGeometry,stalkMat);stalk.position.set(x,.45,z);stalk.rotation.z=side*.15;this.world.add(stalk);
-      const ear=new THREE.Mesh(earGeo,earMat);ear.position.set(x-side*.07,.94,z);ear.rotation.z=side*.15;this.world.add(ear);
+      const ear=new THREE.Mesh(earGeo,jelly?new THREE.MeshStandardMaterial({color:0x665591,roughness:.8}):earMat);ear.position.set(x-side*.07,.94,z);ear.rotation.z=side*.15;this.world.add(ear);
     }
     // Low-poly stones at the arena perimeter establish depth and scale.
-    const stoneGeo=new THREE.DodecahedronGeometry(.16,0),stoneMat=new THREE.MeshStandardMaterial({color:0x384944,roughness:1});
+    const stoneGeo=new THREE.DodecahedronGeometry(.16,0),stoneMat=new THREE.MeshStandardMaterial({color:jelly?0x3c3452:0x384944,roughness:1});
     for(let i=0;i<16;i++){const a=i/16*Math.PI*2;const stone=new THREE.Mesh(stoneGeo,stoneMat);stone.position.set(Math.cos(a)*2.02,-.09,Math.sin(a)*2.02);stone.scale.set(1.1,.6,.8);stone.rotation.y=i;this.world.add(stone)}
   }
   private contextLost=(event:Event)=>{event.preventDefault();this.onFailure()};
@@ -107,7 +112,7 @@ export class BattleScene {
       positions.setXYZ(0,source.x*w,-source.y*h,0);positions.setXYZ(1,center.x,-center.y,0);positions.needsUpdate=true;path.frustumCulled=false;
     }
     const verdict=phase==='verdictReady'||phase==='verdictSlash'||impact&&feedback?.kind==='Verdict';
-    const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h);
+    const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h,this.bossKind);
     const guidePoints=this.guide.geometry.getAttribute('position') as THREE.BufferAttribute;
     weak.forEach((point,i)=>{
       const group=this.weakGroups[i];group.visible=verdict;group.position.set(point.x*w,-point.y*h,25);group.scale.set(point.radius*h,point.radius*h,1);

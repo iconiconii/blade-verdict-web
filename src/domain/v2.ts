@@ -2,12 +2,14 @@ export type Quality = 'Broken' | 'Normal' | 'High' | 'Top';
 export type ParryResult = 'Perfect' | 'Nice' | 'Miss';
 export type ParryPhase = 'EarlyMiss' | 'Nice' | 'Perfect' | 'LateMiss';
 export type BattlePhase = 'intro' | 'telegraph' | 'targetActive' | 'impact' | 'stagger' | 'verdictReady' | 'verdictSlash' | 'settle';
+export type BossKind = 'corn' | 'jelly';
 export interface AttackPresentation { targetIndex:number; position:{x:number;y:number}; startDelayMs:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
 export interface VerdictPoint { x:number; y:number; time:number }
 export interface VerdictWeakPoint { id:string; x:number; y:number; radius:number }
 export interface VerdictStroke { points:VerdictPoint[]; hitWeakPointIds:string[]; score:number; valid:boolean }
 export interface AttackConfig { telegraphMs:number; missDamage:number; perfectCounterDamage:number; niceCounterDamage:number; perfectMeterGain:number; niceMeterGain:number }
 export const cornAttack: AttackConfig = { telegraphMs:900, missDamage:12, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:18 };
+export const jellyAttack: AttackConfig = { telegraphMs:700, missDamage:8, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:34, niceMeterGain:22 };
 export const parryPhase = (progress:number):ParryPhase => progress < .35 ? 'EarlyMiss' : progress < .7 ? 'Nice' : progress <= .9 ? 'Perfect' : 'LateMiss';
 export const ringRatio = (p:number) => { p=Math.max(0,Math.min(1,p)); const lerp=(a:number,b:number,t:number)=>a+(b-a)*t; return p<.35?lerp(3,2.2,p/.35):p<.7?lerp(2.2,1.2,(p-.35)/.35):p<=.9?lerp(1.2,.8,(p-.7)/.2):lerp(.8,.25,(p-.9)/.1) };
 export function resolveParry(elapsedMs:number, attack= cornAttack):ParryResult { if(elapsedMs>attack.telegraphMs) return 'Miss'; const phase=parryPhase(Math.max(0,elapsedMs/attack.telegraphMs)); return phase==='Perfect'?'Perfect':phase==='Nice'?'Nice':'Miss' }

@@ -1,0 +1,5 @@
+.stage-image.jelly{background:radial-gradient(circle at 50% 35%,#9b6dd8aa,#1a1930 72%),url('/assets/jelly-stage.png') center/cover}
+.danger--purple{background:#7046a7}
+.jelly-stage{border-color:#8f70cb}
+.jelly-stage h2{color:#d6b9ff}
+.jelly-stage button{background:linear-gradient(135deg,#9c71df,#503070);border-color:#d0b0ff}

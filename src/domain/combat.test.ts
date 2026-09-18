@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateParryResults, deterministicTarget, resolveParry, verdictStroke } from './v2';
+import { aggregateParryResults, applyParry, deterministicTarget, jellyAttack, newBattle, resolveParry, verdictStroke } from './v2';
 import { createCombat, finishStroke, prepareRound, tapTarget, tickCombat } from './combat';
 
 describe('battle presentation state machine',()=>{
+  it('uses Jelly V2 timing and split cadence without changing verdict rules',()=>{
+    expect(jellyAttack.telegraphMs).toBe(700);expect(jellyAttack.missDamage).toBe(8);expect(jellyAttack.perfectMeterGain).toBe(34);expect(resolveParry(560,jellyAttack)).toBe('Perfect');expect(applyParry(newBattle(),'Miss',jellyAttack).playerHp).toBe(92);
+    let combat=createCombat(7319,'jelly');combat=tickCombat(combat,700);combat=tickCombat(combat,400);expect(combat.targets).toHaveLength(1);combat={...combat,round:2};combat=prepareRound(combat);expect(combat.targets).toHaveLength(2);expect(combat.targets[1].startDelayMs).toBe(180);
+  });
   it('uses deterministic target positions and a two-target cadence',()=>{
     expect(deterministicTarget(7319,0,0,1)).toEqual(deterministicTarget(7319,0,0,1));
     let combat=createCombat(7319);combat=tickCombat(combat,700);expect(combat.phase).toBe('telegraph');combat=tickCombat(combat,400);expect(combat.phase).toBe('targetActive');expect(combat.targets).toHaveLength(1);
