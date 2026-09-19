@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { targetCenter, targetDiameter, type CombatState } from './domain/combat';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { doubleTargetDiameter, targetDiameter, type CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
-import { makeBattleCamera, projectPoint, projectedWeakPoints } from './scene/layout';
+import { makeBattleCamera, projectBodyAnchor, projectPoint, projectedWeakPoints } from './scene/layout';
 import type { BossKind } from './domain/v2';
 
 const colors={early:0xff9466,nice:0xffd369,perfect:0x74ffe4,late:0xff665c};
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:opacity<1,opacity,depthWrite:false,toneMapped:false});
+export interface ParryTargetLayout { round:number; x:number; y:number; diameter:number; visible:boolean }
 
 /** Perspective world plus a pixel-space Three.js effects pass. React owns text. */
 export class BattleScene {
@@ -18,8 +20,8 @@ export class BattleScene {
   private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
   private guardian:CornGuardian|JellyGuardian;
   private bossKind:BossKind;
-  private targetGroups:THREE.Group[]=[];
-  private targetPaths:THREE.Line[]=[];
+  private targetRings:THREE.Group[]=[];
+  private targetLayouts:ParryTargetLayout[]=[];
   private weakGroups:THREE.Group[]=[];
   private guide:THREE.Line;
   private trail:EffectMesh;
@@ -29,6 +31,7 @@ export class BattleScene {
   private width=1;private height=1;private disposed=false;
   private lineBuffer=new Float32Array(512*6*3);
   private lastStroke:CombatState['stroke']=null;
+  private jellyEnvironment:THREE.WebGLRenderTarget|null=null;
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
@@ -45,13 +48,14 @@ export class BattleScene {
     this.world.add(this.guardian.root);this.setupArena();
     this.overlayCamera.position.z=100;
     for(let i=0;i<2;i++){
-      const group=new THREE.Group();group.position.z=20;group.visible=false;
-      const halo=new THREE.Mesh(new THREE.RingGeometry(.69,.72,48),basic(0xffd369,.25));
-      const ring=new THREE.Mesh(new THREE.RingGeometry(.48,.51,48),basic(0xffd369));
-      const core=new THREE.Mesh(new THREE.CircleGeometry(.32,6),basic(0xffd369));core.rotation.z=Math.PI/6;core.position.z=1;
-      const inner=new THREE.Mesh(new THREE.RingGeometry(.13,.17,4),basic(0x243531));inner.position.z=2;
-      group.add(halo,ring,core,inner);this.targetGroups.push(group);this.overlay.add(group);
-      const path=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3)),new THREE.LineBasicMaterial({color:0xffdc96,transparent:true,opacity:.35,toneMapped:false}));path.position.z=10;this.targetPaths.push(path);this.overlay.add(path);
+      // These rings are real world objects mounted on the selected body anchor.
+      // React still owns the invisible 72px touch target; Three.js owns this visual.
+      const group=new THREE.Group();group.name=`body-parry-ring-${i}`;group.visible=false;group.renderOrder=20;
+      const outer=new THREE.Mesh(new THREE.TorusGeometry(.24,.035,8,36),basic(0xffb64f,.9));
+      const warning=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,6,28),basic(0xffd369,.95));
+      const core=new THREE.Mesh(new THREE.CircleGeometry(.1,24),basic(0x64f4e6,.72));core.position.z=.012;
+      const center=new THREE.Mesh(new THREE.TorusGeometry(.065,.014,6,20),basic(0xd7fff7,.95));center.position.z=.02;
+      group.add(outer,warning,core,center);this.targetRings.push(group);
     }
     for(let i=0;i<4;i++){
       const group=new THREE.Group();group.position.z=25;
@@ -70,6 +74,13 @@ export class BattleScene {
 
   private setupArena(){
     const jelly=this.bossKind==='jelly';
+    if(jelly){
+      // A small local studio reflection map gives the gel broad, soft highlights.
+      // No network asset or per-frame environment rendering is needed.
+      const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(this.renderer);
+      try{this.jellyEnvironment=pmrem.fromScene(room,.06,.1,100,{size:128});this.world.environment=this.jellyEnvironment.texture;this.world.environmentIntensity=.55}
+      finally{room.dispose();pmrem.dispose()}
+    }
     const hemi=new THREE.HemisphereLight(jelly?0xb799d9:0x9accc9,jelly?0x241d3b:0x40341d,1.8);this.world.add(hemi);
     const key=new THREE.DirectionalLight(jelly?0xe1c7ff:0xffe4aa,3.3);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
     const rim=new THREE.DirectionalLight(jelly?0x9f80ff:0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
@@ -95,6 +106,8 @@ export class BattleScene {
     this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);this.lastStroke=null;
   }
+  /** React uses the exact layout just rendered, never a second projection/animation clock. */
+  getTargetLayout(index:number){return this.targetLayouts[index]}
   isPointInsideMonster(point:{x:number;y:number}){
     this.guardian.root.updateMatrixWorld(true);
     const bounds=new THREE.Box3().setFromObject(this.guardian.root),min=new THREE.Vector3(Infinity,Infinity,Infinity),max=new THREE.Vector3(-Infinity,-Infinity,-Infinity);
@@ -104,18 +117,28 @@ export class BattleScene {
   render(state:CombatState,reducedMotion=false){
     if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
     const impact=phase==='impact'||phase==='stagger'||feedback?.kind==='Cut';
+    const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
+    const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
+    this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
-    const launch=this.guardian.root.localToWorld(new THREE.Vector3(-.65,1.15,.3));const source=projectPoint(launch,this.camera);
+    this.targetLayouts=[];
     for(let i=0;i<2;i++){
-      const target=state.targets[i],group=this.targetGroups[i],path=this.targetPaths[i];
-      const show=!!target&&!target.resolved&&(phase==='telegraph'||phase==='targetActive'&&elapsed>=target.startDelayMs);
-      group.visible=path.visible=show;if(!show)continue;
-      const center=targetCenter(target.position,w,h),d=Math.max(targetDiameter(w,h),state.targets.length===2?72:0);
-      group.position.set(center.x,-center.y,20);group.scale.set(d,d,1);
-      const ring=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh;
-      ring.scale.setScalar(1.5-target.telegraphProgress*.65);ring.material.color.setHex(colors[target.phase]);core.material.color.copy(ring.material.color);core.scale.setScalar(phase==='telegraph'?.55:1);
-      const positions=path.geometry.getAttribute('position') as THREE.BufferAttribute;
-      positions.setXYZ(0,source.x*w,-source.y*h,0);positions.setXYZ(1,center.x,-center.y,0);positions.needsUpdate=true;path.frustumCulled=false;
+      const target=state.targets[i],group=this.targetRings[i];
+      const show=!!target&&!target.resolved&&(
+        phase==='telegraph'&&target.targetIndex===0
+        || phase==='targetActive'&&elapsed>=target.startDelayMs
+      );
+      group.visible=show;if(!target)continue;
+      const center=projectBodyAnchor(this.guardian.getAnchor(target.anchorId),this.camera,w,h),d=Math.max(targetDiameter(w,h),state.targets.length===2?doubleTargetDiameter:0);
+      this.targetLayouts[i]={round:state.round,...center,diameter:d,visible:show};
+      if(!show)continue;
+      const anchor=this.guardian.getAnchor(target.anchorId);if(group.parent!==anchor)anchor.add(group);
+      group.position.set(0,0,.055);group.rotation.z=Math.sin(t*1.8+i)*.035;
+      const pulse=1+Math.sin(t*7+i)*.04,scale=(1.08-target.telegraphProgress*.3)*pulse;group.scale.setScalar(scale);
+      const outer=group.children[0] as EffectMesh,warning=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh,centerMesh=group.children[3] as EffectMesh;
+      outer.material.color.setHex(target.phase==='perfect'?0x76ffe5:target.phase==='late'?0xff675e:0xffa94f);
+      warning.material.color.setHex(colors[target.phase]);core.material.color.setHex(target.phase==='perfect'?0x9affed:0x5ed9e0);centerMesh.material.color.setHex(0xeaffff);
+      core.material.opacity=phase==='telegraph'?.58:.86;
     }
     const verdict=false;
     const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h,this.bossKind);
@@ -126,17 +149,14 @@ export class BattleScene {
       guidePoints.setXYZ(i,point.x*w,-point.y*h,0);
     });guidePoints.needsUpdate=true;this.guide.visible=verdict;this.guide.frustumCulled=false;
     this.drawStroke(state);
-    const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
     this.shock.visible=this.slash.visible=!!feedback&&impact&&strength>0;
-    const position=feedback?targetCenter(feedback.position,w,h):{x:w/2,y:h/2};
+    const position=feedback?.anchorId?projectBodyAnchor(this.guardian.getAnchor(feedback.anchorId),this.camera,w,h):{x:(feedback?.position.x??.5)*w,y:(feedback?.position.y??.5)*h};
     if(feedback){
       const color=feedback.kind==='Miss'?0xff695e:feedback.kind==='Nice'?0xffd369:0x85ffdf;
       this.shock.position.set(position.x,-position.y,35);this.shock.scale.setScalar(25+age*.18);this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
-      this.slash.visible=this.slash.visible&&feedback.kind!=='Miss';this.slash.position.set(w/2,-h*.48,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
+      this.slash.visible=this.slash.visible&&feedback.kind!=='Miss';this.slash.position.set(position.x,-position.y,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
       this.sparks.forEach((spark,i)=>{spark.visible=impact&&strength>0;const a=i*2.39996,r=(25+age*.17)*(.7+(i%4)*.14);spark.position.set(position.x+Math.cos(a)*r,-position.y+Math.sin(a)*r-age*age*.00005,36);spark.scale.setScalar((i%3+1)*1.7*strength);spark.material.color.setHex(color)});
     }else this.sparks.forEach(spark=>spark.visible=false);
-    const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
-    this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.renderer.clear();this.renderer.render(this.world,this.camera);this.renderer.clearDepth();this.renderer.render(this.overlay,this.overlayCamera);
     this.camera.position.x=0;this.camera.updateMatrixWorld();
   }
@@ -160,6 +180,6 @@ export class BattleScene {
       if(object instanceof THREE.Mesh||object instanceof THREE.Line){geometries.add(object.geometry);const m=object.material;if(Array.isArray(m))m.forEach(item=>materials.add(item));else materials.add(m);}
       if(object instanceof THREE.InstancedMesh)object.dispose();
       if(object instanceof THREE.DirectionalLight)object.shadow.dispose();
-    });geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());this.renderer.dispose();this.renderer.domElement.remove();
+    });geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());this.world.environment=null;this.jellyEnvironment?.dispose();this.renderer.dispose();this.renderer.domElement.remove();
   }
 }

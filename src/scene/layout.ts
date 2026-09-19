@@ -8,6 +8,11 @@ export function makeBattleCamera(width:number,height:number){
   camera.position.set(0,1.75,distance);camera.lookAt(0,1.15,0);camera.updateMatrixWorld(true);return camera;
 }
 export function projectPoint(point:THREE.Vector3,camera:THREE.Camera){const p=point.clone().project(camera);return{x:(p.x+1)/2,y:(1-p.y)/2}}
+/** No HUD clamping: a body-bound marker must never drift off its body part. */
+export function projectBodyAnchor(anchor:THREE.Object3D,camera:THREE.Camera,width:number,height:number){
+  const projected=projectPoint(anchor.getWorldPosition(new THREE.Vector3()),camera);
+  return{x:projected.x*width,y:projected.y*height};
+}
 export function projectedWeakPoints(verdictCount:number,width:number,height:number,bossKind:BossKind='corn'):VerdictWeakPoint[]{
   const patterns=bossKind==='jelly'?[[[.24,.68],[.74,.68],[.26,.36],[.76,.36]],[[.22,.66],[.45,.48],[.63,.68],[.78,.38]],[[.28,.62],[.68,.66],[.66,.36],[.4,.4]]]:[[[.22,.55],[.4,.55],[.58,.55],[.76,.55]],[[.22,.68],[.4,.59],[.58,.5],[.76,.41]],[[.3,.7],[.3,.52],[.3,.34],[.68,.34]]];
   const camera=makeBattleCamera(width,height),radius=Math.max(22,Math.min(27,width*.065))/height;
