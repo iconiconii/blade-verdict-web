@@ -5,6 +5,7 @@ import { bodyAnchorLabel, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
+const parryLabels={early:'收环中',nice:'金色 Nice · 点击',perfect:'青色 Perfect · 点击',late:'红色危险 · 立即点击'} as const;
 
 export function Battle(){
   const host=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null);
@@ -15,6 +16,9 @@ export function Battle(){
   const [failed,setFailed]=useState(false),failedRef=useRef(false);
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
   const {battle,bossKind,phase,targets,feedback,combo,paused}=combat;
+  const resolvedTargets=targets.filter(target=>target.resolved).length;
+  const nextTarget=targets.find(target=>!target.resolved);
+  const phaseTitle=feedback?.kind==='Miss'?'受到攻击':feedback?.kind==='Nice'?'Nice 反击':feedback?.kind==='Perfect'?'Perfect 反击':phaseLabels[phase];
   const positionTarget=(index:number,button:HTMLButtonElement)=>{
     const layout=scene.current?.getTargetLayout(index);
     const visible=layout?.visible&&layout.round===Number(button.dataset.round);
@@ -66,36 +70,41 @@ export function Battle(){
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
-  const showFeedback=feedback&&(phase==='impact'||phase==='stagger'||feedback.kind==='Cut');
+  const showFeedback=Boolean(feedback&&(phase==='impact'||(phase==='stagger'&&combat.elapsed<900)||(phase==='verdictSlash'&&feedback.kind==='Cut')));
   return <section className={`battle battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''}`} data-testid="battle" data-battle-phase={phase}>
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&!target.resolved&&!paused;
+        const waiting=phase==='telegraph'||combat.elapsed<target.startDelayMs;
+        const timingLabel=target.resolved?(target.result==='Perfect'?'Perfect':target.result==='Nice'?'Nice':'Miss'):waiting?'即将亮起':parryLabels[target.phase];
         return <button key={`${combat.round}-${target.targetIndex}`} className="parry-target"
           ref={button=>{if(button){targetButtons.current.set(target.targetIndex,button);positionTarget(target.targetIndex,button)}else targetButtons.current.delete(target.targetIndex)}}
-          aria-label={`招架环 · ${bodyAnchorLabel(target.anchorId)}`} data-testid={`target-${target.targetIndex}`} data-anchor={target.anchorId} data-round={combat.round} data-phase={target.phase} data-resolved={target.resolved} disabled={!active}
-          onPointerDown={e=>{e.stopPropagation();if(e.button!==0)return;const rect=e.currentTarget.getBoundingClientRect();if(Math.hypot(e.clientX-rect.left-rect.width/2,e.clientY-rect.top-rect.height/2)>rect.width/2)return;advanceNow();useGame.getState().tap(target.targetIndex)}}
+          data-testid={`target-${target.targetIndex}`} data-anchor={target.anchorId} data-round={combat.round} data-phase={target.phase} data-resolved={target.resolved} disabled={!active}
+          aria-label={`招架环 ${target.targetIndex+1}/${targets.length} · ${bodyAnchorLabel(target.anchorId)} · ${timingLabel}`}
+          title={timingLabel}
+          style={{'--target-scale':(1.02-target.telegraphProgress*.2).toFixed(3)} as React.CSSProperties}
+          onPointerDown={e=>{e.stopPropagation();e.preventDefault();if(e.button!==0)return;const rect=e.currentTarget.getBoundingClientRect();if(Math.hypot(e.clientX-rect.left-rect.width/2,e.clientY-rect.top-rect.height/2)>rect.width/2)return;advanceNow();useGame.getState().tap(target.targetIndex)}}
           onClick={e=>{if(e.detail===0){advanceNow();useGame.getState().tap(target.targetIndex)}}}>
-          <span className="target-caption">{target.resolved?'✓':`${bodyAnchorLabel(target.anchorId)} · ${target.phase==='perfect'?'完美窗口':phase==='telegraph'?'即将亮起':target.phase==='late'?'太晚了':'等待收环'}`}</span>
+          <span className="target-caption"><b>{target.resolved?'✓':target.targetIndex+1}</b>{bodyAnchorLabel(target.anchorId)} · {timingLabel}</span>
         </button>
       })}
     </div>
     <header className="battle-top">
       <button className="battle-icon" aria-label="返回与暂停" onClick={()=>useGame.getState().pause(true)}>‹</button>
-      <div className="boss-hud"><div className="boss-heading"><span>{bossKind==='jelly'?'NO. 02 / JELLY LAB':'NO. 01 / CORN GUARDIAN'}</span><span>{bossKind==='jelly'?'危险度 III':'危险度 II'}</span></div><h2>{bossKind==='jelly'?'酸蚀果冻怪':'暴怒玉米守卫'} <small>{phaseLabels[phase]}</small></h2><div className="battle-health boss-health"><i style={{width:`${battle.bossHp/8}%`}}/></div><div className="boss-meta"><span>{bossKind==='jelly'?'果冻实验室 · 反应池':'荒芜农场 · 月下讨伐'}</span><span data-testid="boss-hp">{battle.bossHp} <em>/ 800</em></span></div></div>
+      <div className="boss-hud"><div className="boss-heading"><span>{bossKind==='jelly'?'NO. 02 / JELLY LAB':'NO. 01 / CORN GUARDIAN'}</span><span>{bossKind==='jelly'?'危险度 III':'危险度 II'}</span></div><h2>{bossKind==='jelly'?'酸蚀果冻怪':'暴怒玉米守卫'} <small>{phaseTitle}</small></h2><div className="battle-health boss-health" role="progressbar" aria-label="Boss 生命值" aria-valuemin={0} aria-valuemax={800} aria-valuenow={battle.bossHp}><i style={{width:`${Math.max(0,Math.min(100,battle.bossHp/8))}%`}}/></div><div className="boss-meta"><span>{bossKind==='jelly'?'果冻实验室 · 反应池':'荒芜农场 · 月下讨伐'}</span><span data-testid="boss-hp">{battle.bossHp} <em>/ 800</em></span></div></div>
       <button className="battle-icon" aria-label="暂停战斗" onClick={()=>useGame.getState().pause(true)}>Ⅱ</button>
     </header>
-    <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'BREAK · 破防时刻':targets.length===2?'DOUBLE · 依次招架两处光环':'PARRY · 观察身体光环 · 等待 · 反击'}</div>
+    <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'BREAK · 破防时刻':targets.length===2?`DOUBLE · 身体光环 ${resolvedTargets}/${targets.length}`:'PARRY · 观察身体光环 · 等待 · 反击'}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>
     {phase==='intro'&&ready&&tutorialSeen&&<div className="battle-announcement"><small>HUNT BEGINS</small><h2>保持冷静，等待刀锋。</h2></div>}
-    {showFeedback&&<div className={`hit-feedback hit-feedback--${feedback.kind}`} key={`${feedback.id}-${feedback.kind}`} role="status"><strong>{feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind.toUpperCase()}</strong><span>{feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?`主体切割 · Combo ×${combat.verdictCombo}`:feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} <b>−{feedback.amount}</b></span></div>}
+    {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind.toUpperCase()}</strong><span>{feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?`主体切割 · Combo ×${combat.verdictCombo}`:feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} <b>−{feedback.amount}</b></span></div>}
     {inVerdict&&<div className="verdict-heading"><small>THE BLADE IS YOUR VERDICT</small><h2>{phase==='verdictReady'?'进入主体。疯狂切！':'保持速度，不要停刀'}</h2><p>{phase==='verdictReady'?`进入裁决后有 ${durations.verdict/1000} 秒连续切割`:'每段有效划动造成 12 伤害 · 最高 200 伤害'}</p>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${Math.max(0,100-combat.elapsed/durations.verdict*100)}%`}}/><span>{Math.max(0,durations.verdict/1000-combat.elapsed/1000).toFixed(1)}s · Combo ×{combat.verdictCombo} · {combat.verdictDamageDealt}/200{combat.verdictBonusDamage>0?` · 斩骨刀 +${combat.verdictBonusDamage}`:''}</span></div>}</div>}
     <footer className="battle-bottom">
-      <div className="player-hud"><div className="player-avatar">刃</div><div><div className="player-heading"><strong>守夜厨师</strong><span data-testid="player-hp">{battle.playerHp}/100</span></div><div className="battle-health player-health"><i style={{width:`${battle.playerHp}%`}}/></div><div className="combo"><b>{String(combo).padStart(2,'0')}</b> 连续招架</div></div></div>
+      <div className="player-hud"><div className="player-avatar" aria-hidden="true">刃</div><div><div className="player-heading"><strong>守夜厨师</strong><span data-testid="player-hp">{battle.playerHp}/100</span></div><div className="battle-health player-health" role="progressbar" aria-label="玩家生命值" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.playerHp}><i style={{width:`${Math.max(0,Math.min(100,battle.playerHp))}%`}}/></div><div className="combo"><b>{String(combo).padStart(2,'0')}</b> 连续招架</div></div></div>
       <div className="combat-instruction">{phase==='verdictSlash'?'连续划过怪物主体 · 每段 +12':phase==='verdictReady'?'点击裁决徽章开始':phase==='telegraph'?'留意怪物身上随机亮起的光环':targets.length===2?'依次点击两处身体光环 · 第二处稍后出现':targets.some(t=>t.phase==='perfect')?'现在 · 点击身体光环':'金色 NICE · 青色 PERFECT'}</div>
-      <button className={`verdict-badge ${phase==='verdictReady'?'is-ready':''}`} style={{'--meter':`${battle.meter}%`} as React.CSSProperties} disabled={phase!=='verdictReady'||paused} onClick={()=>{advanceNow();useGame.getState().beginVerdict()}} aria-label="执行裁决" data-testid="verdict-start"><span className="verdict-mark">斩</span><strong>{phase==='verdictReady'?'执行裁决':`${battle.meter}%`}</strong><small>VERDICT</small></button>
+      <button className={`verdict-badge ${phase==='verdictReady'?'is-ready':''}`} style={{'--meter':`${battle.meter}%`} as React.CSSProperties} disabled={phase!=='verdictReady'||paused} onClick={()=>{advanceNow();useGame.getState().beginVerdict()}} aria-label={phase==='verdictReady'?'执行裁决':`裁决能量 ${battle.meter}%`} data-testid="verdict-start"><span className="verdict-mark">斩</span><strong>{phase==='verdictReady'?'执行裁决':`${battle.meter}%`}</strong><small>VERDICT · {battle.meter>=100?'READY':'CHARGE'}</small></button>
     </footer>
-    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'掌握招架的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>观察怪物蓄力，等待光环收缩。<br/>{bossKind==='jelly'?'紫色时点击核心：Nice':'金色时点击核心：Nice'}<br/>青色时点击核心：Perfect</p><p>能量蓄满后，连续划过怪物主体进行裁决。</p></>}{ready&&!failed&&<button autoFocus className="gold-button" onClick={()=>{clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</button>}{(paused||failed)&&<button className="quiet-button" onClick={()=>useGame.getState().go('stages')}>退出讨伐</button>}</div></div>}
+    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'掌握招架的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>观察怪物蓄力，等待光环收缩。<br/>金色时点击核心：Nice<br/>青色时点击核心：Perfect</p><p>能量蓄满后，连续划过怪物主体进行裁决。</p></>}{ready&&!failed&&<button autoFocus className="gold-button" onClick={()=>{clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</button>}{(paused||failed)&&<button className="quiet-button" onClick={()=>useGame.getState().go('stages')}>退出讨伐</button>}</div></div>}
   </section>;
 }

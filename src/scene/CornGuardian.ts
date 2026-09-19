@@ -36,7 +36,7 @@ export class CornGuardian {
       huskLight=this.material(0xa7c65a,.48),bronze=this.material(0xb77a37,.38,.55),
       boot=this.material(0x3b483b,.72,.25),face=this.material(0xffc94c,.4),
       eye=this.material(0x15262a,.2,.1),cream=this.material(0xfff1b4,.32),
-      mouth=this.material(0x241913,.8);
+      mouth=this.material(0x241913,.8),anchorTrim=this.material(0xf4ca68,.28,.45);
 
     this.body.position.set(0,1.02,0);
     this.mesh(new RoundedBoxGeometry(.92,1.2,.66,4,.15),face,this.body,[0,0,0]);
@@ -75,6 +75,17 @@ export class CornGuardian {
     this.makeArm(this.rightArm,1,huskLight,kernel);
     this.makeLeg(this.leftLeg,-1,boot,kernel);
     this.makeLeg(this.rightLeg,1,boot,kernelLight);
+
+    // Anatomical trim makes each possible target legible before the parry ring
+    // arrives. These read as clasps, pads and a forehead crest, not UI markers.
+    this.mesh(new THREE.TorusGeometry(.13,.016,7,24),anchorTrim,this.head,[0,.24,.48],[1,1,.38]);
+    this.mesh(new THREE.CircleGeometry(.13,16),anchorTrim,this.body,[0,-.02,.47],[1,1,.2]);
+    for(const arm of [this.leftArm,this.rightArm]){
+      this.mesh(new THREE.TorusGeometry(.16,.018,7,24),anchorTrim,arm,[0,-.46,.23],[1,.82,.42]);
+    }
+    for(const leg of [this.leftLeg,this.rightLeg]){
+      this.mesh(new THREE.TorusGeometry(.18,.018,7,24),anchorTrim,leg,[0,-.08,.31],[1,.8,.36]);
+    }
 
     this.addAnchor('head',this.head,[0,.24,.47]);
     this.addAnchor('belly',this.body,[0,-.02,.46]);

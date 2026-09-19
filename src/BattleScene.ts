@@ -3,10 +3,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { doubleTargetDiameter, targetDiameter, type CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
-import { makeBattleCamera, projectBodyAnchor, projectPoint, projectedWeakPoints } from './scene/layout';
-import type { BossKind } from './domain/v2';
+import { makeBattleCamera, projectBodyAnchor, projectPoint } from './scene/layout';
+import { ringRatio, type BossKind } from './domain/v2';
 
-const colors={early:0xff9466,nice:0xffd369,perfect:0x74ffe4,late:0xff665c};
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:opacity<1,opacity,depthWrite:false,toneMapped:false});
 export interface ParryTargetLayout { round:number; x:number; y:number; diameter:number; visible:boolean }
@@ -22,11 +21,12 @@ export class BattleScene {
   private bossKind:BossKind;
   private targetRings:THREE.Group[]=[];
   private targetLayouts:ParryTargetLayout[]=[];
-  private weakGroups:THREE.Group[]=[];
-  private guide:THREE.Line;
   private trail:EffectMesh;
   private slash:EffectMesh;
+  private slashEcho:EffectMesh;
   private shock:EffectMesh;
+  private missCrack:THREE.LineSegments;
+  private arenaPulse!:EffectMesh;
   private sparks:EffectMesh[]=[];
   private width=1;private height=1;private disposed=false;
   private lineBuffer=new Float32Array(512*6*3);
@@ -49,26 +49,35 @@ export class BattleScene {
     this.overlayCamera.position.z=100;
     for(let i=0;i<2;i++){
       // These rings are real world objects mounted on the selected body anchor.
-      // React still owns the invisible 72px touch target; Three.js owns this visual.
-      const group=new THREE.Group();group.name=`body-parry-ring-${i}`;group.visible=false;group.renderOrder=20;
-      const outer=new THREE.Mesh(new THREE.TorusGeometry(.24,.035,8,36),basic(0xffb64f,.9));
-      const warning=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,6,28),basic(0xffd369,.95));
-      const core=new THREE.Mesh(new THREE.CircleGeometry(.1,24),basic(0x64f4e6,.72));core.position.z=.012;
-      const center=new THREE.Mesh(new THREE.TorusGeometry(.065,.014,6,20),basic(0xd7fff7,.95));center.position.z=.02;
-      group.add(outer,warning,core,center);this.targetRings.push(group);
+      // React still owns the invisible touch target; Three.js owns this visual.
+      // The layers deliberately have different speeds/weights so the marker reads
+      // as a body-mounted lock-on rather than a flat debug circle.
+      const group=new THREE.Group();group.name=`body-parry-ring-${i}`;group.visible=false;group.renderOrder=20;group.frustumCulled=false;
+      const outer=new THREE.Mesh(new THREE.TorusGeometry(.24,.035,10,48),basic(0xff675e,.9));
+      const warning=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,8,36),basic(0xff9466,.95));
+      const core=new THREE.Mesh(new THREE.CircleGeometry(.1,28),basic(0xffad72,.22));core.position.z=.012;
+      const center=new THREE.Mesh(new THREE.TorusGeometry(.065,.014,6,20),basic(0xfff2d1,.95));center.position.z=.02;
+      const sweep=new THREE.Mesh(new THREE.TorusGeometry(.255,.012,6,32,Math.PI*1.18),basic(0xfff2cf,.92));sweep.position.z=.026;sweep.rotation.z=.38;
+      const reticle=new THREE.Mesh(new THREE.RingGeometry(.112,.126,12),basic(0xffeac5,.76));reticle.position.z=.027;
+      const needle=new THREE.Mesh(new THREE.PlaneGeometry(.018,.16),basic(0xffffff,.86));needle.position.set(0,.115,.029);needle.rotation.z=-.38;
+      for(const child of [outer,warning,core,center,sweep,reticle,needle]){
+        child.renderOrder=20;child.frustumCulled=false;
+        (child.material as THREE.MeshBasicMaterial).depthTest=false;
+      }
+      group.add(outer,warning,core,center,sweep,reticle,needle);this.targetRings.push(group);
     }
-    for(let i=0;i<4;i++){
-      const group=new THREE.Group();group.position.z=25;
-      group.add(new THREE.Mesh(new THREE.RingGeometry(.8,.95,4),basic(0xffdf8b)),new THREE.Mesh(new THREE.CircleGeometry(.22,4),basic(0xffffff)));
-      this.weakGroups.push(group);this.overlay.add(group);
-    }
-    this.guide=new THREE.Line(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(12),3)),new THREE.LineBasicMaterial({color:0xffdf8b,transparent:true,opacity:.28,toneMapped:false}));this.guide.position.z=23;this.overlay.add(this.guide);
     const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute('position',new THREE.BufferAttribute(this.lineBuffer,3).setUsage(THREE.DynamicDrawUsage));trailGeo.setDrawRange(0,0);
     this.trail=new THREE.Mesh(trailGeo,basic(0xb6fff4,.95));this.trail.material.side=THREE.DoubleSide;this.trail.frustumCulled=false;this.trail.position.z=40;this.overlay.add(this.trail);
-    this.slash=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0xd9fff3,.9));this.slash.position.z=38;this.slash.rotation.z=-.65;this.overlay.add(this.slash);
-    this.shock=new THREE.Mesh(new THREE.RingGeometry(.94,1,48),basic(0x74ffe4,.9));this.shock.position.z=35;this.overlay.add(this.shock);
+    this.slash=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0xd9fff3,.9));this.slash.position.z=38;this.slash.rotation.z=-.65;this.slash.renderOrder=40;this.slash.frustumCulled=false;this.slash.visible=false;this.overlay.add(this.slash);
+    this.slashEcho=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0x8bffe9,.36));this.slashEcho.position.z=37;this.slashEcho.rotation.z=.58;this.slashEcho.renderOrder=39;this.slashEcho.frustumCulled=false;this.slashEcho.visible=false;this.overlay.add(this.slashEcho);
+    this.shock=new THREE.Mesh(new THREE.RingGeometry(.94,1,48),basic(0x74ffe4,.9));this.shock.position.z=35;this.shock.visible=false;this.overlay.add(this.shock);
     const sparkGeometry=new THREE.CircleGeometry(1,3),sparkMaterial=basic(0xffe6a5,.9);
-    for(let i=0;i<24;i++){const spark=new THREE.Mesh(sparkGeometry,sparkMaterial);spark.position.z=36;this.sparks.push(spark);this.overlay.add(spark)}
+    for(let i=0;i<24;i++){const spark=new THREE.Mesh(sparkGeometry,sparkMaterial);spark.position.z=36;spark.visible=false;this.sparks.push(spark);this.overlay.add(spark)}
+    const crackPoints=[[-.06,.02,0,.18,.15,0],[-.06,.02,0,-.2,-.09,0],[.04,-.01,0,.14,-.2,0],[-.01,.06,0,-.18,.23,0],[.09,.02,0,.23,.04,0],[.01,-.08,0,-.08,-.26,0]];
+    const crackPositions=new Float32Array(crackPoints.flat());
+    const crackGeometry=new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(crackPositions,3));
+    this.missCrack=new THREE.LineSegments(crackGeometry,new THREE.LineBasicMaterial({color:0xff695e,transparent:true,opacity:.9,depthTest:false,depthWrite:false,toneMapped:false}));
+    this.missCrack.position.z=39;this.missCrack.renderOrder=42;this.missCrack.frustumCulled=false;this.overlay.add(this.missCrack);
     this.resize();queueMicrotask(()=>{if(!this.disposed)onReady()});
   }
 
@@ -88,6 +97,8 @@ export class BattleScene {
     const floor=new THREE.Mesh(new THREE.CircleGeometry(24,64),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
     const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.67,1.76,.17,48),new THREE.MeshStandardMaterial({color:jelly?0x49416b:0x4e5740,roughness:.9}));plinth.position.y=-.085;plinth.receiveShadow=true;this.world.add(plinth);
     const rimRing=new THREE.Mesh(new THREE.TorusGeometry(1.6,.024,6,64),new THREE.MeshStandardMaterial({color:jelly?0xb697ed:0xb89550,metalness:.3,roughness:.65}));rimRing.rotation.x=-Math.PI/2;rimRing.position.y=.015;this.world.add(rimRing);
+    this.arenaPulse=new THREE.Mesh(new THREE.RingGeometry(1.16,1.51,72),basic(jelly?0xa88cff:0xffca70,.12));
+    this.arenaPulse.name='battle-arena-pulse';this.arenaPulse.rotation.x=-Math.PI/2;this.arenaPulse.position.y=.026;this.arenaPulse.renderOrder=3;this.arenaPulse.frustumCulled=false;this.world.add(this.arenaPulse);
     const stalkGeometry=new THREE.CylinderGeometry(.025,.04,1.25,5),stalkMat=new THREE.MeshStandardMaterial({color:jelly?0x463d62:0x315440,roughness:1});
     const earGeo=new THREE.CapsuleGeometry(.075,.19,2,6),earMat=new THREE.MeshStandardMaterial({color:0xa68b3d,roughness:.9});
     for(let i=0;i<26;i++){
@@ -116,11 +127,16 @@ export class BattleScene {
   }
   render(state:CombatState,reducedMotion=false){
     if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
+    const verdict=phase==='verdictReady'||phase==='verdictSlash';
     const impact=phase==='impact'||phase==='stagger'||feedback?.kind==='Cut';
     const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
     const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
     this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
+    const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:this.bossKind==='jelly'?0xa98cff:0xffc66b;
+    this.arenaPulse.material.color.setHex(arenaColor);
+    this.arenaPulse.material.opacity=(verdict?.18:phase==='telegraph'?.13:.08)+(Math.sin(t*3.4)*.018);
+    this.arenaPulse.scale.setScalar(1+(verdict?.045:.018)*Math.sin(t*(verdict?5.2:2.4)));
     this.targetLayouts=[];
     for(let i=0;i<2;i++){
       const target=state.targets[i],group=this.targetRings[i];
@@ -133,29 +149,39 @@ export class BattleScene {
       this.targetLayouts[i]={round:state.round,...center,diameter:d,visible:show};
       if(!show)continue;
       const anchor=this.guardian.getAnchor(target.anchorId);if(group.parent!==anchor)anchor.add(group);
-      group.position.set(0,0,.055);group.rotation.z=Math.sin(t*1.8+i)*.035;
-      const pulse=1+Math.sin(t*7+i)*.04,scale=(1.08-target.telegraphProgress*.3)*pulse;group.scale.setScalar(scale);
-      const outer=group.children[0] as EffectMesh,warning=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh,centerMesh=group.children[3] as EffectMesh;
-      outer.material.color.setHex(target.phase==='perfect'?0x76ffe5:target.phase==='late'?0xff675e:0xffa94f);
-      warning.material.color.setHex(colors[target.phase]);core.material.color.setHex(target.phase==='perfect'?0x9affed:0x5ed9e0);centerMesh.material.color.setHex(0xeaffff);
-      core.material.opacity=phase==='telegraph'?.58:.86;
+      group.position.set(0,0,.07);group.rotation.z=Math.sin(t*1.8+i)*.035;
+      const palette={
+        early:{outer:0xff5d63,warning:0xff9275,core:0xff776d,accent:0xffd0ae},
+        nice:{outer:0xffd16b,warning:0xffe19a,core:0xffe4a0,accent:0xfffae4b4},
+        perfect:{outer:0x73ffe3,warning:0xbaffef,core:0x86ffec,accent:0xffffff},
+        late:{outer:0xff5d63,warning:0xff7b70,core:0xff655f,accent:0xffd0c5},
+      }[target.phase];
+      const ratio=ringRatio(target.telegraphProgress),pulse=1+Math.sin(t*(target.phase==='perfect'?12:7)+i)*.045;
+      // ringRatio is the same timing curve used by the combat rule. Mapping it
+      // to a restrained world scale keeps the marker readable without becoming
+      // the old full-screen debug ring.
+      const scale=(.74+ratio*.17)*pulse;group.scale.setScalar(scale);
+      const outer=group.children[0] as EffectMesh,warning=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh,centerMesh=group.children[3] as EffectMesh,sweep=group.children[4] as EffectMesh,reticle=group.children[5] as EffectMesh,needle=group.children[6] as EffectMesh;
+      outer.material.color.setHex(palette.outer);warning.material.color.setHex(palette.warning);core.material.color.setHex(palette.core);centerMesh.material.color.setHex(palette.accent);sweep.material.color.setHex(palette.accent);reticle.material.color.setHex(palette.accent);needle.material.color.setHex(palette.accent);
+      const warningPulse=.6+Math.sin(t*8+i)*.12;
+      outer.material.opacity=target.phase==='perfect'?.98:.78;
+      warning.material.opacity=Math.max(.35,warningPulse);
+      core.material.opacity=phase==='telegraph'?.24:target.phase==='perfect'?.56:.42;
+      centerMesh.material.opacity=target.phase==='perfect'?.98:.78;
+      sweep.material.opacity=target.phase==='perfect'?.96:.62;reticle.material.opacity=target.phase==='perfect'?.94:.64;needle.material.opacity=target.phase==='perfect'?.98:.6;
+      sweep.rotation.z=-t*(target.phase==='perfect'?2.7:1.15)+i*.8;reticle.rotation.z=t*.7+i;needle.scale.y=.72+.28*Math.max(0,Math.sin(t*4+i));
     }
-    const verdict=false;
-    const weak=projectedWeakPoints(state.battle.verdictCount-(feedback?.kind==='Verdict'?1:0),w,h,this.bossKind);
-    const guidePoints=this.guide.geometry.getAttribute('position') as THREE.BufferAttribute;
-    weak.forEach((point,i)=>{
-      const group=this.weakGroups[i];group.visible=verdict;group.position.set(point.x*w,-point.y*h,25);group.scale.set(point.radius*h,point.radius*h,1);
-      const caught=state.stroke?.hitWeakPointIds.includes(point.id);(group.children[0] as EffectMesh).material.color.setHex(caught?0x74ffe4:0xffdf8b);group.rotation.z=caught?Math.PI/4:0;
-      guidePoints.setXYZ(i,point.x*w,-point.y*h,0);
-    });guidePoints.needsUpdate=true;this.guide.visible=verdict;this.guide.frustumCulled=false;
     this.drawStroke(state);
-    this.shock.visible=this.slash.visible=!!feedback&&impact&&strength>0;
+    const showFeedback=!!feedback&&impact&&strength>0;
+    this.shock.visible=showFeedback;this.slash.visible=showFeedback&&feedback?.kind!=='Miss';this.slashEcho.visible=showFeedback&&feedback?.kind!=='Miss';this.missCrack.visible=showFeedback&&feedback?.kind==='Miss';
     const position=feedback?.anchorId?projectBodyAnchor(this.guardian.getAnchor(feedback.anchorId),this.camera,w,h):{x:(feedback?.position.x??.5)*w,y:(feedback?.position.y??.5)*h};
     if(feedback){
       const color=feedback.kind==='Miss'?0xff695e:feedback.kind==='Nice'?0xffd369:0x85ffdf;
-      this.shock.position.set(position.x,-position.y,35);this.shock.scale.setScalar(25+age*.18);this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
-      this.slash.visible=this.slash.visible&&feedback.kind!=='Miss';this.slash.position.set(position.x,-position.y,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
-      this.sparks.forEach((spark,i)=>{spark.visible=impact&&strength>0;const a=i*2.39996,r=(25+age*.17)*(.7+(i%4)*.14);spark.position.set(position.x+Math.cos(a)*r,-position.y+Math.sin(a)*r-age*age*.00005,36);spark.scale.setScalar((i%3+1)*1.7*strength);spark.material.color.setHex(color)});
+      this.shock.position.set(position.x,-position.y,35);this.shock.scale.setScalar(25+age*.18);this.shock.rotation.z=t*.8;this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
+      this.slash.position.set(position.x,-position.y,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
+      this.slashEcho.position.set(position.x,-position.y,37);this.slashEcho.scale.set(2+strength*3,Math.min(w*.46,220),1);this.slashEcho.material.opacity=strength*.42;
+      this.missCrack.position.set(position.x,-position.y,39);this.missCrack.scale.setScalar(58+age*.16);this.missCrack.rotation.z=-t*1.2;(this.missCrack.material as THREE.LineBasicMaterial).opacity=strength;
+      this.sparks.forEach((spark,i)=>{spark.visible=showFeedback;const a=i*2.39996,r=(25+age*.17)*(.7+(i%4)*.14);spark.position.set(position.x+Math.cos(a)*r,-position.y+Math.sin(a)*r-age*age*.00005,36);spark.scale.setScalar((i%3+1)*1.7*strength);spark.material.color.setHex(color)});
     }else this.sparks.forEach(spark=>spark.visible=false);
     this.renderer.clear();this.renderer.render(this.world,this.camera);this.renderer.clearDepth();this.renderer.render(this.overlay,this.overlayCamera);
     this.camera.position.x=0;this.camera.updateMatrixWorld();
@@ -171,6 +197,7 @@ export class BattleScene {
       }
       this.trail.geometry.getAttribute('position').needsUpdate=true;this.trail.geometry.setDrawRange(0,count/3);this.lastStroke=stroke;
     }
+    this.trail.material.color.setHex(state.phase==='verdictSlash'?0x9bffe9:0x76d7c2);
     this.trail.material.opacity=state.phase==='verdictSlash'?1:Math.max(0,1-state.elapsed/900);
   }
   dispose(){

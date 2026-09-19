@@ -9,6 +9,19 @@ import { readWorkshopSave, updateWorkshopSave } from './persistence';
 import { applyContinuousCut, createCombat, startVerdict, tapTarget, tickCombat, type CombatState } from './domain/combat';
 import type { BossKind } from './domain/v2';
 
+// The scene's dynamic line buffer is intentionally finite. Keeping the same
+// budget in the store prevents a high-frequency touchmove stream from growing
+// an unbounded immutable array during a verdict.
+const MAX_STROKE_POINTS = 513;
+function appendStrokePoint(points:Array<{x:number;y:number;time:number}>, point:{x:number;y:number;time:number}) {
+  const next = [...points, point];
+  if (next.length <= MAX_STROKE_POINTS) return next;
+  // Preserve the newest path while reducing samples by half. The renderer
+  // still receives a continuous line, but React/Zustand never retains a
+  // pointer trace larger than the WebGL buffer.
+  return next.filter((_, index) => index % 2 === 0).slice(-MAX_STROKE_POINTS);
+}
+
 export type Screen='restaurant'|'stages'|'battle'|'result'|'kitchen'|'inventory'|'cookbook'|'sales'|'shop';
 export interface Notice { kind:'success'|'error'; message:string }
 interface PendingBattle { id:string; bossKind:BossKind; won:boolean }
@@ -104,7 +117,7 @@ export const useGame=create<GameStore>((set,get)=>{
     pause:paused=>set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}})),
     beginVerdict:()=>set(s=>({combat:startVerdict(s.combat)})),
     beginStroke:(pointerId,point)=>set(s=>({combat:s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.pointerId===null?{...s.combat,pointerId,stroke:{points:[point],hitWeakPointIds:[],score:0,valid:true}}:s.combat})),
-    moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:[...s.combat.stroke.points,point]}}:s.combat})),
+    moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:appendStrokePoint(s.combat.stroke.points,point)}}:s.combat})),
     cut:(pointerId,point,insideMonster)=>set(s=>({combat:s.combat.pointerId===pointerId?applyContinuousCut(s.combat,point,insideMonster):s.combat})),
     endStroke:pointerId=>set(s=>({combat:s.combat.pointerId===pointerId?{...s.combat,pointerId:null}:s.combat})),
     cancelStroke:()=>set(s=>({combat:{...s.combat,pointerId:null,stroke:null}})),

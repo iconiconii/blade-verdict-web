@@ -72,6 +72,7 @@ export class JellyGuardian {
     const dark=this.material({color:0x39275c,roughness:.3,transmission:0,clearcoat:.7});
     const eye=this.material({color:0xe6fbff,emissive:0xb2efff,emissiveIntensity:1.4,roughness:.2});
     const edge=this.material({color:0xcec2ff,emissive:0x9b91ff,emissiveIntensity:.32,roughness:.25});
+    const anchorGlow=this.material({color:0x8e7acb,emissive:0x6652d9,emissiveIntensity:.32,roughness:.22,clearcoat:1});
     const blush=this.material({color:0xe7a1dc,emissive:0xb85ead,emissiveIntensity:.14,roughness:.4});
     const sphere=new THREE.SphereGeometry(1,32,24);
 
@@ -99,6 +100,11 @@ export class JellyGuardian {
     this.mesh(mantle,gradientGel,this.body,'jelly-mantle-shell');
     this.mesh(sphere,dark,this.body,'jelly-inner-core',[0,.04,-.01],[.19,.245,.17]);
     this.pearl=this.mesh(sphere,edge,this.body,'jelly-heart',[0,.04,.267],[.09,.125,.045]);
+    // A few restrained bioluminescent seams make the three body anchors read as
+    // anatomy (crown, heart and lower joint), not floating interaction markers.
+    this.mesh(new THREE.TorusGeometry(.13,.013,8,24,Math.PI*1.35),anchorGlow,this.hood,'jelly-crown-seam',[.10,.32,.605],[1,1,.32]);
+    this.mesh(new THREE.TorusGeometry(.125,.013,8,24,Math.PI*1.35),anchorGlow,this.body,'jelly-heart-seam',[0,.035,.31],[1,1,.34]);
+    this.mesh(new THREE.TorusGeometry(.11,.011,8,22,Math.PI*1.25),anchorGlow,this.body,'jelly-hem-seam',[0,-.28,.355],[1,1,.32]);
 
     for(const side of [-1,1]){
       const fin=new THREE.Group();fin.name=side<0?'jelly-left-fin':'jelly-right-fin';
@@ -107,6 +113,7 @@ export class JellyGuardian {
       this.mesh(jellyLimb(points,.21,.64),gel,fin,'jelly-fin-surface');
       const trace=new THREE.CatmullRomCurve3([new THREE.Vector3(side*.13,-.16,.115),new THREE.Vector3(side*.31,-.43,.187),new THREE.Vector3(side*.39,-.68,.20)]);
       this.mesh(new THREE.TubeGeometry(trace,24,.011,6,false),edge,fin,'jelly-fin-edge');
+      this.mesh(new THREE.SphereGeometry(.064,12,8),anchorGlow,fin,'jelly-fin-joint',[side*.34,-.47,.205],[1,.86,.5]);
       this.addAnchor(side<0?'leftFin':'rightFin',fin,[side*.34,-.47,.20]);
 
       const foot=new THREE.Group();foot.name=side<0?'jelly-left-foot':'jelly-right-foot';
@@ -114,6 +121,7 @@ export class JellyGuardian {
       const footPoints:XYZ[]=[[0,.02,0],[side*.045,-.13,.045],[side*.09,-.30,.11],[side*.05,-.43,.2]];
       this.mesh(jellyLimb(footPoints,.16,.84),gel,foot,'jelly-foot-stem');
       this.mesh(sphere,gel,foot,'jelly-foot-pad',[side*.07,-.43,.18],[.215,.12,.235]);
+      this.mesh(new THREE.TorusGeometry(.09,.01,8,20,Math.PI*1.2),anchorGlow,foot,'jelly-foot-joint',[side*.07,-.23,.235],[1,.85,.42]);
       this.addAnchor(side<0?'leftJoint':'rightJoint',foot,[side*.07,-.23,.232]);
     }
 
@@ -179,7 +187,8 @@ export class JellyGuardian {
     this.feet.forEach((foot,i)=>foot.rotation.z=still?0:Math.sin(t*2.4+i)*.04);
     const blink=still||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
     this.eyes.forEach(eye=>eye.scale.y=.115*blink);
-    this.pearl.scale.setScalar(1);this.pearl.scale.set(.09,.125,.045);
+    const heartPulse=phase==='telegraph'?1+.14*Math.sin(charge*Math.PI):success?1+.12*Math.sin(Math.min(feedbackAge/280,1)*Math.PI):1;
+    this.pearl.scale.set(.09*heartPulse,.125*heartPulse,.045*heartPulse);
     const flash=success?Math.max(0,.7-feedbackAge/220):0;
     for(const {material,emissive,intensity} of this.materials){
       material.emissive.copy(emissive).lerp(new THREE.Color(0xe5d9ff),flash);

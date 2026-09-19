@@ -24,6 +24,12 @@ describe('battle presentation state machine',()=>{
   it('a timeout cannot deal damage twice',()=>{
     let combat=prepareRound(createCombat());combat=tickCombat(combat,400);combat=tickCombat(combat,901);expect(combat.phase).toBe('impact');expect(combat.battle.playerHp).toBe(88);combat=tickCombat(combat,20);expect(combat.battle.playerHp).toBe(88);
   });
+  it('aggregates a readable double-target round without applying damage per tap',()=>{
+    let combat={...createCombat(),round:2};combat=prepareRound(combat);combat=tickCombat(combat,400);
+    combat={...combat,elapsed:720};combat=tapTarget(combat,0);expect(combat.phase).toBe('targetActive');expect(combat.targets[0].result).toBe('Perfect');
+    combat=tickCombat(combat,doubleTargetDelay);combat=tapTarget(combat,1);
+    expect(combat.phase).toBe('impact');expect(combat.feedback?.kind).toBe('Perfect');expect(combat.battle.bossHp).toBe(788);expect(combat.battle.meter).toBe(30);
+  });
   it('aggregates double targets with any miss and all-perfect rules',()=>{
     expect(aggregateParryResults(['Perfect','Perfect'])).toBe('Perfect');expect(aggregateParryResults(['Perfect','Nice'])).toBe('Nice');expect(aggregateParryResults(['Perfect','Miss'])).toBe('Miss');
   });
@@ -35,6 +41,10 @@ describe('battle presentation state machine',()=>{
 
 describe('continuous subject cutting',()=>{
   const ready=()=>startVerdict({...createCombat(),battle:{...createCombat().battle,meter:100},phase:'verdictReady'});
+  it('consumes a full gauge once and ignores a duplicate verdict start',()=>{
+    const first=ready();expect(first.battle.meter).toBe(0);expect(first.battle.verdictCount).toBe(1);
+    const duplicate=startVerdict(first);expect(duplicate).toBe(first);expect(duplicate.battle.meter).toBe(0);expect(duplicate.battle.verdictCount).toBe(1);
+  });
   it('applies a fixed twelve damage per valid subject segment and ignores outside segments',()=>{
     let combat=ready();combat=applyContinuousCut(combat,{x:.5,y:.5},false);expect(combat.battle.bossHp).toBe(800);combat=applyContinuousCut(combat,{x:.5,y:.5},true);expect(combat.battle.bossHp).toBe(788);expect(combat.verdictCombo).toBe(1);expect(combat.verdictDamageDealt).toBe(12);
   });
