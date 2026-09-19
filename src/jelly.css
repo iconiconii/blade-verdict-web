@@ -1,4 +1,4 @@
-.stage-image.jelly{background:radial-gradient(circle at 50% 35%,#9b6dd8aa,#1a1930 72%),url('/assets/jelly-stage.png') center/cover}
+.stage-image.jelly{background:linear-gradient(180deg,#12102533,#0c0e1c99),url('/assets/workshop/expedition-jelly-portrait.webp') center 40%/cover}
 .danger--purple{background:#7046a7}
 .jelly-stage{border-color:#8f70cb}
 .jelly-stage h2{color:#d6b9ff}
