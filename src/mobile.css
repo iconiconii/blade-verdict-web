@@ -1,0 +1,67 @@
+/* Portrait screens own one scroll container; cards must never become scroll tracks. */
+@media (max-width: 700px) {
+  :root { --mobile-bottom-space: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  html { -webkit-text-size-adjust: 100%; }
+  .expedition-page, .result, .ws-screen {
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scroll-padding-bottom: var(--mobile-bottom-space);
+  }
+  .expedition-page, .result { padding-bottom: var(--mobile-bottom-space); }
+  .expedition-header { width: calc(100% - 32px); gap: 12px; padding: calc(16px + env(safe-area-inset-top, 0px)) 0 14px; }
+  .expedition-title h1 { font-size: 27px; margin: 5px 0; }
+  .expedition-title p { font: 12px/1.6 system-ui, sans-serif; letter-spacing: 0; }
+  .expedition-title small { font-size: 10px; }
+  .chapter-line { width: calc(100% - 32px); gap: 10px; margin-bottom: 14px; font-size: 10px; letter-spacing: .04em; }
+  .chapter-line span { flex-shrink: 0; white-space: nowrap; }
+  .chapter-line i { flex: 1; min-width: 12px; }
+  .expedition-page .stage-grid {
+    width: calc(100% - 32px);
+    max-width: none;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    margin: 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    gap: 18px;
+  }
+  .expedition-page .stage-card { min-width: 0; min-height: 0; height: auto; padding: 0; border-radius: 14px; }
+  .expedition-page .stage-image { height: clamp(145px, 43vw, 190px); flex-shrink: 0; }
+  .expedition-page .danger { left: auto; right: 12px; top: 12px; width: auto; padding: 5px 9px; border-radius: 5px; font-size: 11px; }
+  .stage-index { top: 12px; left: 14px; }
+  .expedition-page .stage-card-body { flex: none; min-height: 0; padding: 15px; }
+  .stage-card-kicker { font-size: 11px; letter-spacing: 0; flex-wrap: wrap; }
+  .expedition-page .stage-card h2 { margin: 8px 0; font-size: 26px; }
+  .expedition-page .stage-card p { font: 13px/1.65 system-ui, sans-serif; }
+  .stage-tags { margin-top: 10px; }
+  .stage-tags span { font-size: 11px; }
+  .stage-card-footer { display: grid; grid-template-columns: 1fr; gap: 12px; padding-top: 14px; }
+  .stage-card-footer dl { width: 100%; gap: 18px; }
+  .stage-card-footer dl div { min-width: 0; }
+  .stage-card-footer dt { font-size: 11px; white-space: nowrap; }
+  .stage-card-footer dd { font-size: 13px; white-space: nowrap; }
+  .stage-card-footer button { min-height: 48px; width: 100%; font-size: 14px; }
+  .expedition-tip { width: calc(100% - 32px); font-size: 12px; }
+  .ws-content { flex: none; min-height: 0; padding-top: calc(16px + env(safe-area-inset-top, 0px)); padding-bottom: var(--mobile-bottom-space); }
+  .ws-heading { justify-content: flex-start; gap: 12px; letter-spacing: 0; }
+  .ws-back { flex: 0 0 44px; }
+  .ws-heading h1 { font-size: 32px; }
+  .ws-heading .ws-subtitle { font: 13px/1.6 system-ui, sans-serif; }
+  .ws-topbar { padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
+  .ws-restaurant-hero { flex: none; }
+  .ws-shop-balance > .ws-coins { flex-direction: row; flex-shrink: 0; }
+  .ws-shop-card.is-featured { position: static; grid-template-columns: 64px minmax(0, 1fr); padding: 14px; }
+  .ws-shop-card.is-featured .ws-shop-action { position: static; grid-column: 1 / -1; width: auto; flex-direction: row; align-items: center; gap: 12px; }
+  .ws-shop-card.is-featured .ws-shop-action .ws-button { min-height: 44px; font-size: 13px; }
+  .ws-nav { left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .ws-nav button { min-height: 48px; flex-direction: column; gap: 4px; padding: 5px 2px; font: 11px/1.2 system-ui, sans-serif; }
+  .ws-nav button .ws-icon { width: 19px; height: 19px; }
+  .result-top { padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
+  .result-layout { margin-top: 28px; }
+  .result-actions { padding-bottom: 16px; }
+  .result-button { min-height: 48px; }
+}

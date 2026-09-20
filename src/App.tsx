@@ -4,6 +4,7 @@ import { useGame } from './store';
 import type { Quality } from './domain/v2';
 import { Workshop, WorkshopNav } from './Workshop';
 import './workshop.css';
+import './mobile.css';
 
 export function App(){
   const screen=useGame(s=>s.screen);
