@@ -4,7 +4,8 @@ import type { CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
 import { SliceEffects } from './scene/SliceEffects';
-import { makeBattleCamera, projectBodyAnchor, projectPoint } from './scene/layout';
+import { makeBattleCamera, projectBodyAnchor } from './scene/layout';
+import { MonsterHitArea } from './scene/MonsterHitArea';
 import { ringRadiusAt, type BossKind } from './domain/v2';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
@@ -19,6 +20,7 @@ export class BattleScene {
   private camera=makeBattleCamera(1,1);
   private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
   private guardian:CornGuardian|JellyGuardian;
+  private hitArea:MonsterHitArea;
   private bossKind:BossKind;
   private targetRings:THREE.Group[]=[];
   private targetLayouts:ParryTargetLayout[]=[];
@@ -29,6 +31,7 @@ export class BattleScene {
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
+    this.hitArea=new MonsterHitArea(this.guardian.root);
     this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -92,16 +95,14 @@ export class BattleScene {
   resize(){
     const {width,height}=this.host.getBoundingClientRect();if(width<=0||height<=0)return;
     this.width=width;this.height=height;this.camera=makeBattleCamera(width,height);
+    this.hitArea.update(this.camera);
     this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);
   }
   /** React uses the exact layout just rendered, never a second projection/animation clock. */
   getTargetLayout(index:number){return this.targetLayouts[index]}
   isPointInsideMonster(point:{x:number;y:number}){
-    this.guardian.root.updateMatrixWorld(true);
-    const bounds=new THREE.Box3().setFromObject(this.guardian.root),min=new THREE.Vector3(Infinity,Infinity,Infinity),max=new THREE.Vector3(-Infinity,-Infinity,-Infinity);
-    for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const projected=projectPoint(new THREE.Vector3(x,y,z),this.camera);min.x=Math.min(min.x,projected.x);min.y=Math.min(min.y,projected.y);max.x=Math.max(max.x,projected.x);max.y=Math.max(max.y,projected.y)}
-    const cx=(min.x+max.x)/2,cy=(min.y+max.y)/2,rx=Math.max(.12,(max.x-min.x)*.47),ry=Math.max(.12,(max.y-min.y)*.43);const dx=(point.x-cx)/rx,dy=(point.y-cy)/ry;return dx*dx+dy*dy<=1;
+    return this.hitArea.contains(point);
   }
   render(state:CombatState,reducedMotion=false){
     if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
@@ -111,6 +112,7 @@ export class BattleScene {
     const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
     this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
+    this.hitArea.update(this.camera);
     const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:this.bossKind==='jelly'?0xa98cff:0xffc66b;
     this.arenaPulse.material.color.setHex(arenaColor);
     this.arenaPulse.material.opacity=(verdict?.18:phase==='telegraph'?.13:.08)+(Math.sin(t*3.4)*.018);

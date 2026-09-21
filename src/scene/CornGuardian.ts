@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { CombatState } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
+import { verdictMotion } from './verdictMotion';
 
 const smooth=(t:number)=>THREE.MathUtils.smoothstep(t,0,1);
 
@@ -18,12 +19,17 @@ export class CornGuardian {
   readonly leftArm=new THREE.Group();
   readonly rightArm=new THREE.Group();
   readonly anchors:Partial<Record<BodyAnchorId,THREE.Object3D>>={};
+  private actor=new THREE.Group();
   private head=new THREE.Group();
   private leftLeg=new THREE.Group();
   private rightLeg=new THREE.Group();
   private crest=new THREE.Group();
   private materials:THREE.MeshStandardMaterial[]=[];
   private leafGeometry:THREE.ExtrudeGeometry;
+  private eyes:THREE.Group[]=[];
+  private brows:THREE.Mesh[]=[];
+  private mouth=new THREE.Group();
+  private painMouth:THREE.Mesh;
 
   constructor(){
     this.root.name='corn-guardian-3d';
@@ -55,12 +61,17 @@ export class CornGuardian {
       this.mesh(kernelGeo,(row+col)%2?kernel:kernelLight,this.head,[x,y,.35],[.9,.86,.8]);
     }
     for(const side of [-1,1]){
-      this.mesh(new THREE.SphereGeometry(.105,14,9),cream,this.head,[side*.16,.07,.39],[1,1.12,.38]);
-      this.mesh(new THREE.SphereGeometry(.052,12,8),eye,this.head,[side*.16,.055,.43],[.8,1,.35]);
-      const brow=this.mesh(new RoundedBoxGeometry(.22,.055,.07,2,.02),huskDark,this.head,[side*.16,.2,.42]);brow.rotation.z=side*.2;
+      const eyeGroup=new THREE.Group();eyeGroup.name=side<0?'corn-eye-left':'corn-eye-right';
+      eyeGroup.position.set(side*.16,.07,.39);this.head.add(eyeGroup);this.eyes.push(eyeGroup);
+      this.mesh(new THREE.SphereGeometry(.105,14,9),cream,eyeGroup,[0,0,0],[1,1.12,.38]);
+      this.mesh(new THREE.SphereGeometry(.052,12,8),eye,eyeGroup,[0,-.015,.04],[.8,1,.35]);
+      const brow=this.mesh(new RoundedBoxGeometry(.22,.055,.07,2,.02),huskDark,this.head,[side*.16,.2,.42]);brow.rotation.z=side*.2;this.brows.push(brow);
     }
-    const mouthMesh=this.mesh(new THREE.TorusGeometry(.12,.035,8,14,Math.PI*1.2),mouth,this.head,[0,-.18,.4],[1,.72,.45]);mouthMesh.rotation.x=Math.PI;
-    this.mesh(new RoundedBoxGeometry(.15,.035,.025,2,.01),cream,this.head,[0,-.18,.43]);
+    this.mouth.name='corn-mouth';this.head.add(this.mouth);
+    const mouthMesh=this.mesh(new THREE.TorusGeometry(.12,.035,8,14,Math.PI*1.2),mouth,this.mouth,[0,-.18,.4],[1,.72,.45]);mouthMesh.rotation.x=Math.PI;
+    this.mesh(new RoundedBoxGeometry(.15,.035,.025,2,.01),cream,this.mouth,[0,-.18,.43]);
+    this.painMouth=this.mesh(new THREE.SphereGeometry(1,16,10),mouth,this.head,[0,-.18,.43],[.12,.075,.025]);
+    this.painMouth.name='corn-pain-mouth';this.painMouth.visible=false;
 
     const leafShape=new THREE.Shape();leafShape.moveTo(0,0);leafShape.bezierCurveTo(-.3,.08,-.3,.48,0,.9);leafShape.bezierCurveTo(.3,.48,.3,.08,0,0);
     this.leafGeometry=new THREE.ExtrudeGeometry(leafShape,{depth:.065,bevelEnabled:true,bevelSize:.02,bevelThickness:.015,bevelSegments:2,curveSegments:5});
@@ -95,6 +106,7 @@ export class CornGuardian {
     this.addAnchor('rightHand',this.rightArm,[0,-.39,.27]);
     this.addAnchor('leftKnee',this.leftLeg,[0,-.08,.3]);
     this.addAnchor('rightKnee',this.rightLeg,[0,-.08,.3]);
+    this.actor.name='corn-reaction-rig';this.actor.add(...this.root.children);this.root.add(this.actor);
   }
 
   private material(color:number,roughness:number,metalness=0){
@@ -126,22 +138,39 @@ export class CornGuardian {
 
   update(state:CombatState,reducedMotion=false){
     const {phase,elapsed,feedback}=state;
+    const pain=verdictMotion(state,reducedMotion),w=pain.weight;
     const age=feedback?state.time-feedback.time:Infinity;
-    const success=feedback!==null&&feedback.kind!=='Miss'&&age<680;
+    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&age<680;
     const perfect=success&&feedback?.kind==='Perfect';
     const t=state.time/1000;
     const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/380):0;
     const recoil=success?Math.sin(Math.min(age/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
     const tremor=perfect&&!reducedMotion?Math.sin(t*68)*.035*Math.max(0,1-age/680):0;
-    const down=state.battle.bossHp<=0?(phase==='settle'?1:smooth(age/650)):0,verdict=phase==='verdictReady'||phase==='verdictSlash';
-    const sway=reducedMotion||verdict?0:Math.sin(t*1.7)*.025;
-    this.root.position.set(tremor,down*.03,-recoil*(perfect?.34:.12));this.root.rotation.set(-charge*.06+recoil*(perfect?.28:.09),verdict?0:-.16+sway+tremor*.8,down*1.1);
-    this.body.position.y=1.02+(reducedMotion||verdict?0:Math.sin(t*2.1)*.012);this.body.scale.set(1-charge*.025,1+charge*.03,1);
-    this.head.position.y=1.98+(reducedMotion||verdict?0:Math.sin(t*2.1+.4)*.012);this.head.rotation.z=recoil*.05;
-    this.leftArm.rotation.set(-charge*.5+recoil*(perfect?.35:.22),0,-.12-charge*.12-down*.25);this.rightArm.rotation.set(-charge*.42,0,.12+recoil*(perfect?.3:.18)+down*.24);
-    this.leftLeg.rotation.z=sideLean(-1,charge,recoil);this.rightLeg.rotation.z=sideLean(1,charge,recoil);
-    this.crest.rotation.x=reducedMotion||verdict?0:Math.sin(t*2.2)*.04+recoil*.18;
-    const flash=success?Math.max(0,(perfect?.95:.35)-age/220)*(reducedMotion?.3:1):0;for(const material of this.materials){material.emissive.setHex(0xffffff);material.emissiveIntensity=flash;}
+    const defeated=state.battle.bossHp<=0;
+    const down=defeated?(phase==='settle'?1:smooth(age/650)):0;
+    const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
+    const sway=Math.sin(t*1.7)*.025*motion*(1-w);
+    // Placement root stays still: only this child rig recoils, so the cut volume never shrinks.
+    this.actor.position.set(tremor+pain.x*.025,-slump*.045+down*.03,-recoil*(perfect?.34:.12));
+    this.actor.rotation.set(-charge*.06+recoil*(perfect?.28:.09)-slump*.04+pain.energy*.13-pain.y*.05,
+      (-.16+sway+tremor*.8)*(1-w)+pain.x*.09,down*1.1-pain.x*.065);
+    this.body.position.y=1.02+Math.sin(t*2.1)*.012*motion*(1-w)+pain.breath*.008;
+    this.body.rotation.set(-slump*.055+pain.energy*.06,0,-pain.x*.035);
+    this.body.scale.set(1-charge*.025+pain.compression*.022,1+charge*.03-pain.compression*.035,1);
+    this.head.position.y=1.98-slump*.035+Math.sin(t*2.1+.4)*.012*motion*(1-w)+pain.breath*.012;
+    this.head.rotation.set(slump*.13+pain.energy*.12-pain.followY*.08,0,recoil*.05-pain.followX*.12);
+    this.leftArm.rotation.set(-charge*.5+recoil*(perfect?.35:.22)-slump*.2+pain.followY*.14,0,-.12-charge*.12-down*.25-slump*.13-pain.followX*.18);
+    this.rightArm.rotation.set(-charge*.42-slump*.1-pain.followY*.1,0,.12+recoil*(perfect?.3:.18)+down*.24+slump*.1-pain.followX*.18);
+    this.leftLeg.rotation.set(slump*.12,0,sideLean(-1,charge,recoil)-slump*.055+pain.x*.025);
+    this.rightLeg.rotation.set(slump*.08,0,sideLean(1,charge,recoil)+slump*.04+pain.x*.025);
+    this.crest.rotation.set(Math.sin(t*2.2)*.04*motion*(1-w)+recoil*.18+slump*.12+pain.followY*.2,0,-pain.followX*.2);
+    const expression=defeated?1:pain.pain;
+    this.eyes.forEach((eye,i)=>{eye.scale.y=1-expression*.7;eye.rotation.z=(i===0?-1:1)*expression*.18});
+    this.brows.forEach((brow,i)=>{brow.rotation.z=(i===0?-1:1)*(.2-expression*.52)});
+    this.mouth.visible=!defeated&&pain.pain<.1;this.painMouth.visible=!defeated&&pain.pain>=.1;
+    this.painMouth.scale.set(.12,.045+.055*pain.pain,.025);
+    const flash=Math.max(pain.flash,success?Math.max(0,(perfect?.95:.35)-age/220)*(reducedMotion?.3:1):0);
+    for(const material of this.materials){material.emissive.setHex(0xffffff);material.emissiveIntensity=flash;}
   }
 }
 

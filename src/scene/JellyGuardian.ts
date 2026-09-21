@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CombatState } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
+import { verdictMotion } from './verdictMotion';
 
 type XYZ = [number, number, number];
 const smooth = (t:number) => THREE.MathUtils.smoothstep(t,0,1);
@@ -49,6 +50,7 @@ function jellyLimb(points:XYZ[],width:number,depth:number){
 export class JellyGuardian {
   readonly root=new THREE.Group();
   readonly anchors:Partial<Record<BodyAnchorId,THREE.Object3D>>={};
+  private actor=new THREE.Group();
   private hood=new THREE.Group();
   private face=new THREE.Group();
   private body=new THREE.Group();
@@ -57,6 +59,8 @@ export class JellyGuardian {
   private eyes:THREE.Mesh[]=[];
   private materials:Array<{material:THREE.MeshPhysicalMaterial;emissive:THREE.Color;intensity:number}>=[];
   private pearl:THREE.Mesh;
+  private mouth:THREE.Mesh;
+  private painMouth:THREE.Mesh;
 
   constructor(){
     this.root.name='jelly-guardian-3d';
@@ -93,7 +97,9 @@ export class JellyGuardian {
       this.mesh(sphere,blush,this.face,'jelly-cheek',[side*.28,-.065,.254],[.069,.025,.016]);
     }
     const smile=new THREE.QuadraticBezierCurve3(new THREE.Vector3(-.074,-.115,.31),new THREE.Vector3(0,-.185,.327),new THREE.Vector3(.074,-.115,.31));
-    this.mesh(new THREE.TubeGeometry(smile,16,.012,6,false),edge,this.face,'jelly-smile');
+    this.mouth=this.mesh(new THREE.TubeGeometry(smile,16,.012,6,false),edge,this.face,'jelly-smile');
+    this.painMouth=this.mesh(new THREE.TorusGeometry(1,.14,6,24),edge,this.face,'jelly-pain-mouth',[0,-.14,.326],[.08,.06,.04]);
+    this.painMouth.visible=false;
 
     // A small pear-shaped mantle and a rippled hem, well below the face.
     const mantle=jellySurface([[0,-.36],[.23,-.35],[.40,-.26],[.35,-.08],[.285,.2],[.22,.33],[0,.37]],.82,.027);
@@ -139,6 +145,7 @@ export class JellyGuardian {
     this.addAnchor('belly',this.body,[0,.035,.30]);
     // Keep the legacy lower-joint id on the flowing hem, not a third pillar-leg.
     this.addAnchor('lowerJoint',this.body,[0,-.28,.35]);
+    this.actor.name='jelly-reaction-rig';this.actor.add(...this.root.children);this.root.add(this.actor);
   }
 
   private material(options:THREE.MeshPhysicalMaterialParameters){
@@ -164,33 +171,48 @@ export class JellyGuardian {
 
   update(state:CombatState,reducedMotion=false){
     const {phase,elapsed,feedback}=state;
+    const pain=verdictMotion(state,reducedMotion),w=pain.weight;
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
-    const success=feedback!==null&&feedback.kind!=='Miss'&&feedbackAge<680;
+    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<680;
     const perfect=success&&feedback?.kind==='Perfect';
     const t=state.time/1000;
     const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/360):0;
     const recoil=success?Math.sin(Math.min(feedbackAge/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
     const tremor=perfect&&!reducedMotion?Math.sin(t*72)*.028*Math.max(0,1-feedbackAge/680):0;
-    const down=state.battle.bossHp<=0?(phase==='settle'?1:smooth(elapsed/650)):0;
-    const still=reducedMotion||phase==='verdictReady'||phase==='verdictSlash';
-    const bob=still?0:Math.sin(t*2)*.025;
-    this.root.position.set(tremor,.035+bob-down*.05,-recoil*(perfect?.18:.1));
-    this.root.rotation.set(-charge*.055+recoil*(perfect?.16:.08),still?0:-.06+Math.sin(t*1.5)*.025+tremor,down*.75);
-    this.root.scale.set(1+down*.25,1-down*.65,1+down*.15);
+    const defeated=state.battle.bossHp<=0;
+    const down=defeated?(phase==='settle'?1:smooth(elapsed/650)):0;
+    const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
+    const bob=Math.sin(t*2)*.025*motion*(1-w);
+    this.actor.position.set(tremor+pain.x*.035,.035+bob-down*.05,-recoil*(perfect?.18:.1));
+    this.actor.rotation.set(-charge*.055+recoil*(perfect?.16:.08)-slump*.04-pain.y*.065,
+      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.08,down*.75-pain.x*.07);
+    this.actor.scale.set(1+down*.25+slump*.035,1-down*.65-slump*.05,1+down*.15);
     // Attached anchors share each part's motion, including the breathing squash.
-    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04),1-charge*.065-recoil*(perfect?.2:.06),1+charge*.025);
-    this.hood.position.y=1.78+(still?0:Math.sin(t*2-.3)*.012);
-    this.body.scale.set(1+charge*.055,1-charge*.04,1);
+    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14,
+      1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22,1+charge*.025+pain.compression*.07);
+    this.hood.position.y=1.78-slump*.035+Math.sin(t*2-.3)*.012*motion*(1-w)+pain.breath*.012;
+    this.hood.rotation.z=-pain.x*.06;
+    this.body.scale.set(1+charge*.055+pain.compression*.12,1-charge*.04-pain.compression*.17,1+pain.compression*.06);
+    this.body.rotation.z=-pain.followX*.085;
+    this.face.position.y=1.48-slump*.03-pain.compression*.012+pain.breath*.005;
+    this.face.rotation.z=-pain.followX*.04;
     this.fins.forEach((fin,i)=>{
       const side=i===0?-1:1;
-      fin.rotation.set(-charge*.06,side*charge*.04,side*(charge*.14+(still?0:Math.sin(t*2.2+i)*.045)));
+      fin.rotation.set(-charge*.06-pain.followY*.17,side*charge*.04,
+        side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07)-pain.followX*.22+side*pain.breath*.016);
     });
-    this.feet.forEach((foot,i)=>foot.rotation.z=still?0:Math.sin(t*2.4+i)*.04);
-    const blink=still||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
-    this.eyes.forEach(eye=>eye.scale.y=.115*blink);
-    const heartPulse=phase==='telegraph'?1+.14*Math.sin(charge*Math.PI):success?1+.12*Math.sin(Math.min(feedbackAge/280,1)*Math.PI):1;
+    this.feet.forEach((foot,i)=>foot.rotation.z=Math.sin(t*2.4+i)*.04*motion*(1-w)-pain.followX*.08);
+    const blink=reducedMotion||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
+    const expression=defeated?1:pain.pain;
+    this.eyes.forEach((eye,i)=>{
+      eye.scale.y=.115*blink*(1-Math.sqrt(expression)*.82);
+      eye.rotation.z=(i===0?-1:1)*(-.12+expression*.55);
+    });
+    this.mouth.visible=!defeated&&pain.pain<.1;this.painMouth.visible=!defeated&&pain.pain>=.1;
+    this.painMouth.scale.set(.08,.035+.04*pain.pain,.04);
+    const heartPulse=phase==='telegraph'?1+.14*Math.sin(charge*Math.PI):success?1+.12*Math.sin(Math.min(feedbackAge/280,1)*Math.PI):1+pain.energy*.16;
     this.pearl.scale.set(.09*heartPulse,.125*heartPulse,.045*heartPulse);
-    const flash=success?Math.max(0,(perfect?.9:.35)-feedbackAge/220)*(reducedMotion?.3:1):0;
+    const flash=Math.max(pain.flash,success?Math.max(0,(perfect?.9:.35)-feedbackAge/220)*(reducedMotion?.3:1):0);
     for(const {material,emissive,intensity} of this.materials){
       material.emissive.copy(emissive).lerp(new THREE.Color(0xe5d9ff),flash);
       material.emissiveIntensity=intensity+flash;
