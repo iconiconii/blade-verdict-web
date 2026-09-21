@@ -6,6 +6,7 @@ import {
 } from './v2';
 
 export interface CombatFeedback {
+  pendingRound?:boolean;
   id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number;
   position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number;
   energyGain:number; angle:number;
@@ -60,7 +61,10 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   const target=s.targets[index];
   const targets=s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t);
   if(targets.length>1&&!targets.every(t=>t.resolved)){
-    return {...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
+    return emit({...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
+      hitStopRemainingMs:result==='Perfect'?100:0},
+      {kind:result,amount:0,energyGain:0,pendingRound:true,position:target.position,
+        anchorId:target.anchorId,angle:index%2?-.65:.65});
   }
   const aggregate=targets.length>1?(targets.some(t=>t.result==='Miss')?'Miss':targets.every(t=>t.result==='Perfect')?'Perfect':'Nice'):result;
   const battle=applyParry(s.battle,aggregate,s.attack);
@@ -69,7 +73,7 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
     successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:aggregate==='Perfect'?100:0,
   },{kind:aggregate,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
     energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65});
-  // Each contact is its own earned reward. Full energy cancels pending attacks.
+  // Damage and energy settle once after the relay, separately from tap feedback.
   if(battle.bossHp<=0||battle.playerHp<=0||battle.meter>=100||targets.every(t=>t.resolved))return transition(next,'impact');
   return {...next,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
 }

@@ -61,7 +61,7 @@ describe('accessible web combat',()=>{
     s=tapTarget(tickCombat(s,200),0);
     expect(s.phase).toBe('targetActive');
     expect(s.battle.meter).toBe(0);
-    expect(s.feedback).toBeNull();
+    expect(s.feedback).toMatchObject({kind:'Nice',pendingRound:true,amount:0});
     expect(s.targets[1].startDelayMs).toBe(200+relayDelayMs);
     s=tickCombat(s,relayDelayMs-1);
     expect(tapTarget(s,1)).toBe(s);
