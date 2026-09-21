@@ -3,9 +3,10 @@ import { BattleScene } from './BattleScene';
 import { durations } from './domain/combat';
 import { bodyAnchorLabel, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
+import { swipeContact } from './domain/swipe';
 
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
-const parryLabels={early:'收环中',nice:'金色 Nice · 点击',perfect:'青色 Perfect · 点击',late:'红色危险 · 立即点击'} as const;
+const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
 
 export function Battle(){
   const host=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null);
@@ -18,7 +19,7 @@ export function Battle(){
   const {battle,bossKind,phase,targets,feedback,combo,paused}=combat;
   const resolvedTargets=targets.filter(target=>target.resolved).length;
   const nextTarget=targets.find(target=>!target.resolved);
-  const phaseTitle=feedback?.kind==='Miss'?'受到攻击':feedback?.kind==='Nice'?'Nice 反击':feedback?.kind==='Perfect'?'Perfect 反击':phaseLabels[phase];
+  const phaseTitle=feedback?.kind==='Miss'?'受到攻击':feedback?.kind==='Nice'?'Good 反击':feedback?.kind==='Perfect'?'Perfect 反击':phaseLabels[phase];
   const positionTarget=(index:number,button:HTMLButtonElement)=>{
     const layout=scene.current?.getTargetLayout(index);
     const visible=layout?.visible&&layout.round===Number(button.dataset.round);
@@ -55,36 +56,38 @@ export function Battle(){
     const first=point(event);event.currentTarget.setPointerCapture(event.pointerId);points.current=[first];lastAccepted.current=first;useGame.getState().beginStroke(event.pointerId,first);
   };
   const move=(event:ReactPointerEvent<HTMLDivElement>)=>{
+    advanceNow();
     if(useGame.getState().combat.pointerId!==event.pointerId)return;
     const p=point(event),last=points.current.at(-1)!;
     if(Math.hypot((p.x-last.x)*size.width,(p.y-last.y)*size.height)<2)return;
     points.current.push(p);if(points.current.length>512)points.current=points.current.filter((_,i)=>i%2===0);useGame.getState().moveStroke(event.pointerId,p);
     const previous=lastAccepted.current;
-    if(previous&&Math.hypot((p.x-previous.x)*size.width,(p.y-previous.y)*size.height)>=58){
-      const midpoint={x:(previous.x+p.x)/2,y:(previous.y+p.y)/2};const inside=(scene.current?.isPointInsideMonster(midpoint)??false)||(scene.current?.isPointInsideMonster(p)??false);useGame.getState().cut(event.pointerId,p,inside);lastAccepted.current=p;
+    if(previous){
+      const sample=swipeContact(previous,p,size.width,size.height,q=>scene.current?.isPointInsideMonster(q)??false);
+      if(sample.contact)useGame.getState().cut(event.pointerId,sample.contact,true,sample.angle);
+      if(sample.consumed)lastAccepted.current=p;
     }
   };
   const end=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();if(useGame.getState().combat.pointerId!==event.pointerId)return;
-    const p=point(event),previous=lastAccepted.current;points.current.push(p);useGame.getState().moveStroke(event.pointerId,p);if(previous&&Math.hypot((p.x-previous.x)*size.width,(p.y-previous.y)*size.height)>=58){const midpoint={x:(previous.x+p.x)/2,y:(previous.y+p.y)/2};useGame.getState().cut(event.pointerId,p,(scene.current?.isPointInsideMonster(midpoint)??false)||(scene.current?.isPointInsideMonster(p)??false));}useGame.getState().endStroke(event.pointerId);
+    move(event);useGame.getState().endStroke(event.pointerId);
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
-  const showFeedback=Boolean(feedback&&(phase==='impact'||(phase==='stagger'&&combat.elapsed<900)||(phase==='verdictSlash'&&feedback.kind==='Cut')));
-  return <section className={`battle battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''}`} data-testid="battle" data-battle-phase={phase}>
+  const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
+  return <section className={`battle battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
-        const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&!target.resolved&&!paused;
+        const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&combat.elapsed-target.startDelayMs<target.ringDurationMs&&!target.resolved&&!paused;
         const waiting=phase==='telegraph'||combat.elapsed<target.startDelayMs;
-        const timingLabel=target.resolved?(target.result==='Perfect'?'Perfect':target.result==='Nice'?'Nice':'Miss'):waiting?'即将亮起':parryLabels[target.phase];
+        const timingLabel=target.resolved?(target.result==='Perfect'?'Perfect':target.result==='Nice'?'Good':'Miss'):waiting?'即将亮起':parryLabels[target.phase];
         return <button key={`${combat.round}-${target.targetIndex}`} className="parry-target"
           ref={button=>{if(button){targetButtons.current.set(target.targetIndex,button);positionTarget(target.targetIndex,button)}else targetButtons.current.delete(target.targetIndex)}}
           data-testid={`target-${target.targetIndex}`} data-anchor={target.anchorId} data-round={combat.round} data-phase={target.phase} data-resolved={target.resolved} disabled={!active}
           aria-label={`招架环 ${target.targetIndex+1}/${targets.length} · ${bodyAnchorLabel(target.anchorId)} · ${timingLabel}`}
           title={timingLabel}
-          style={{'--target-scale':(1.02-target.telegraphProgress*.2).toFixed(3)} as React.CSSProperties}
           onPointerDown={e=>{e.stopPropagation();e.preventDefault();if(e.button!==0)return;const rect=e.currentTarget.getBoundingClientRect();if(Math.hypot(e.clientX-rect.left-rect.width/2,e.clientY-rect.top-rect.height/2)>rect.width/2)return;advanceNow();useGame.getState().tap(target.targetIndex)}}
           onClick={e=>{if(e.detail===0){advanceNow();useGame.getState().tap(target.targetIndex)}}}>
           <span className="target-caption"><b>{target.resolved?'✓':target.targetIndex+1}</b>{bodyAnchorLabel(target.anchorId)} · {timingLabel}</span>
@@ -97,14 +100,20 @@ export function Battle(){
       <button className="battle-icon" aria-label="暂停战斗" onClick={()=>useGame.getState().pause(true)}>Ⅱ</button>
     </header>
     <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'BREAK · 破防时刻':targets.length===2?`DOUBLE · 身体光环 ${resolvedTargets}/${targets.length}`:'PARRY · 观察身体光环 · 等待 · 反击'}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>
-    {phase==='intro'&&ready&&tutorialSeen&&<div className="battle-announcement"><small>HUNT BEGINS</small><h2>保持冷静，等待刀锋。</h2></div>}
-    {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind.toUpperCase()}</strong><span>{feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?`主体切割 · Combo ×${combat.verdictCombo}`:feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} <b>−{feedback.amount}</b></span></div>}
+    {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}
+    {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind==='Nice'?'GOOD':feedback.kind.toUpperCase()}</strong><span>{feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?`主体切割 · Combo ×${combat.verdictCombo}`:feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} <b>−{feedback.amount}</b></span></div>}
     {inVerdict&&<div className="verdict-heading"><small>THE BLADE IS YOUR VERDICT</small><h2>{phase==='verdictReady'?'进入主体。疯狂切！':'保持速度，不要停刀'}</h2><p>{phase==='verdictReady'?`进入裁决后有 ${durations.verdict/1000} 秒连续切割`:'每段有效划动造成 12 伤害 · 最高 200 伤害'}</p>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${Math.max(0,100-combat.elapsed/durations.verdict*100)}%`}}/><span>{Math.max(0,durations.verdict/1000-combat.elapsed/1000).toFixed(1)}s · Combo ×{combat.verdictCombo} · {combat.verdictDamageDealt}/200{combat.verdictBonusDamage>0?` · 斩骨刀 +${combat.verdictBonusDamage}`:''}</span></div>}</div>}
     <footer className="battle-bottom">
       <div className="player-hud"><div className="player-avatar" aria-hidden="true">刃</div><div><div className="player-heading"><strong>守夜厨师</strong><span data-testid="player-hp">{battle.playerHp}/100</span></div><div className="battle-health player-health" role="progressbar" aria-label="玩家生命值" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.playerHp}><i style={{width:`${Math.max(0,Math.min(100,battle.playerHp))}%`}}/></div><div className="combo"><b>{String(combo).padStart(2,'0')}</b> 连续招架</div></div></div>
-      <div className="combat-instruction">{phase==='verdictSlash'?'连续划过怪物主体 · 每段 +12':phase==='verdictReady'?'点击裁决徽章开始':phase==='telegraph'?'留意怪物身上随机亮起的光环':targets.length===2?'依次点击两处身体光环 · 第二处稍后出现':targets.some(t=>t.phase==='perfect')?'现在 · 点击身体光环':'金色 NICE · 青色 PERFECT'}</div>
-      <button className={`verdict-badge ${phase==='verdictReady'?'is-ready':''}`} style={{'--meter':`${battle.meter}%`} as React.CSSProperties} disabled={phase!=='verdictReady'||paused} onClick={()=>{advanceNow();useGame.getState().beginVerdict()}} aria-label={phase==='verdictReady'?'执行裁决':`裁决能量 ${battle.meter}%`} data-testid="verdict-start"><span className="verdict-mark">斩</span><strong>{phase==='verdictReady'?'执行裁决':`${battle.meter}%`}</strong><small>VERDICT · {battle.meter>=100?'READY':'CHARGE'}</small></button>
+      <div className="combat-instruction">{phase==='verdictSlash'?'连续划过怪物主体 · 每段 +12':phase==='verdictReady'?'储蓄已满 · 自动进入裁决':phase==='telegraph'?'留意怪物身上随机亮起的光环':targets.length===2?'依次点击两处身体光环 · 第二处稍后出现':targets.some(t=>t.phase==='perfect')?'现在 · 点击身体光环':'点击即可，找准青色 PERFECT'}</div>
     </footer>
-    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'掌握招架的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>观察怪物蓄力，等待光环收缩。<br/>金色时点击核心：Nice<br/>青色时点击核心：Perfect</p><p>能量蓄满后，连续划过怪物主体进行裁决。</p></>}{ready&&!failed&&<button autoFocus className="gold-button" onClick={()=>{clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</button>}{(paused||failed)&&<button className="quiet-button" onClick={()=>useGame.getState().go('stages')}>退出讨伐</button>}</div></div>}
+    <aside className={`resource-meter resource-meter--${bossKind}`} data-testid="resource-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.meter} aria-label={`${bossKind==='jelly'?'果冻':'玉米'}裁决储蓄 ${battle.meter}%`}>
+      <div className="resource-meter__cap"><span>{bossKind==='jelly'?'JELLY':'CORN'}</span><b>{battle.meter}%</b></div>
+      <div className="resource-meter__track"><i style={{height:`${Math.max(0,Math.min(100,battle.meter))}%`}}/><span className="resource-meter__glow"/></div>
+      <strong className="resource-meter__icon" aria-hidden="true"><i className={`ingredient-mark ingredient-mark--${bossKind}`}/></strong>
+      <span className="resource-meter__name">{bossKind==='jelly'?'果冻':'玉米'}</span>
+      <small>{battle.meter>=100?'FULL':'CHARGE'}</small>
+    </aside>
+    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>光环出现后的 1.8 秒内都可以点击。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>储蓄条满后会自动进入连续裁决。</p></>}{ready&&!failed&&<button autoFocus className="gold-button" onClick={()=>{clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</button>}{(paused||failed)&&<button className="quiet-button" onClick={()=>useGame.getState().go('stages')}>退出讨伐</button>}</div></div>}
   </section>;
 }

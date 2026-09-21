@@ -4,8 +4,9 @@ import type { BossKind, VerdictWeakPoint } from '../domain/v2';
 export function makeBattleCamera(width:number,height:number){
   const aspect=Math.max(.2,width/height),camera=new THREE.PerspectiveCamera(35,aspect,.1,70);
   // Fit the entire weapon/shield silhouette on narrow screens; leave HUD space.
-  const distance=Math.max(6.8,3.2/aspect);
-  camera.position.set(0,1.75,distance);camera.lookAt(0,1.15,0);camera.updateMatrixWorld(true);return camera;
+  const distance=Math.max(7.7,5/aspect);
+  // Reserve room for a 90px body ring and the fixed left energy vial.
+  camera.position.set(0,1.75,distance);camera.lookAt(aspect<.8?-.22:0,1.25,0);camera.updateMatrixWorld(true);return camera;
 }
 export function projectPoint(point:THREE.Vector3,camera:THREE.Camera){const p=point.clone().project(camera);return{x:(p.x+1)/2,y:(1-p.y)/2}}
 /** No HUD clamping: a body-bound marker must never drift off its body part. */

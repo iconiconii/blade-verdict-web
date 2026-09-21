@@ -6,19 +6,15 @@ import {
 } from './domain/meta';
 import { createSave, settleBattle, type SavedWorkshop } from './domain/save';
 import { readWorkshopSave, updateWorkshopSave } from './persistence';
-import { applyContinuousCut, createCombat, startVerdict, tapTarget, tickCombat, type CombatState } from './domain/combat';
+import { applyContinuousCut, createCombat, tapTarget, tickCombat, type CombatState } from './domain/combat';
 import type { BossKind } from './domain/v2';
 
-// The scene's dynamic line buffer is intentionally finite. Keeping the same
-// budget in the store prevents a high-frequency touchmove stream from growing
-// an unbounded immutable array during a verdict.
+// Bound input history even though the renderer no longer draws a pointer line.
 const MAX_STROKE_POINTS = 513;
 function appendStrokePoint(points:Array<{x:number;y:number;time:number}>, point:{x:number;y:number;time:number}) {
   const next = [...points, point];
   if (next.length <= MAX_STROKE_POINTS) return next;
-  // Preserve the newest path while reducing samples by half. The renderer
-  // still receives a continuous line, but React/Zustand never retains a
-  // pointer trace larger than the WebGL buffer.
+  // Preserve recent input without retaining an unbounded touch history.
   return next.filter((_, index) => index % 2 === 0).slice(-MAX_STROKE_POINTS);
 }
 
@@ -29,9 +25,9 @@ interface GameStore {
   screen:Screen; combat:CombatState; meta:MetaState; save:SavedWorkshop; tutorialSeen:boolean;
   notice:Notice|null; saving:boolean; saveIssue:string|null; battleId:string|null; pendingBattle:PendingBattle|null;
   go:(screen:Screen)=>void; start:(bossKind?:BossKind)=>void; advance:(delta:number)=>void;
-  tap:(index:number)=>void; pause:(paused:boolean)=>void; beginVerdict:()=>void;
+  tap:(index:number)=>void; pause:(paused:boolean)=>void;
   beginStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void; moveStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void;
-  cut:(pointerId:number,point:{x:number;y:number},insideMonster:boolean)=>void; endStroke:(pointerId:number)=>void; cancelStroke:()=>void; dismissTutorial:()=>void;
+  cut:(pointerId:number,point:{x:number;y:number},insideMonster:boolean,angle?:number)=>void; endStroke:(pointerId:number)=>void; cancelStroke:()=>void; dismissTutorial:()=>void;
   cook:(selected:IngredientSelection[])=>Promise<boolean>; sellDish:(instanceId:string)=>Promise<boolean>; sellAllDishes:()=>Promise<boolean>;
   buyItem:(itemId:string)=>Promise<boolean>; equipItem:(itemId:string|null)=>Promise<boolean>; clearNotice:()=>void;
   retrySettlement:()=>Promise<boolean>; refreshSave:()=>void;
@@ -115,10 +111,9 @@ export const useGame=create<GameStore>((set,get)=>{
     },
     tap:index=>set(s=>({combat:tapTarget(s.combat,index)})),
     pause:paused=>set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}})),
-    beginVerdict:()=>set(s=>({combat:startVerdict(s.combat)})),
     beginStroke:(pointerId,point)=>set(s=>({combat:s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.pointerId===null?{...s.combat,pointerId,stroke:{points:[point],hitWeakPointIds:[],score:0,valid:true}}:s.combat})),
     moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:appendStrokePoint(s.combat.stroke.points,point)}}:s.combat})),
-    cut:(pointerId,point,insideMonster)=>set(s=>({combat:s.combat.pointerId===pointerId?applyContinuousCut(s.combat,point,insideMonster):s.combat})),
+    cut:(pointerId,point,insideMonster,angle)=>set(s=>({combat:s.combat.pointerId===pointerId?applyContinuousCut(s.combat,point,insideMonster,angle):s.combat})),
     endStroke:pointerId=>set(s=>({combat:s.combat.pointerId===pointerId?{...s.combat,pointerId:null}:s.combat})),
     cancelStroke:()=>set(s=>({combat:{...s.combat,pointerId:null,stroke:null}})),
     dismissTutorial:()=>{void transact(save=>({...save,tutorialSeen:true}),'')},

@@ -125,19 +125,23 @@ export class CornGuardian {
   getAnchor(id:BodyAnchorId){return this.anchors[id]??this.body}
 
   update(state:CombatState,reducedMotion=false){
-    const {phase,elapsed,feedback}=state,impact=phase==='impact'||phase==='stagger',success=impact&&feedback!==null&&feedback.kind!=='Miss';
-    const hitStop=feedback?.kind==='Perfect'&&phase==='impact'&&elapsed<100,t=(state.time-(hitStop?elapsed:0))/1000;
-    const charge=phase==='telegraph'?smooth(elapsed/400):phase==='targetActive'?1-smooth(elapsed/380):0;
-    const age=phase==='stagger'&&feedback?.kind!=='Verdict'?elapsed+280:elapsed,recoil=success?Math.sin(Math.min(age/580,1)*Math.PI):0;
-    const down=state.battle.bossHp<=0?smooth(age/650):0,verdict=phase==='verdictReady'||phase==='verdictSlash';
+    const {phase,elapsed,feedback}=state;
+    const age=feedback?state.time-feedback.time:Infinity;
+    const success=feedback!==null&&feedback.kind!=='Miss'&&age<680;
+    const perfect=success&&feedback?.kind==='Perfect';
+    const t=state.time/1000;
+    const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/380):0;
+    const recoil=success?Math.sin(Math.min(age/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
+    const tremor=perfect&&!reducedMotion?Math.sin(t*68)*.035*Math.max(0,1-age/680):0;
+    const down=state.battle.bossHp<=0?(phase==='settle'?1:smooth(age/650)):0,verdict=phase==='verdictReady'||phase==='verdictSlash';
     const sway=reducedMotion||verdict?0:Math.sin(t*1.7)*.025;
-    this.root.position.set(0,down*.03,-recoil*.15);this.root.rotation.set(-charge*.06+recoil*.12,verdict?0:-.16+sway,down*1.1);
+    this.root.position.set(tremor,down*.03,-recoil*(perfect?.34:.12));this.root.rotation.set(-charge*.06+recoil*(perfect?.28:.09),verdict?0:-.16+sway+tremor*.8,down*1.1);
     this.body.position.y=1.02+(reducedMotion||verdict?0:Math.sin(t*2.1)*.012);this.body.scale.set(1-charge*.025,1+charge*.03,1);
     this.head.position.y=1.98+(reducedMotion||verdict?0:Math.sin(t*2.1+.4)*.012);this.head.rotation.z=recoil*.05;
-    this.leftArm.rotation.set(-charge*.5+recoil*.22,0,-.12-charge*.12-down*.25);this.rightArm.rotation.set(-charge*.42,0,.12+recoil*.18+down*.24);
+    this.leftArm.rotation.set(-charge*.5+recoil*(perfect?.35:.22),0,-.12-charge*.12-down*.25);this.rightArm.rotation.set(-charge*.42,0,.12+recoil*(perfect?.3:.18)+down*.24);
     this.leftLeg.rotation.z=sideLean(-1,charge,recoil);this.rightLeg.rotation.z=sideLean(1,charge,recoil);
     this.crest.rotation.x=reducedMotion||verdict?0:Math.sin(t*2.2)*.04+recoil*.18;
-    const flash=success&&phase==='impact'?Math.max(0,.75-elapsed/190):0;for(const material of this.materials){material.emissive.setHex(0xffffff);material.emissiveIntensity=flash;}
+    const flash=success?Math.max(0,(perfect?.95:.35)-age/220)*(reducedMotion?.3:1):0;for(const material of this.materials){material.emissive.setHex(0xffffff);material.emissiveIntensity=flash;}
   }
 }
 

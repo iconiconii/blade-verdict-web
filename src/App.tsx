@@ -25,14 +25,14 @@ function Stages(){
     <div className="stage-grid">
       <article className="stage-card stage-card--corn selected">
         <div className="stage-image corn"><span className="stage-index">01</span><span className="danger">危险度 II</span><span className="stage-image-caption">WIND / HARVEST FIELD</span></div>
-        <div className="stage-card-body"><div className="stage-card-kicker"><span>荒芜农场 · 第一章</span><b>推荐训练场</b></div><h2>暴怒玉米怪</h2><p>它的攻击会在身体上亮起。等环收紧，在青色窗口完成一次精准招架，再用刀痕切开破绽。</p><div className="stage-tags"><span>🌽 玉米核</span><span>身体锚点</span><span>连续裁决</span></div><div className="stage-card-footer"><dl><div><dt>攻击节拍</dt><dd>稳定</dd></div><div><dt>预计收获</dt><dd>极品 ×3</dd></div></dl><button data-testid="start" onClick={()=>useGame.getState().start('corn')}>开始讨伐 <span>↗</span></button></div></div>
+        <div className="stage-card-body"><div className="stage-card-kicker"><span>荒芜农场 · 第一章</span><b>推荐训练场</b></div><h2>暴怒玉米怪</h2><p>身体光环亮起就可以点击；等到青色，打出更强的 Perfect。蓄满玉米储蓄，自动进入连续切割。</p><div className="stage-tags"><span>🌽 玉米核</span><span>身体锚点</span><span>连续裁决</span></div><div className="stage-card-footer"><dl><div><dt>攻击节拍</dt><dd>稳定</dd></div><div><dt>预计收获</dt><dd>极品 ×3</dd></div></dl><button data-testid="start" onClick={()=>useGame.getState().start('corn')}>开始讨伐 <span>↗</span></button></div></div>
       </article>
       <article className="stage-card stage-card--jelly jelly-stage">
         <div className="stage-image jelly"><span className="stage-index">02</span><span className="danger danger--purple">危险度 III</span><span className="stage-image-caption">LAB / REACTION POOL</span></div>
-        <div className="stage-card-body"><div className="stage-card-kicker"><span>果冻实验室 · 第二章</span><b className="stage-status--violet">变异机制</b></div><h2>酸蚀果冻怪</h2><p>黏液弹会在命中前分裂，第二处身体环稍后出现。保持呼吸，把连续完美留给最后一击。</p><div className="stage-tags"><span>🫐 果冻核</span><span>分裂攻击</span><span>延迟目标</span></div><div className="stage-card-footer"><dl><div><dt>攻击节拍</dt><dd>快速</dd></div><div><dt>预计收获</dt><dd>极品 ×3</dd></div></dl><button data-testid="start-jelly" onClick={()=>useGame.getState().start('jelly')}>开始讨伐 <span>↗</span></button></div></div>
+        <div className="stage-card-body"><div className="stage-card-kicker"><span>果冻实验室 · 第二章</span><b className="stage-status--violet">变异机制</b></div><h2>酸蚀果冻怪</h2><p>先熟悉宽松的点击窗口，再迎接更快的接力招架。第二环在第一环结束后出现，整轮完成后积攒果冻储蓄。</p><div className="stage-tags"><span>🫐 果冻核</span><span>分裂攻击</span><span>延迟目标</span></div><div className="stage-card-footer"><dl><div><dt>攻击节拍</dt><dd>快速</dd></div><div><dt>预计收获</dt><dd>极品 ×3</dd></div></dl><button data-testid="start-jelly" onClick={()=>useGame.getState().start('jelly')}>开始讨伐 <span>↗</span></button></div></div>
       </article>
     </div>
-    <div className="expedition-tip"><span>FIELD NOTE / 01</span><p>双目标回合会先亮起第一处身体环；完成后，第二处才会进入有效窗口。</p></div>
+    <div className="expedition-tip"><span>FIELD NOTE / 01</span><p>光环存在时点击都有效；后段双环接力出现，不用同时点。储蓄满后自动裁决，按住并连续划过怪物。</p></div>
     <WorkshopNav active="stages" />
   </section>;
 }

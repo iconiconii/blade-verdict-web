@@ -5,16 +5,45 @@ export type BattlePhase = 'intro' | 'telegraph' | 'targetActive' | 'impact' | 's
 export type BossKind = 'corn' | 'jelly';
 /** Named points on the 3D guardian used to attach a parry ring to the actor. */
 export type BodyAnchorId = 'head'|'belly'|'leftHand'|'rightHand'|'leftKnee'|'rightKnee'|'leftShoulder'|'rightShoulder'|'leftFin'|'rightFin'|'leftJoint'|'rightJoint'|'lowerJoint';
-export interface AttackPresentation { targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
+export interface AttackPresentation { targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; ringElapsedMs:number; ringDurationMs:number; maxRadiusPx:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
 export interface VerdictPoint { x:number; y:number; time:number }
 export interface VerdictWeakPoint { id:string; x:number; y:number; radius:number }
 export interface VerdictStroke { points:VerdictPoint[]; hitWeakPointIds:string[]; score:number; valid:boolean }
 export interface AttackConfig { telegraphMs:number; missDamage:number; perfectCounterDamage:number; niceCounterDamage:number; perfectMeterGain:number; niceMeterGain:number }
-export const cornAttack: AttackConfig = { telegraphMs:900, missDamage:12, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:10 };
-export const jellyAttack: AttackConfig = { telegraphMs:700, missDamage:8, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:10 };
+export const cornAttack: AttackConfig = { telegraphMs:900, missDamage:12, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:18 };
+export const jellyAttack: AttackConfig = { telegraphMs:700, missDamage:8, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:34, niceMeterGain:22 };
 export const parryPhase = (progress:number):ParryPhase => progress < .35 ? 'EarlyMiss' : progress < .7 ? 'Nice' : progress <= .9 ? 'Perfect' : 'LateMiss';
 export const ringRatio = (p:number) => { p=Math.max(0,Math.min(1,p)); const lerp=(a:number,b:number,t:number)=>a+(b-a)*t; return p<.35?lerp(3,2.2,p/.35):p<.7?lerp(2.2,1.2,(p-.35)/.35):p<=.9?lerp(1.2,.8,(p-.7)/.2):lerp(.8,.25,(p-.9)/.1) };
 export function resolveParry(elapsedMs:number, attack= cornAttack, lateGraceMs=0):ParryResult { if(elapsedMs>attack.telegraphMs+lateGraceMs) return 'Miss'; if(elapsedMs>attack.telegraphMs)return lateGraceMs>0?'Perfect':'Miss'; const phase=parryPhase(Math.max(0,elapsedMs/attack.telegraphMs)); return phase==='Perfect'?'Perfect':phase==='Nice'?'Nice':'Miss' }
+
+/**
+ * The web ring is intentionally more forgiving than the legacy timing rule.
+ * A click anywhere in the visible 1.8s window resolves exactly once; only the
+ * radius sweet spot changes the quality of that successful click.
+ */
+export const ringLifecycleMs = 1800;
+export function ringRadiusAt(elapsedMs:number,durationMs=ringLifecycleMs,maxRadiusPx=90){
+  const t=Math.max(0,Math.min(1800,elapsedMs/durationMs*1800));
+  const smooth=(value:number)=>value*value*(3-2*value);
+  const scale=maxRadiusPx/90;
+  if(t<=600)return (30+60*smooth(t/600))*scale;
+  if(t<=700)return (90-15*smooth((t-600)/100))*scale;
+  // Two complete breaths after the continuous 90→75 settling movement.
+  if(t<=1400)return (75-5*Math.sin((t-700)/700*Math.PI*4))*scale;
+  return 75*(1-smooth((t-1400)/400))*scale;
+}
+export function resolveRingParry(elapsedMs:number,durationMs=ringLifecycleMs):ParryResult {
+  if(elapsedMs<0||elapsedMs>=durationMs)return 'Miss';
+  const t=elapsedMs/durationMs*1800;
+  return t>=700&&t<1400?'Perfect':'Nice';
+}
+export function ringPhaseAt(elapsedMs:number,durationMs=ringLifecycleMs):AttackPresentation['phase'] {
+  if(elapsedMs<0||elapsedMs>=durationMs)return 'late';
+  const t=elapsedMs/durationMs*1800;
+  if(t<600)return 'early';
+  if(t<1400)return resolveRingParry(elapsedMs,durationMs)==='Perfect'?'perfect':'nice';
+  return 'late';
+}
 export const bodyAnchorIds:Record<BossKind,readonly BodyAnchorId[]>={
   // The order is intentionally stable: it is part of the deterministic replay seed.
   corn:['head','leftHand','rightHand','belly','leftKnee','rightKnee','leftShoulder','rightShoulder'],
@@ -62,5 +91,5 @@ export const damageForScore=(score:number)=>Math.round(160+Math.max(0,Math.min(1
 export const qualityForScore=(score:number):Quality=>score>=95?'Top':score>=85?'High':score>=50?'Normal':'Broken';
 export interface BattleState { playerHp:number; bossHp:number; meter:number; remainingParts:number; verdictCount:number; loot:{quality:Quality;count:number}[] }
 export const newBattle=():BattleState=>({playerHp:100,bossHp:800,meter:0,remainingParts:3,verdictCount:0,loot:[]});
-export function applyParry(state:BattleState,result:ParryResult,attack=cornAttack):BattleState { const s={...state}; if(result==='Miss'){s.playerHp=Math.max(0,s.playerHp-attack.missDamage);s.meter=Math.max(0,s.meter-10)} else {s.bossHp=Math.max(0,s.bossHp-(result==='Perfect'?attack.perfectCounterDamage:attack.niceCounterDamage));s.meter=Math.min(100,s.meter+(result==='Perfect'?attack.perfectMeterGain:attack.niceMeterGain))} return s }
+export function applyParry(state:BattleState,result:ParryResult,attack=cornAttack):BattleState { const s={...state}; if(result==='Miss'){s.playerHp=Math.max(0,s.playerHp-attack.missDamage)} else {s.bossHp=Math.max(0,s.bossHp-(result==='Perfect'?attack.perfectCounterDamage:attack.niceCounterDamage));s.meter=Math.min(100,s.meter+(result==='Perfect'?attack.perfectMeterGain:attack.niceMeterGain))} return s }
 export function applyVerdict(state:BattleState,score:number):BattleState { if(state.meter<100) throw Error('Verdict requires a full meter'); if(state.playerHp<=0||state.bossHp<=0)throw Error('Battle has ended');score=Math.max(0,Math.min(100,score)); const s={...state,loot:[...state.loot],meter:0,verdictCount:state.verdictCount+1}; const amount=Math.min(score>=95?2:score>=20?1:0,s.remainingParts); if(amount){s.loot.push({quality:qualityForScore(score),count:amount});s.remainingParts-=amount} s.bossHp=Math.max(0,s.bossHp-damageForScore(score)); if(!s.bossHp&&s.remainingParts){s.loot.push({quality:'Broken',count:s.remainingParts});s.remainingParts=0} return s }

@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { doubleTargetDiameter, targetDiameter, type CombatState } from './domain/combat';
+import type { CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
+import { SliceEffects } from './scene/SliceEffects';
 import { makeBattleCamera, projectBodyAnchor, projectPoint } from './scene/layout';
-import { ringRatio, type BossKind } from './domain/v2';
+import { ringRadiusAt, type BossKind } from './domain/v2';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
-const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:opacity<1,opacity,depthWrite:false,toneMapped:false});
+const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,toneMapped:false});
 export interface ParryTargetLayout { round:number; x:number; y:number; diameter:number; visible:boolean }
 
 /** Perspective world plus a pixel-space Three.js effects pass. React owns text. */
@@ -21,17 +22,10 @@ export class BattleScene {
   private bossKind:BossKind;
   private targetRings:THREE.Group[]=[];
   private targetLayouts:ParryTargetLayout[]=[];
-  private trail:EffectMesh;
-  private slash:EffectMesh;
-  private slashEcho:EffectMesh;
-  private shock:EffectMesh;
-  private missCrack:THREE.LineSegments;
   private arenaPulse!:EffectMesh;
-  private sparks:EffectMesh[]=[];
   private width=1;private height=1;private disposed=false;
-  private lineBuffer=new Float32Array(512*6*3);
-  private lastStroke:CombatState['stroke']=null;
   private jellyEnvironment:THREE.WebGLRenderTarget|null=null;
+  private sliceEffects:SliceEffects;
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
@@ -39,7 +33,7 @@ export class BattleScene {
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure=1.1;
-    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;
     this.renderer.autoClear=false;this.renderer.setClearColor(0x101e23);
     this.renderer.domElement.dataset.scene='true-3d';
     this.host.appendChild(this.renderer.domElement);
@@ -47,37 +41,21 @@ export class BattleScene {
     this.world.fog=new THREE.FogExp2(0x101e23,.055);
     this.world.add(this.guardian.root);this.setupArena();
     this.overlayCamera.position.z=100;
+    this.sliceEffects=new SliceEffects(this.overlay,bossKind);
     for(let i=0;i<2;i++){
-      // These rings are real world objects mounted on the selected body anchor.
-      // React still owns the invisible touch target; Three.js owns this visual.
-      // The layers deliberately have different speeds/weights so the marker reads
-      // as a body-mounted lock-on rather than a flat debug circle.
-      const group=new THREE.Group();group.name=`body-parry-ring-${i}`;group.visible=false;group.renderOrder=20;group.frustumCulled=false;
-      const outer=new THREE.Mesh(new THREE.TorusGeometry(.24,.035,10,48),basic(0xff675e,.9));
-      const warning=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,8,36),basic(0xff9466,.95));
-      const core=new THREE.Mesh(new THREE.CircleGeometry(.1,28),basic(0xffad72,.22));core.position.z=.012;
-      const center=new THREE.Mesh(new THREE.TorusGeometry(.065,.014,6,20),basic(0xfff2d1,.95));center.position.z=.02;
-      const sweep=new THREE.Mesh(new THREE.TorusGeometry(.255,.012,6,32,Math.PI*1.18),basic(0xfff2cf,.92));sweep.position.z=.026;sweep.rotation.z=.38;
-      const reticle=new THREE.Mesh(new THREE.RingGeometry(.112,.126,12),basic(0xffeac5,.76));reticle.position.z=.027;
-      const needle=new THREE.Mesh(new THREE.PlaneGeometry(.018,.16),basic(0xffffff,.86));needle.position.set(0,.115,.029);needle.rotation.z=-.38;
-      for(const child of [outer,warning,core,center,sweep,reticle,needle]){
-        child.renderOrder=20;child.frustumCulled=false;
-        (child.material as THREE.MeshBasicMaterial).depthTest=false;
-      }
-      group.add(outer,warning,core,center,sweep,reticle,needle);this.targetRings.push(group);
+      // Pixel-space ring follows the projected anatomical anchor exactly.
+      // Its diameter is shared with the HTML hit area, independent of camera/DPR.
+      const group=new THREE.Group();group.name=`body-parry-ring-${i}`;group.visible=false;
+      const halo=new THREE.Mesh(new THREE.RingGeometry(.90,1,64),basic(0xffd477,.16));
+      const edge=new THREE.Mesh(new THREE.RingGeometry(.969,1,64),basic(0xffd477,.95));
+      const inner=new THREE.Mesh(new THREE.RingGeometry(.81,.82,64),basic(0xffe7b4,.35));
+      const core=new THREE.Mesh(new THREE.CircleGeometry(1,48),basic(0xffd477,.035));
+      const marker=new THREE.Mesh(new THREE.CircleGeometry(.075,4),basic(0xffedba,.95));
+      marker.rotation.z=Math.PI/4;
+      group.add(core,halo,edge,inner,marker);
+      group.children.forEach(child=>{child.renderOrder=20;(child as EffectMesh).material.depthTest=false});
+      this.overlay.add(group);this.targetRings.push(group);
     }
-    const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute('position',new THREE.BufferAttribute(this.lineBuffer,3).setUsage(THREE.DynamicDrawUsage));trailGeo.setDrawRange(0,0);
-    this.trail=new THREE.Mesh(trailGeo,basic(0xb6fff4,.95));this.trail.material.side=THREE.DoubleSide;this.trail.frustumCulled=false;this.trail.position.z=40;this.overlay.add(this.trail);
-    this.slash=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0xd9fff3,.9));this.slash.position.z=38;this.slash.rotation.z=-.65;this.slash.renderOrder=40;this.slash.frustumCulled=false;this.slash.visible=false;this.overlay.add(this.slash);
-    this.slashEcho=new THREE.Mesh(new THREE.PlaneGeometry(1,1),basic(0x8bffe9,.36));this.slashEcho.position.z=37;this.slashEcho.rotation.z=.58;this.slashEcho.renderOrder=39;this.slashEcho.frustumCulled=false;this.slashEcho.visible=false;this.overlay.add(this.slashEcho);
-    this.shock=new THREE.Mesh(new THREE.RingGeometry(.94,1,48),basic(0x74ffe4,.9));this.shock.position.z=35;this.shock.visible=false;this.overlay.add(this.shock);
-    const sparkGeometry=new THREE.CircleGeometry(1,3),sparkMaterial=basic(0xffe6a5,.9);
-    for(let i=0;i<24;i++){const spark=new THREE.Mesh(sparkGeometry,sparkMaterial);spark.position.z=36;spark.visible=false;this.sparks.push(spark);this.overlay.add(spark)}
-    const crackPoints=[[-.06,.02,0,.18,.15,0],[-.06,.02,0,-.2,-.09,0],[.04,-.01,0,.14,-.2,0],[-.01,.06,0,-.18,.23,0],[.09,.02,0,.23,.04,0],[.01,-.08,0,-.08,-.26,0]];
-    const crackPositions=new Float32Array(crackPoints.flat());
-    const crackGeometry=new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(crackPositions,3));
-    this.missCrack=new THREE.LineSegments(crackGeometry,new THREE.LineBasicMaterial({color:0xff695e,transparent:true,opacity:.9,depthTest:false,depthWrite:false,toneMapped:false}));
-    this.missCrack.position.z=39;this.missCrack.renderOrder=42;this.missCrack.frustumCulled=false;this.overlay.add(this.missCrack);
     this.resize();queueMicrotask(()=>{if(!this.disposed)onReady()});
   }
 
@@ -115,7 +93,7 @@ export class BattleScene {
     const {width,height}=this.host.getBoundingClientRect();if(width<=0||height<=0)return;
     this.width=width;this.height=height;this.camera=makeBattleCamera(width,height);
     this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);this.lastStroke=null;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);
   }
   /** React uses the exact layout just rendered, never a second projection/animation clock. */
   getTargetLayout(index:number){return this.targetLayouts[index]}
@@ -140,65 +118,24 @@ export class BattleScene {
     this.targetLayouts=[];
     for(let i=0;i<2;i++){
       const target=state.targets[i],group=this.targetRings[i];
-      const show=!!target&&!target.resolved&&(
-        phase==='telegraph'&&target.targetIndex===0
-        || phase==='targetActive'&&elapsed>=target.startDelayMs
-      );
+      const show=!!target&&!target.resolved&&phase==='targetActive'&&elapsed>=target.startDelayMs
+        &&elapsed-target.startDelayMs<target.ringDurationMs;
       group.visible=show;if(!target)continue;
-      const center=projectBodyAnchor(this.guardian.getAnchor(target.anchorId),this.camera,w,h),d=Math.max(targetDiameter(w,h),state.targets.length===2?doubleTargetDiameter:0);
-      this.targetLayouts[i]={round:state.round,...center,diameter:d,visible:show};
+      const center=projectBodyAnchor(this.guardian.getAnchor(target.anchorId),this.camera,w,h);
+      const radius=ringRadiusAt(Math.max(0,elapsed-target.startDelayMs),target.ringDurationMs,target.maxRadiusPx);
+      this.targetLayouts[i]={round:state.round,...center,diameter:Math.max(44,radius*2),visible:show};
       if(!show)continue;
-      const anchor=this.guardian.getAnchor(target.anchorId);if(group.parent!==anchor)anchor.add(group);
-      group.position.set(0,0,.07);group.rotation.z=Math.sin(t*1.8+i)*.035;
-      const palette={
-        early:{outer:0xff5d63,warning:0xff9275,core:0xff776d,accent:0xffd0ae},
-        nice:{outer:0xffd16b,warning:0xffe19a,core:0xffe4a0,accent:0xfffae4b4},
-        perfect:{outer:0x73ffe3,warning:0xbaffef,core:0x86ffec,accent:0xffffff},
-        late:{outer:0xff5d63,warning:0xff7b70,core:0xff655f,accent:0xffd0c5},
-      }[target.phase];
-      const ratio=ringRatio(target.telegraphProgress),pulse=1+Math.sin(t*(target.phase==='perfect'?12:7)+i)*.045;
-      // ringRatio is the same timing curve used by the combat rule. Mapping it
-      // to a restrained world scale keeps the marker readable without becoming
-      // the old full-screen debug ring.
-      const scale=(.74+ratio*.17)*pulse;group.scale.setScalar(scale);
-      const outer=group.children[0] as EffectMesh,warning=group.children[1] as EffectMesh,core=group.children[2] as EffectMesh,centerMesh=group.children[3] as EffectMesh,sweep=group.children[4] as EffectMesh,reticle=group.children[5] as EffectMesh,needle=group.children[6] as EffectMesh;
-      outer.material.color.setHex(palette.outer);warning.material.color.setHex(palette.warning);core.material.color.setHex(palette.core);centerMesh.material.color.setHex(palette.accent);sweep.material.color.setHex(palette.accent);reticle.material.color.setHex(palette.accent);needle.material.color.setHex(palette.accent);
-      const warningPulse=.6+Math.sin(t*8+i)*.12;
-      outer.material.opacity=target.phase==='perfect'?.98:.78;
-      warning.material.opacity=Math.max(.35,warningPulse);
-      core.material.opacity=phase==='telegraph'?.24:target.phase==='perfect'?.56:.42;
-      centerMesh.material.opacity=target.phase==='perfect'?.98:.78;
-      sweep.material.opacity=target.phase==='perfect'?.96:.62;reticle.material.opacity=target.phase==='perfect'?.94:.64;needle.material.opacity=target.phase==='perfect'?.98:.6;
-      sweep.rotation.z=-t*(target.phase==='perfect'?2.7:1.15)+i*.8;reticle.rotation.z=t*.7+i;needle.scale.y=.72+.28*Math.max(0,Math.sin(t*4+i));
+      group.position.set(center.x,-center.y,24);group.scale.setScalar(radius);
+      const color=target.phase==='perfect'?0x7fffe0:0xffd277;
+      group.children.forEach(child=>(child as EffectMesh).material.color.setHex(color));
+      const halo=group.children[1] as EffectMesh;
+      halo.material.opacity=target.phase==='perfect'?.36:.16;
     }
-    this.drawStroke(state);
-    const showFeedback=!!feedback&&impact&&strength>0;
-    this.shock.visible=showFeedback;this.slash.visible=showFeedback&&feedback?.kind!=='Miss';this.slashEcho.visible=showFeedback&&feedback?.kind!=='Miss';this.missCrack.visible=showFeedback&&feedback?.kind==='Miss';
-    const position=feedback?.anchorId?projectBodyAnchor(this.guardian.getAnchor(feedback.anchorId),this.camera,w,h):{x:(feedback?.position.x??.5)*w,y:(feedback?.position.y??.5)*h};
-    if(feedback){
-      const color=feedback.kind==='Miss'?0xff695e:feedback.kind==='Nice'?0xffd369:0x85ffdf;
-      this.shock.position.set(position.x,-position.y,35);this.shock.scale.setScalar(25+age*.18);this.shock.rotation.z=t*.8;this.shock.material.opacity=strength;this.shock.material.color.setHex(color);
-      this.slash.position.set(position.x,-position.y,38);this.slash.scale.set(3+strength*4,Math.min(w*.6,290),1);this.slash.material.opacity=strength;
-      this.slashEcho.position.set(position.x,-position.y,37);this.slashEcho.scale.set(2+strength*3,Math.min(w*.46,220),1);this.slashEcho.material.opacity=strength*.42;
-      this.missCrack.position.set(position.x,-position.y,39);this.missCrack.scale.setScalar(58+age*.16);this.missCrack.rotation.z=-t*1.2;(this.missCrack.material as THREE.LineBasicMaterial).opacity=strength;
-      this.sparks.forEach((spark,i)=>{spark.visible=showFeedback;const a=i*2.39996,r=(25+age*.17)*(.7+(i%4)*.14);spark.position.set(position.x+Math.cos(a)*r,-position.y+Math.sin(a)*r-age*age*.00005,36);spark.scale.setScalar((i%3+1)*1.7*strength);spark.material.color.setHex(color)});
-    }else this.sparks.forEach(spark=>spark.visible=false);
+    this.sliceEffects.update(state,reducedMotion,event=>event.anchorId
+      ?projectBodyAnchor(this.guardian.getAnchor(event.anchorId),this.camera,w,h)
+      :{x:event.position.x*w,y:event.position.y*h});
     this.renderer.clear();this.renderer.render(this.world,this.camera);this.renderer.clearDepth();this.renderer.render(this.overlay,this.overlayCamera);
     this.camera.position.x=0;this.camera.updateMatrixWorld();
-  }
-  private drawStroke(state:CombatState){
-    const stroke=state.stroke,points=stroke?.points??[];this.trail.visible=points.length>1;
-    if(stroke!==this.lastStroke){
-      let count=0;
-      for(let i=1;i<Math.min(points.length,513);i++){
-        const a=points[i-1],b=points[i],ax=a.x*this.width,ay=-a.y*this.height,bx=b.x*this.width,by=-b.y*this.height;
-        const len=Math.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/len*3,ny=(bx-ax)/len*3;
-        this.lineBuffer.set([ax+nx,ay+ny,0,ax-nx,ay-ny,0,bx+nx,by+ny,0,bx+nx,by+ny,0,ax-nx,ay-ny,0,bx-nx,by-ny,0],count);count+=18;
-      }
-      this.trail.geometry.getAttribute('position').needsUpdate=true;this.trail.geometry.setDrawRange(0,count/3);this.lastStroke=stroke;
-    }
-    this.trail.material.color.setHex(state.phase==='verdictSlash'?0x9bffe9:0x76d7c2);
-    this.trail.material.opacity=state.phase==='verdictSlash'?1:Math.max(0,1-state.elapsed/900);
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);

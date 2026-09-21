@@ -1,96 +1,144 @@
-import { aggregateParryResults, applyParry, cornAttack, deterministicBodyAnchor, deterministicTarget, jellyAttack, newBattle, resolveParry, type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState, type BodyAnchorId, type BossKind, type ParryResult, type VerdictStroke, type VerdictWeakPoint } from './v2';
+import {
+  applyParry, cornAttack, deterministicBodyAnchor, deterministicTarget, jellyAttack,
+  newBattle, resolveRingParry, ringPhaseAt,
+  type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState,
+  type BodyAnchorId, type BossKind, type ParryResult, type VerdictStroke,
+} from './v2';
 
-export interface CombatFeedback { id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number; position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number }
+export interface CombatFeedback {
+  id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number;
+  position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number;
+  energyGain:number; angle:number;
+}
+export interface CombatTempo { durationMs:number; maxRadiusPx:number; telegraphMs:number; label:string }
 export interface CombatState {
-  battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase; elapsed:number; time:number; round:number; seed:number;
-  paused:boolean; targets:AttackPresentation[]; combo:number; bestCombo:number;
-  feedback:CombatFeedback|null; stroke:VerdictStroke|null; pointerId:number|null; verdictDamageDealt:number; verdictCombo:number; verdictBonusDamage:number;
+  battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase;
+  elapsed:number; time:number; round:number; seed:number; paused:boolean;
+  targets:AttackPresentation[]; combo:number; bestCombo:number; successfulParries:number;
+  tempo:CombatTempo; feedback:CombatFeedback|null; effects:CombatFeedback[]; feedbackSequence:number;
+  hitStopRemainingMs:number; stroke:VerdictStroke|null; pointerId:number|null;
+  verdictDamageDealt:number; verdictCombo:number; verdictBonusDamage:number;
 }
-export const doubleTargetDelay=560;
-export const doubleLateGrace=240;
-export const doubleTargetDiameter=82;
-export const durations={intro:700,telegraph:400,impact:280,stagger:300,verdict:3000,settle:1000};
-export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0):CombatState=>({battle:newBattle(),bossKind,attack:bossKind==='jelly'?jellyAttack:cornAttack,phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,verdictBonusDamage});
+
+export const relayDelayMs = 420;
+export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, verdictReady:650, verdict:3000, settle:1000 };
+
+/** Difficulty follows successful play, never time spent failing. */
+export function tempoFor(bossKind:BossKind,successfulParries:number):CombatTempo {
+  const warmup=bossKind==='jelly'?5:6, final=bossKind==='jelly'?11:14;
+  if(successfulParries<warmup)return {durationMs:1800,maxRadiusPx:90,telegraphMs:400,label:'热身'};
+  if(successfulParries<final)return {durationMs:1650,maxRadiusPx:82,telegraphMs:340,label:'熟练'};
+  return {durationMs:1500,maxRadiusPx:76,telegraphMs:280,label:'疾风'};
+}
+
+export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0):CombatState=>({
+  battle:newBattle(),bossKind,attack:bossKind==='jelly'?jellyAttack:cornAttack,
+  phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
+  successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
+  hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
+  verdictBonusDamage,
+});
 const transition=(s:CombatState,phase:BattlePhase):CombatState=>({...s,phase,elapsed:0});
-export function prepareRound(s:CombatState):CombatState {
-  const count=s.bossKind==='jelly'?(s.round>=2&&(s.round+1)%2===1?2:1):(s.round>0&&s.round%3===2?2:1);
-  const targetDelay=count>1?doubleTargetDelay:0;
-  return {...transition(s,'telegraph'),feedback:null,stroke:null,targets:Array.from({length:count},(_,i)=>{
-    const anchorId=deterministicBodyAnchor(s.seed,s.round,i,count,s.bossKind);
-    return {targetIndex:i,anchorId,position:deterministicTarget(s.seed,s.round,i,count,s.bossKind),startDelayMs:i*targetDelay,telegraphProgress:0,phase:'early',resolved:false};
-  })};
+function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState {
+  const feedback={...event,id:s.feedbackSequence+1,time:s.time};
+  return {...s,feedback,feedbackSequence:feedback.id,effects:[...s.effects,feedback].slice(-24)};
 }
-function completeRound(s:CombatState,result:ParryResult,index:number):CombatState {
-  const combo=result==='Miss'?0:s.combo+1;
-  const battle=applyParry(s.battle,result,s.attack);
-  if(battle.playerHp===0)battle.loot=[];
-  return {...transition(s,'impact'),battle,combo,bestCombo:Math.max(s.bestCombo,combo),feedback:{id:s.round+1,kind:result,amount:result==='Miss'?s.attack.missDamage:result==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,position:{x:.5,y:.5},anchorId:s.targets[index].anchorId,time:s.time}};
+export function prepareRound(s:CombatState):CombatState {
+  const tempo=tempoFor(s.bossKind,s.successfulParries);
+  const double=tempo.durationMs<1800&&(s.bossKind==='jelly'?s.round%2===0:s.round%3===2);
+  const count=double?2:1;
+  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,targets:Array.from({length:count},(_,i)=>({
+    targetIndex:i,anchorId:deterministicBodyAnchor(s.seed,s.round,i,count,s.bossKind),
+    position:deterministicTarget(s.seed,s.round,i,count,s.bossKind),
+    // The second ring has no running clock until the first has resolved.
+    startDelayMs:i===0?0:Infinity,ringElapsedMs:0,ringDurationMs:tempo.durationMs,
+    maxRadiusPx:tempo.maxRadiusPx,telegraphProgress:0,phase:'early',resolved:false,
+  }))};
+}
+
+function resolveContact(s:CombatState,index:number,result:ParryResult):CombatState {
+  const target=s.targets[index];
+  const targets=s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t);
+  if(targets.length>1&&!targets.every(t=>t.resolved)){
+    return {...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
+  }
+  const aggregate=targets.length>1?(targets.some(t=>t.result==='Miss')?'Miss':targets.every(t=>t.result==='Perfect')?'Perfect':'Nice'):result;
+  const battle=applyParry(s.battle,aggregate,s.attack);
+  const combo=aggregate==='Miss'?0:s.combo+1;
+  const next=emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
+    successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:aggregate==='Perfect'?100:0,
+  },{kind:aggregate,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+    energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65});
+  // Each contact is its own earned reward. Full energy cancels pending attacks.
+  if(battle.bossHp<=0||battle.playerHp<=0||battle.meter>=100||targets.every(t=>t.resolved))return transition(next,'impact');
+  return {...next,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
 }
 export function tapTarget(s:CombatState,index:number):CombatState {
-  if(s.paused||s.phase!=='targetActive')return s;
+  if(s.paused||s.phase!=='targetActive'||s.hitStopRemainingMs>0)return s;
   const target=s.targets[index];
   if(!target||target.resolved||s.elapsed<target.startDelayMs)return s;
-  const result=resolveParry(s.elapsed-target.startDelayMs,s.attack,s.targets.length>1?160:0);
-  const next={...s,targets:s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t)};
-  // A double round still aggregates to Miss, but lets the player finish the
-  // second target instead of ending the interaction on the first bad tap.
-  if(result==='Miss'&&next.targets.length===1)return completeRound(next,'Miss',index);
-  if(next.targets.every(t=>t.resolved))return completeRound(next,aggregateParryResults(next.targets.map(t=>t.result!)),index);
-  return next;
+  return resolveContact(s,index,resolveRingParry(s.elapsed-target.startDelayMs,target.ringDurationMs));
 }
 export function startVerdict(s:CombatState):CombatState {
-  if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100)return s;
+  if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
   const battle={...s.battle,meter:0,verdictCount:s.battle.verdictCount+1};
-  return {...transition({...s,battle},'verdictSlash'),feedback:null,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0};
+  return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,
+    verdictDamageDealt:0,verdictCombo:0};
 }
 function finishVerdict(s:CombatState):CombatState {
-  // Weapon bonus is applied once per verdict, never once per swipe. The next
-  // phase prevents a repeated timeout/cut event from granting it again.
+  // Apply the equipped weapon once, including on a no-input timeout.
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-s.verdictBonusDamage)};
-  return {...transition({...s,battle},'stagger'),pointerId:null};
+  return {...transition({...s,battle},'stagger'),pointerId:null,stroke:null};
 }
-export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean):CombatState {
+export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65):CombatState {
   if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=200)return s;
-  const damage=Math.min(12,200-s.verdictDamageDealt,s.battle.bossHp);if(damage<=0)return s;
+  const damage=Math.min(12,200-s.verdictDamageDealt,s.battle.bossHp);
+  if(damage<=0)return s;
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage)};
   const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
-  const feedback:CombatFeedback={id:s.round+verdictCombo,kind:'Cut',amount:damage,position,time:s.time};
-  const stroke=s.stroke?{...s.stroke,points:[...s.stroke.points],valid:true}:null;
-  const next={...s,battle,verdictCombo,verdictDamageDealt,feedback,stroke};
+  const next=emit({...s,battle,verdictCombo,verdictDamageDealt},
+    {kind:'Cut',amount:damage,energyGain:0,position,angle});
   return battle.bossHp<=0||verdictDamageDealt>=200?finishVerdict(next):next;
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
-  if(s.paused||delta<=0)return s;
-  const next={...s,elapsed:s.elapsed+delta,time:s.time+delta};
+  if(s.paused||delta<=0||!Number.isFinite(delta))return s;
+  // Hit-stop freezes the ring clock and actor pose, not just text feedback.
+  if(s.hitStopRemainingMs>0){
+    const consumed=Math.min(delta,s.hitStopRemainingMs);
+    const next={...s,hitStopRemainingMs:s.hitStopRemainingMs-consumed};
+    return delta>consumed?tickCombat(next,delta-consumed):next;
+  }
+  const next={...s,elapsed:s.elapsed+delta,time:s.time+delta,effects:s.effects.filter(e=>s.time+delta-e.time<850)};
   switch(next.phase){
-    case 'intro': return next.elapsed>=durations.intro?prepareRound(next):next;
-    case 'telegraph':return next.elapsed>=durations.telegraph?transition(next,'targetActive'):next;
+    case 'intro':return next.elapsed>=durations.intro?prepareRound(next):next;
+    case 'telegraph':return next.elapsed>=next.tempo.telegraphMs?transition(next,'targetActive'):next;
     case 'targetActive':{
-      next.targets=next.targets.map(t=>{if(t.resolved)return t;const p=Math.max(0,Math.min(1,(next.elapsed-t.startDelayMs)/next.attack.telegraphMs));return{...t,telegraphProgress:p,phase:p<.35?'early':p<.7?'nice':p<=.9?'perfect':'late'}});
-      const lateGrace=next.targets.length>1?doubleLateGrace:0;
-      const timedOut=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>next.attack.telegraphMs+lateGrace);
-      return timedOut>=0?completeRound(next,'Miss',timedOut):next;
+      next.targets=next.targets.map(t=>{
+        if(t.resolved)return t;
+        const age=Math.max(0,next.elapsed-t.startDelayMs);
+        return {...t,ringElapsedMs:age,telegraphProgress:Math.min(1,age/t.ringDurationMs),phase:ringPhaseAt(age,t.ringDurationMs)};
+      });
+      const expired=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>=t.ringDurationMs);
+      return expired>=0?resolveContact(next,expired,'Miss'):next;
     }
     case 'impact':return next.elapsed>=durations.impact?transition(next,'stagger'):next;
     case 'stagger':{
-      const delay=next.feedback?.kind==='Verdict'?950:durations.stagger;
-      if(next.elapsed<delay)return next;
+      if(next.elapsed<durations.stagger)return next;
       if(next.battle.bossHp<=0||next.battle.playerHp<=0)return transition(next,'settle');
       if(next.battle.meter>=100)return transition(next,'verdictReady');
       return prepareRound({...next,round:next.round+1});
     }
+    case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
     case 'verdictSlash':return next.elapsed>=durations.verdict?finishVerdict(next):next;
     default:return next;
   }
 }
 
-// Same line/slope/L patterns as V2GameConfig, mapped onto the boss portrait.
-export function weakPointsFor(verdictCount:number,width:number,height:number,bossKind:BossKind='corn'):VerdictWeakPoint[]{
+export function weakPointsFor(verdictCount:number,width:number,height:number,bossKind:BossKind='corn'){
   const patterns=bossKind==='jelly'?[[[.24,.68],[.74,.68],[.26,.36],[.76,.36]],[[.22,.66],[.45,.48],[.63,.68],[.78,.38]],[[.28,.62],[.68,.66],[.66,.36],[.4,.4]]]:[[[.22,.55],[.4,.55],[.58,.55],[.76,.55]],[[.22,.68],[.4,.59],[.58,.5],[.76,.41]],[[.3,.7],[.3,.52],[.3,.34],[.68,.34]]];
-  const size=Math.min(width*.94,height*.76,650),radius=Math.max(22,Math.min(30,width*.065))/height;
+  const radius=Math.max(22,Math.min(30,width*.065))/height;
   return patterns[verdictCount%3].map(([x,y],i)=>({id:`weak-${i}`,x:.27+x*.46,y:.28+(1-y)*.42,radius}));
 }
-
 export const targetDiameter=(width:number,height:number)=>Math.max(44,Math.min(64,Math.min(width,height)*.14));
 export function targetCenter(position:{x:number;y:number},width:number,height:number){
   const inset=targetDiameter(width,height)*.8+12;
