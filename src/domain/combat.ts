@@ -24,9 +24,10 @@ export interface CombatState {
 
 export const relayDelayMs = 420;
 export const feverConfig={comboThreshold:5,durationMs:3000};
+export const deathFallDurationMs=1250;
 export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===null
   ?durations.verdict-s.elapsed:feverConfig.durationMs-(s.time-s.feverStartedAt));
-export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:850, verdictReady:650, verdict:3000, settle:1000 };
+export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:1200, verdictReady:650, verdict:3000, settle:1000 };
 
 /** Difficulty follows successful play, never time spent failing. */
 export function tempoFor(bossKind:BossKind,successfulParries:number):CombatTempo {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { CombatState } from '../domain/combat';
+import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
 
@@ -149,7 +150,7 @@ export class CornGuardian {
     const defeated=state.battle.bossHp<=0;
     // Keep the death pose on one continuous event timeline through settle;
     // switching phases must not snap the actor from half-fallen to flat.
-    const down=defeated?smooth(age/900):0;
+    const down=defeated?smooth(age/deathFallDurationMs):0;
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const sway=Math.sin(t*1.7)*.025*motion*(1-w);
     // Placement root stays still: only this child rig recoils, so the cut volume never shrinks.

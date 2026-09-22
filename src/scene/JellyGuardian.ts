@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CombatState } from '../domain/combat';
+import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
 
@@ -182,7 +183,7 @@ export class JellyGuardian {
     const defeated=state.battle.bossHp<=0;
     // Death is driven by the finisher timestamp, not by the stagger/settle
     // boundary, so the soft body keeps falling instead of snapping down.
-    const down=defeated?smooth(feedbackAge/900):0;
+    const down=defeated?smooth(feedbackAge/deathFallDurationMs):0;
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const bob=Math.sin(t*2)*.025*motion*(1-w);
     // Soft-body death: cap buckles, fins lose lift, then the mantle folds
