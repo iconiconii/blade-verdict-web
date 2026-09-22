@@ -7,7 +7,7 @@ import { SliceEffects } from './scene/SliceEffects';
 import { makeBattleCamera, projectBodyAnchor } from './scene/layout';
 import { MonsterHitArea } from './scene/MonsterHitArea';
 import { ImpactPresentation } from './scene/ImpactPresentation';
-import { ringRadiusAt, type BossKind } from './domain/v2';
+import { ringRadiusAt, type BodyAnchorId, type BossKind } from './domain/v2';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,toneMapped:false});
@@ -103,6 +103,10 @@ export class BattleScene {
   }
   /** React uses the exact layout just rendered, never a second projection/animation clock. */
   getTargetLayout(index:number){return this.targetLayouts[index]}
+  getBodyAnchorLayout(anchorId:BodyAnchorId){
+    if(!this.guardian)return null;
+    return projectBodyAnchor(this.guardian.getAnchor(anchorId),this.camera,this.width,this.height);
+  }
   isPointInsideMonster(point:{x:number;y:number}){
     return this.hitArea.contains(point);
   }

@@ -8,10 +8,11 @@ import { swipeContact } from './domain/swipe';
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
 
-function IngredientBurst({feedback,bossKind}:{feedback:CombatFeedback|null;bossKind:'corn'|'jelly'}){
+function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|null;bossKind:'corn'|'jelly';origin:{x:number;y:number}|null}){
   if(!feedback||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')||feedback.pendingRound)return null;
   const count=ingredientBurstFor(bossKind,feedback.kind);
-  return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:`${feedback.position.x*100}%`,top:`${feedback.position.y*100}%`}} aria-hidden="true">
+  const source=origin??{x:0,y:0};
+  return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:source.x,top:source.y}} aria-hidden="true">
     {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count} as React.CSSProperties}>{bossKind==='corn'?'🌽':'🫐'}</i>)}
   </div>;
 }
@@ -27,6 +28,7 @@ export function Battle(){
   const {battle,bossKind,phase,targets,feedback,combo,paused}=combat;
   const resolvedTargets=targets.filter(target=>target.resolved).length;
   const nextTarget=targets.find(target=>!target.resolved);
+  const ingredientOrigin=feedback?.anchorId?scene.current?.getBodyAnchorLayout(feedback.anchorId)??null:feedback?{x:feedback.position.x*size.width,y:feedback.position.y*size.height}:null;
   const phaseTitle=feedback?.kind==='Miss'?'受到攻击':feedback?.kind==='Nice'?'Good 反击':feedback?.kind==='Perfect'?'Perfect 反击':phaseLabels[phase];
   const positionTarget=(index:number,button:HTMLButtonElement)=>{
     const layout=scene.current?.getTargetLayout(index);
@@ -87,7 +89,7 @@ export function Battle(){
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
-      <IngredientBurst feedback={feedback} bossKind={bossKind}/>
+      <IngredientBurst feedback={feedback} bossKind={bossKind} origin={ingredientOrigin}/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&combat.elapsed-target.startDelayMs<target.ringDurationMs&&!target.resolved&&!paused;
         const waiting=phase==='telegraph'||combat.elapsed<target.startDelayMs;
