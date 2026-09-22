@@ -42,6 +42,7 @@ export function Battle(){
   const [size,setSize]=useState({width:1,height:1});
   const [ready,setReady]=useState(false),readyRef=useRef(false);
   const [failed,setFailed]=useState(false),failedRef=useRef(false);
+  const [visualMeter,setVisualMeter]=useState(0),meterTimers=useRef<number[]>([]);
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
   const {battle,bossKind,phase,targets,feedback,combo,paused}=combat;
   const resolvedTargets=targets.filter(target=>target.resolved).length;
@@ -79,6 +80,18 @@ export function Battle(){
 
   useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:feedback.kind==='Cut'?(feedback.speed==='ferocious'?[12,18]:[8]):[8];navigator.vibrate(pattern)},[feedback?.id]);
   useEffect(()=>{if(feedback)playCombatTone(feedback)},[feedback?.id]);
+  useEffect(()=>{
+    meterTimers.current.forEach(window.clearTimeout);meterTimers.current=[];
+    if(!feedback||feedback.pendingRound||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')){
+      setVisualMeter(battle.meter);return;
+    }
+    const start=Math.max(0,battle.meter-feedback.energyGain),target=battle.meter,count=ingredientBurstFor(bossKind,feedback.kind);
+    setVisualMeter(start);
+    for(let index=0;index<count;index++){
+      meterTimers.current.push(window.setTimeout(()=>setVisualMeter(start+(target-start)*(index+1)/count),300+index*42));
+    }
+    return()=>{meterTimers.current.forEach(window.clearTimeout);meterTimers.current=[]};
+  },[feedback?.id,battle.meter,bossKind]);
   const point=(event:ReactPointerEvent<HTMLDivElement>):VerdictPoint=>{const rect=event.currentTarget.getBoundingClientRect();return{x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,time:performance.now()}};
   const begin=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();if(event.button!==0||useGame.getState().combat.phase!=='verdictSlash'||useGame.getState().combat.paused||useGame.getState().combat.pointerId!==null)return;
@@ -139,7 +152,7 @@ export function Battle(){
     </footer>
     <aside className={`resource-meter resource-meter--${bossKind}`} data-testid="resource-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.meter} aria-label={`${bossKind==='jelly'?'果冻':'玉米'}裁决储蓄 ${battle.meter}%`}>
       <div className="resource-meter__cap"><span>{bossKind==='jelly'?'JELLY':'CORN'}</span><b>{battle.meter}%</b></div>
-      <div className="resource-meter__track"><i style={{height:`${Math.max(0,Math.min(100,battle.meter))}%`}}/><span className="resource-meter__glow"/></div>
+      <div className="resource-meter__track"><i style={{height:`${Math.max(0,Math.min(100,visualMeter))}%`}}/><span className="resource-meter__glow"/></div>
       <strong className="resource-meter__icon" aria-hidden="true"><i className={`ingredient-mark ingredient-mark--${bossKind}`}/></strong>
       <span className="resource-meter__name">{bossKind==='jelly'?'果冻':'玉米'}</span>
       <small>{battle.meter>=100?'FULL':'CHARGE'}</small>
