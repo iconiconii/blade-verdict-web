@@ -8,10 +8,11 @@ import { swipeContact } from './domain/swipe';
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
 
+let combatAudio:AudioContext|null=null;
 function playCombatTone(feedback:CombatFeedback){
   if(typeof window==='undefined'||!window.AudioContext)return;
   try{
-    const context=new AudioContext();
+    const context=combatAudio??=new AudioContext();
     if(context.state==='suspended')void context.resume();
     const oscillator=context.createOscillator(),gain=context.createGain();
     const cut=feedback.kind==='Cut',perfect=feedback.kind==='Perfect',ferocious=feedback.speed==='ferocious';
@@ -22,7 +23,6 @@ function playCombatTone(feedback:CombatFeedback){
     gain.gain.exponentialRampToValueAtTime(feedback.finisher?.12:.055,context.currentTime+.008);
     gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+duration);
     oscillator.connect(gain).connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration+.02);
-    window.setTimeout(()=>void context.close(),Math.ceil((duration+.05)*1000));
   }catch{/* Audio is optional and may be blocked by the browser. */}
 }
 
