@@ -106,6 +106,23 @@
 /* Kitchen */
 .ws-recipe-layout, .ws-equipment-layout { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(420px, 1.35fr); gap: 20px; }
 .ws-recipes-panel, .ws-cook-panel { min-width: 0; }
+.ws-cook-panel { position: relative; overflow: hidden; }
+.ws-cooking-presentation{position:relative;height:215px;margin:12px;border:1px solid #e8bf6255;border-radius:12px;background:#0b1910;overflow:hidden;pointer-events:none;text-align:center}
+.ws-cooking-particles>span{position:absolute;left:50%;top:100px;animation:ingredient-into-pot .55s ease-in calc(var(--cook-index)*55ms) both}
+.ws-cooking-particles .ws-sprite{width:40px;height:40px}
+.ws-cooking-pot{position:absolute;left:calc(50% - 27px);top:95px;color:#e8bf62}
+.ws-cooking-dish{position:absolute;inset:12px 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;animation:cooked-dish .4s ease-out .75s both}
+.ws-cooking-presentation>small{position:absolute;bottom:14px;left:0;right:0;color:#c7d0bd}
+@keyframes ingredient-into-pot{0%{opacity:0;transform:translate(calc(-110px + var(--cook-index)*38px),-55px) scale(.8)}20%{opacity:1}60%{opacity:1;transform:translate(-35px,-90px)}100%{opacity:0;transform:translate(-20px,12px) scale(.15)}}
+@keyframes cooked-dish{from{opacity:0;transform:translateY(35px) scale(.65)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.ws-cooking-particles{display:none}.ws-cooking-dish{animation:none}}
+.ws-cook-panel.is-cooking { box-shadow: 0 0 0 1px rgba(232,191,98,.4), 0 0 42px rgba(216,157,64,.18); }
+.ws-cook-flight { position: absolute; z-index: 4; inset: 0; pointer-events: none; overflow: hidden; }
+.ws-cook-flight__item { position: absolute; left: 26%; top: 38%; animation: cook-to-pot .48s cubic-bezier(.2,.8,.25,1) calc(var(--cook-index) * 55ms) both; }
+.ws-cook-flight__item .ws-sprite { width: 32px; height: 32px; filter: drop-shadow(0 4px 9px rgba(0,0,0,.4)); }
+.ws-cook-flight__pot { position: absolute; left: 72%; top: 70%; display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid rgba(232,191,98,.7); border-radius: 50%; color: var(--ws-brass); animation: pot-arrive .55s ease-out both; }
+@keyframes cook-to-pot { 0% { opacity: 0; transform: translate(-20px, 14px) scale(.55) rotate(-12deg); } 18% { opacity: 1; } 72% { opacity: 1; transform: translate(120px, -58px) scale(1.05) rotate(15deg); } 100% { opacity: 0; transform: translate(190px, 90px) scale(.16) rotate(45deg); } }
+@keyframes pot-arrive { 0%,55% { opacity: .35; transform: scale(.85); } 75% { opacity: 1; transform: scale(1.14); } 100% { opacity: .75; transform: scale(1); } }
 .ws-recipe-list { display: grid; gap: 8px; padding: 12px; }
 .ws-recipe-card { display: flex; align-items: center; gap: 13px; border: 1px solid transparent; border-radius: 11px; background: rgba(22, 43, 24, .62); padding: 10px; text-align: left; transition: background .2s, border-color .2s; }
 .ws-recipe-card:hover, .ws-recipe-card.is-selected { border-color: rgba(225, 188, 93, .69); background: linear-gradient(110deg, rgba(63, 85, 44, .9), rgba(27, 48, 28, .9)); box-shadow: inset 0 1px rgba(246, 239, 185, .1); }

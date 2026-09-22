@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { BattleScene } from './BattleScene';
-import { durations } from './domain/combat';
-import { bodyAnchorLabel, type VerdictPoint } from './domain/v2';
+import { durations, verdictRemainingMs, type CombatFeedback } from './domain/combat';
+import { bodyAnchorLabel, ingredientBurstFor, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 import { swipeContact } from './domain/swipe';
 
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
+
+function IngredientBurst({feedback,bossKind}:{feedback:CombatFeedback|null;bossKind:'corn'|'jelly'}){
+  if(!feedback||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')||feedback.pendingRound)return null;
+  const count=ingredientBurstFor(bossKind,feedback.kind);
+  return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:`${feedback.position.x*100}%`,top:`${feedback.position.y*100}%`}} aria-hidden="true">
+    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count} as React.CSSProperties}>{bossKind==='corn'?'🌽':'🫐'}</i>)}
+  </div>;
+}
 
 export function Battle(){
   const host=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null);
@@ -49,7 +57,7 @@ export function Battle(){
     return()=>{alive=false;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('keydown',key);scene.current?.dispose();scene.current=null;readyRef.current=false};
   },[]);
 
-  useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:feedback.kind==='Cut'?[8]:[8];navigator.vibrate(pattern)},[feedback?.id]);
+  useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:feedback.kind==='Cut'?(feedback.speed==='ferocious'?[12,18]:[8]):[8];navigator.vibrate(pattern)},[feedback?.id]);
   const point=(event:ReactPointerEvent<HTMLDivElement>):VerdictPoint=>{const rect=event.currentTarget.getBoundingClientRect();return{x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,time:performance.now()}};
   const begin=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();if(event.button!==0||useGame.getState().combat.phase!=='verdictSlash'||useGame.getState().combat.paused||useGame.getState().combat.pointerId!==null)return;
@@ -79,6 +87,7 @@ export function Battle(){
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
+      <IngredientBurst feedback={feedback} bossKind={bossKind}/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&combat.elapsed-target.startDelayMs<target.ringDurationMs&&!target.resolved&&!paused;
         const waiting=phase==='telegraph'||combat.elapsed<target.startDelayMs;
@@ -101,11 +110,11 @@ export function Battle(){
     </header>
     <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'BREAK · 破防时刻':targets.length===2?`DOUBLE · 身体光环 ${resolvedTargets}/${targets.length}`:'PARRY · 观察身体光环 · 等待 · 反击'}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>
     {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}
-    {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind==='Nice'?'GOOD':feedback.kind.toUpperCase()}</strong><span>{feedback.pendingRound?'已判定 · 继续下一环':feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?`主体切割 · Combo ×${combat.verdictCombo}`:feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} {!feedback.pendingRound&&<b>−{feedback.amount}</b>}</span></div>}
-    {inVerdict&&<div className="verdict-heading"><small>THE BLADE IS YOUR VERDICT</small><h2>{phase==='verdictReady'?'进入主体。疯狂切！':'保持速度，不要停刀'}</h2><p>{phase==='verdictReady'?`进入裁决后有 ${durations.verdict/1000} 秒连续切割`:'每段有效划动造成 12 伤害 · 最高 200 伤害'}</p>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${Math.max(0,100-combat.elapsed/durations.verdict*100)}%`}}/><span>{Math.max(0,durations.verdict/1000-combat.elapsed/1000).toFixed(1)}s · Combo ×{combat.verdictCombo} · {combat.verdictDamageDealt}/200{combat.verdictBonusDamage>0?` · 斩骨刀 +${combat.verdictBonusDamage}`:''}</span></div>}</div>}
+    {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind} ${feedback.finisher?'hit-feedback--finisher':''}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.finisher?'FINISH':feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind==='Nice'?'GOOD':feedback.kind.toUpperCase()}</strong><span>{feedback.pendingRound?'已判定 · 继续下一环':feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?(feedback.finisher?'击杀确认 · 怪物崩解':`主体切割 · Combo ×${combat.verdictCombo}`):feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} {!feedback.pendingRound&&<b>−{feedback.amount}</b>}</span></div>}
+    {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'破防！':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/durations.verdict*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}
     <footer className="battle-bottom">
       <div className="player-hud"><div className="player-avatar" aria-hidden="true">刃</div><div><div className="player-heading"><strong>守夜厨师</strong><span data-testid="player-hp">{battle.playerHp}/100</span></div><div className="battle-health player-health" role="progressbar" aria-label="玩家生命值" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.playerHp}><i style={{width:`${Math.max(0,Math.min(100,battle.playerHp))}%`}}/></div><div className="combo"><b>{String(combo).padStart(2,'0')}</b> 连续招架</div></div></div>
-      <div className="combat-instruction">{phase==='verdictSlash'?'连续划过怪物主体 · 每段 +12':phase==='verdictReady'?'储蓄已满 · 自动进入裁决':phase==='telegraph'?'留意怪物身上随机亮起的光环':targets.length===2?'依次点击两处身体光环 · 第二处稍后出现':targets.some(t=>t.phase==='perfect')?'现在 · 点击身体光环':'点击即可，找准青色 PERFECT'}</div>
+    <div className="combat-instruction">{phase==='verdictSlash'?'切！':phase==='verdictReady'?'裁决就绪':!tutorialSeen?(phase==='telegraph'?'留意怪物身上随机亮起的光环':targets.length===2?'依次点击两处身体光环 · 第二处稍后出现':targets.some(t=>t.phase==='perfect')?'现在 · 点击身体光环':'点击即可，找准青色 PERFECT'):(phase==='telegraph'?'蓄力中':targets.length===2?`接力 ${resolvedTargets + 1}/${targets.length}`:targets.some(t=>t.phase==='perfect')?'PERFECT':'点击')}</div>
     </footer>
     <aside className={`resource-meter resource-meter--${bossKind}`} data-testid="resource-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.meter} aria-label={`${bossKind==='jelly'?'果冻':'玉米'}裁决储蓄 ${battle.meter}%`}>
       <div className="resource-meter__cap"><span>{bossKind==='jelly'?'JELLY':'CORN'}</span><b>{battle.meter}%</b></div>

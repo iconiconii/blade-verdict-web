@@ -113,7 +113,17 @@ export const useGame=create<GameStore>((set,get)=>{
     pause:paused=>set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}})),
     beginStroke:(pointerId,point)=>set(s=>({combat:s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.pointerId===null?{...s.combat,pointerId,stroke:{points:[point],hitWeakPointIds:[],score:0,valid:true}}:s.combat})),
     moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:appendStrokePoint(s.combat.stroke.points,point)}}:s.combat})),
-    cut:(pointerId,point,insideMonster,angle)=>set(s=>({combat:s.combat.pointerId===pointerId?applyContinuousCut(s.combat,point,insideMonster,angle):s.combat})),
+    cut:(pointerId,point,insideMonster,angle)=>set(s=>{
+      if(s.combat.pointerId!==pointerId)return s;
+      const points=s.combat.stroke?.points??[];
+      const path=points.length>=2?points.slice(-2):points;
+      const previous=path[0],current=path.at(-1);
+      const distance=previous&&current?Math.hypot((current.x-previous.x),(current.y-previous.y)):0;
+      const dt=previous&&current?Math.max(1,current.time-previous.time):16;
+      const velocity=distance/dt;
+      const speed=velocity>.0028?'ferocious':velocity>.0012?'fast':'normal';
+      return {combat:applyContinuousCut(s.combat,point,insideMonster,angle,path,speed)};
+    }),
     endStroke:pointerId=>set(s=>({combat:s.combat.pointerId===pointerId?{...s.combat,pointerId:null}:s.combat})),
     cancelStroke:()=>set(s=>({combat:{...s.combat,pointerId:null,stroke:null}})),
     dismissTutorial:()=>{void transact(save=>({...save,tutorialSeen:true}),'')},

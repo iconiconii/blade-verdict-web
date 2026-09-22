@@ -9,7 +9,7 @@ export interface CombatFeedback {
   pendingRound?:boolean;
   id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number;
   position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number;
-  energyGain:number; angle:number;
+  energyGain:number; angle:number; path?:Array<{x:number;y:number;time:number}>; speed?:'normal'|'fast'|'ferocious'; hitStopMs?:number; finisher?:boolean;
 }
 export interface CombatTempo { durationMs:number; maxRadiusPx:number; telegraphMs:number; label:string }
 export interface CombatState {
@@ -19,9 +19,13 @@ export interface CombatState {
   tempo:CombatTempo; feedback:CombatFeedback|null; effects:CombatFeedback[]; feedbackSequence:number;
   hitStopRemainingMs:number; stroke:VerdictStroke|null; pointerId:number|null;
   verdictDamageDealt:number; verdictCombo:number; verdictBonusDamage:number;
+  fever:boolean; feverStartedAt:number|null;
 }
 
 export const relayDelayMs = 420;
+export const feverConfig={comboThreshold:5,durationMs:3000};
+export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===null
+  ?durations.verdict-s.elapsed:feverConfig.durationMs-(s.time-s.feverStartedAt));
 export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, verdictReady:650, verdict:3000, settle:1000 };
 
 /** Difficulty follows successful play, never time spent failing. */
@@ -37,7 +41,7 @@ export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
   hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
-  verdictBonusDamage,
+  verdictBonusDamage,fever:false,feverStartedAt:null,
 });
 const transition=(s:CombatState,phase:BattlePhase):CombatState=>({...s,phase,elapsed:0});
 function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState {
@@ -48,7 +52,7 @@ export function prepareRound(s:CombatState):CombatState {
   const tempo=tempoFor(s.bossKind,s.successfulParries);
   const double=tempo.durationMs<1800&&(s.bossKind==='jelly'?s.round%2===0:s.round%3===2);
   const count=double?2:1;
-  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,targets:Array.from({length:count},(_,i)=>({
+  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,fever:false,targets:Array.from({length:count},(_,i)=>({
     targetIndex:i,anchorId:deterministicBodyAnchor(s.seed,s.round,i,count,s.bossKind),
     position:deterministicTarget(s.seed,s.round,i,count,s.bossKind),
     // The second ring has no running clock until the first has resolved.
@@ -62,23 +66,24 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   const targets=s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t);
   if(targets.length>1&&!targets.every(t=>t.resolved)){
     return emit({...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
-      hitStopRemainingMs:result==='Perfect'?100:0},
+      hitStopRemainingMs:0},
       {kind:result,amount:0,energyGain:0,pendingRound:true,position:target.position,
-        anchorId:target.anchorId,angle:index%2?-.65:.65});
+        anchorId:target.anchorId,angle:index%2?-.65:.65,hitStopMs:result==='Miss'?0:result==='Perfect'?45:25});
   }
   const aggregate=targets.length>1?(targets.some(t=>t.result==='Miss')?'Miss':targets.every(t=>t.result==='Perfect')?'Perfect':'Nice'):result;
   const battle=applyParry(s.battle,aggregate,s.attack);
   const combo=aggregate==='Miss'?0:s.combo+1;
   const next=emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
-    successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:aggregate==='Perfect'?100:0,
+    successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:0,
   },{kind:aggregate,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
-    energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65});
+    energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
+    finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:aggregate==='Miss'?0:aggregate==='Perfect'?45:25});
   // Damage and energy settle once after the relay, separately from tap feedback.
   if(battle.bossHp<=0||battle.playerHp<=0||battle.meter>=100||targets.every(t=>t.resolved))return transition(next,'impact');
   return {...next,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
 }
 export function tapTarget(s:CombatState,index:number):CombatState {
-  if(s.paused||s.phase!=='targetActive'||s.hitStopRemainingMs>0)return s;
+  if(s.paused||s.phase!=='targetActive')return s;
   const target=s.targets[index];
   if(!target||target.resolved||s.elapsed<target.startDelayMs)return s;
   return resolveContact(s,index,resolveRingParry(s.elapsed-target.startDelayMs,target.ringDurationMs));
@@ -87,31 +92,30 @@ export function startVerdict(s:CombatState):CombatState {
   if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
   const battle={...s.battle,meter:0,verdictCount:s.battle.verdictCount+1};
   return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,
-    verdictDamageDealt:0,verdictCombo:0};
+    verdictDamageDealt:0,verdictCombo:0,fever:false,feverStartedAt:null};
 }
 function finishVerdict(s:CombatState):CombatState {
   // Apply the equipped weapon once, including on a no-input timeout.
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-s.verdictBonusDamage)};
   return {...transition({...s,battle},'stagger'),pointerId:null,stroke:null};
 }
-export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65):CombatState {
+export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65,path?:Array<{x:number;y:number;time:number}>,speed:'normal'|'fast'|'ferocious'='normal'):CombatState {
   if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=200)return s;
   const damage=Math.min(12,200-s.verdictDamageDealt,s.battle.bossHp);
   if(damage<=0)return s;
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage)};
   const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
-  const next=emit({...s,battle,verdictCombo,verdictDamageDealt},
-    {kind:'Cut',amount:damage,energyGain:0,position,angle});
+  const finalHit=battle.bossHp<=0;
+  const fever=s.fever||verdictCombo>=feverConfig.comboThreshold;
+  const feverStartedAt=s.feverStartedAt??(fever?s.time:null);
+  const next=emit({...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt},
+    {kind:'Cut',amount:damage,energyGain:0,position,angle,path,speed,finisher:finalHit,
+      hitStopMs:finalHit?80:25});
   return battle.bossHp<=0||verdictDamageDealt>=200?finishVerdict(next):next;
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
   if(s.paused||delta<=0||!Number.isFinite(delta))return s;
-  // Hit-stop freezes the ring clock and actor pose, not just text feedback.
-  if(s.hitStopRemainingMs>0){
-    const consumed=Math.min(delta,s.hitStopRemainingMs);
-    const next={...s,hitStopRemainingMs:s.hitStopRemainingMs-consumed};
-    return delta>consumed?tickCombat(next,delta-consumed):next;
-  }
+  // Visual hit-stop belongs to the renderer; simulation and input never wait for it.
   const next={...s,elapsed:s.elapsed+delta,time:s.time+delta,effects:s.effects.filter(e=>s.time+delta-e.time<850)};
   switch(next.phase){
     case 'intro':return next.elapsed>=durations.intro?prepareRound(next):next;
@@ -133,7 +137,7 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
       return prepareRound({...next,round:next.round+1});
     }
     case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
-    case 'verdictSlash':return next.elapsed>=durations.verdict?finishVerdict(next):next;
+    case 'verdictSlash':return verdictRemainingMs(next)<=0?finishVerdict(next):next;
     default:return next;
   }
 }

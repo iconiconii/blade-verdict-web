@@ -3,6 +3,12 @@ export type ParryResult = 'Perfect' | 'Nice' | 'Miss';
 export type ParryPhase = 'EarlyMiss' | 'Nice' | 'Perfect' | 'LateMiss';
 export type BattlePhase = 'intro' | 'telegraph' | 'targetActive' | 'impact' | 'stagger' | 'verdictReady' | 'verdictSlash' | 'settle';
 export type BossKind = 'corn' | 'jelly';
+/** Presentation-only burst count; inventory and battle meter remain domain-owned. */
+export const battleIngredients:Record<BossKind,{id:'ing_corn'|'ing_jelly';icon:'corn'|'jelly';counts:Record<ParryResult,number>}>= {
+  corn:{id:'ing_corn',icon:'corn',counts:{Miss:0,Nice:3,Perfect:8}},
+  jelly:{id:'ing_jelly',icon:'jelly',counts:{Miss:0,Nice:3,Perfect:8}},
+};
+export const ingredientBurstFor=(bossKind:BossKind,result:ParryResult):number=>battleIngredients[bossKind].counts[result];
 /** Named points on the 3D guardian used to attach a parry ring to the actor. */
 export type BodyAnchorId = 'head'|'belly'|'leftHand'|'rightHand'|'leftKnee'|'rightKnee'|'leftShoulder'|'rightShoulder'|'leftFin'|'rightFin'|'leftJoint'|'rightJoint'|'lowerJoint';
 export interface AttackPresentation { targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; ringElapsedMs:number; ringDurationMs:number; maxRadiusPx:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }

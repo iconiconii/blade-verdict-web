@@ -98,12 +98,13 @@ describe('accessible web combat',()=>{
     expect(s.battle).toMatchObject({meter:0,verdictCount:1});
     expect(startVerdict(s)).toBe(s);
   });
-  it('freezes clocks during Perfect hit-stop and pause',()=>{
+  it('keeps simulation running during Perfect visual stop but freezes on pause',()=>{
     const s=tapTarget(tickCombat(active(),800),0);
     const stopped=tickCombat(s,99);
-    expect(stopped.time).toBe(s.time);
-    expect(stopped.elapsed).toBe(s.elapsed);
-    expect(tickCombat(stopped,2).elapsed).toBe(1);
+    expect(s.feedback?.hitStopMs).toBe(45);
+    expect(stopped.time).toBe(s.time+99);
+    expect(stopped.elapsed).toBe(s.elapsed+99);
+    expect(tickCombat(stopped,2).elapsed).toBe(101);
     const paused={...s,paused:true};
     expect(tickCombat(paused,10000)).toBe(paused);
     expect(tapTarget(paused,0)).toBe(paused);
@@ -145,6 +146,44 @@ describe('continuous body cutting',()=>{
     expect(s.phase).toBe('stagger');
     expect(s.pointerId).toBeNull();
     expect(applyContinuousCut(s,{x:.5,y:.5},true)).toBe(s);
+  });
+  it('records trajectory, speed tier and non-blocking hit-stop hints for cuts',()=>{
+    const path=[{x:.2,y:.5,time:0},{x:.8,y:.5,time:40}];
+    const s=applyContinuousCut(verdict(),{x:.5,y:.5},true,0,path,'ferocious');
+    expect(s.feedback).toMatchObject({kind:'Cut',path,speed:'ferocious',hitStopMs:25});
+    expect(s.hitStopRemainingMs).toBe(0);
+  });
+  it('marks only the lethal cut as a finisher with the stronger stop hint',()=>{
+    let capped=verdict();
+    for(let i=0;i<17;i++)capped=applyContinuousCut(capped,{x:.5,y:.5},true);
+    expect(capped.battle.bossHp).toBe(600);
+    expect(capped.feedback?.finisher).toBe(false);
+    expect(capped.feedback?.hitStopMs).toBe(25);
+    const normal=applyContinuousCut({...verdict(),battle:{...verdict().battle,bossHp:100}}, {x:.5,y:.5},true,0,undefined,'normal');
+    expect(normal.feedback?.finisher).toBe(false);
+    const lethal=applyContinuousCut({...verdict(),battle:{...verdict().battle,bossHp:12}}, {x:.5,y:.5},true,0,undefined,'normal');
+    expect(lethal.feedback).toMatchObject({finisher:true,hitStopMs:80});
+    expect(lethal.phase).toBe('stagger');
+    expect(applyContinuousCut(lethal,{x:.5,y:.5},true)).toBe(lethal);
+  });
+  it('enters Fever once after the configured combo threshold and resets next round',()=>{
+    let s=verdict();
+    for(let i=0;i<5;i++)s=applyContinuousCut(s,{x:.5,y:.5},true,0);
+    expect(s.fever).toBe(true);
+    s=tickCombat(s,durations.verdict);
+    s=tickCombat(s,durations.stagger);
+    expect(s.fever).toBe(false);
+  });
+  it('starts a full Fever window at threshold and never refreshes it on later hits',()=>{
+    let s=tickCombat(verdict(),2200);
+    for(let i=0;i<5;i++)s=applyContinuousCut(s,{x:.5,y:.5},true);
+    expect(s.feverStartedAt).toBe(2200);
+    s=tickCombat(s,1000);
+    expect(s.phase).toBe('verdictSlash');
+    s=applyContinuousCut(s,{x:.5,y:.5},true);
+    expect(s.feverStartedAt).toBe(2200);
+    s=tickCombat(s,1999);expect(s.phase).toBe('verdictSlash');
+    s=tickCombat(s,1);expect(s.phase).toBe('stagger');
   });
   it('returns to parry after an empty three-second verdict',()=>{
     let s=tickCombat(verdict(),durations.verdict);

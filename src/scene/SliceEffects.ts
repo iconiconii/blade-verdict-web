@@ -4,7 +4,7 @@ import type { BossKind } from '../domain/v2';
 
 const flat=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthTest:false,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
 type Burst={root:THREE.Group; blade:THREE.Mesh<THREE.ShapeGeometry,THREE.MeshBasicMaterial>; halves:THREE.Group[];
-  dust:THREE.InstancedMesh; materials:THREE.MeshBasicMaterial[]; event:CombatFeedback|null; x:number; y:number};
+  dust:THREE.InstancedMesh; materials:THREE.MeshBasicMaterial[]; event:CombatFeedback|null; x:number; y:number; length:number};
 
 /** Bounded object pool: curved blades, exposed food cross-sections and juice. No pointer polyline. */
 export class SliceEffects {
@@ -39,32 +39,36 @@ export class SliceEffects {
         half.add(detail);root.add(half);halves.push(half);
       }
       const dust=new THREE.InstancedMesh(dropGeo,dustMat,12);dust.instanceMatrix.setUsage(THREE.DynamicDrawUsage);dust.frustumCulled=false;dust.renderOrder=41;root.add(dust);
-      this.pool.push({root,blade,halves,dust,materials:[bladeMat,face,edge,kernels,dustMat],event:null,x:0,y:0});
+      this.pool.push({root,blade,halves,dust,materials:[bladeMat,face,edge,kernels,dustMat],event:null,x:0,y:0,length:140});
     }
   }
-  update(state:CombatState,reducedMotion:boolean,position:(event:CombatFeedback)=>{x:number;y:number}){
+  update(state:CombatState,reducedMotion:boolean,position:(event:CombatFeedback)=>{x:number;y:number},width=1,height=1){
     for(const event of state.effects){
       if(event.id<=this.seen)continue;
       this.seen=event.id;
       if(event.kind==='Miss')continue;
       const slot=this.pool[this.cursor++%this.pool.length],p=position(event);
-      slot.event=event;slot.x=p.x;slot.y=p.y;
+      const path=event.path&&event.path.length>1?event.path:null;
+      const end=path?.at(-1),start=path?.at(-2);
+      slot.event=event;slot.x=end?end.x*width:p.x;slot.y=end?end.y*height:p.y;
+      slot.length=start&&end?Math.max(70,Math.min(320,Math.hypot((end.x-start.x)*640,(end.y-start.y)*640))):140;
     }
     for(const slot of this.pool){
       const event=slot.event,age=event?state.time-event.time:Infinity;
       slot.root.visible=age<720;if(!event||age>=720)continue;
       const progress=Math.min(1,age/720),fade=1-progress,cut=event.kind==='Cut',perfect=event.kind==='Perfect';
-      const force=reducedMotion?.25:perfect||cut?1:.6;
+      const force=reducedMotion?.25:event.finisher?1.8:perfect||cut?1:.6;
       slot.root.position.set(slot.x,-slot.y,36);
       slot.root.rotation.z=-event.angle;
       slot.blade.visible=age<240;
-      slot.blade.scale.setScalar((perfect?1.12:.78)*(1+Math.min(age/240,1)*.2));
-      slot.blade.material.color.setHex(perfect?0xc3fff2:cut?0xfff1d2:0xffda8d);
-      slot.blade.material.opacity=Math.max(0,1-age/240);
+      const tierScale=event.finisher?1.75:event.speed==='ferocious'?1.35:event.speed==='fast'?1.12:.9;
+      slot.blade.scale.set(tierScale*slot.length/220,(perfect?1.12:.78)*(1+Math.min(age/240,1)*.2),1);
+      slot.blade.material.color.setHex(event.finisher?0xffffff:perfect?0xc3fff2:cut?0xfff1d2:0xffda8d);
+      slot.blade.material.opacity=Math.max(0,1-age/(event.finisher?360:240));
       slot.halves.forEach((half,i)=>{
         const side=i===0?-1:1;
         half.visible=cut;
-        half.position.set(side*(6+progress*100*force),15+Math.sin(progress*Math.PI)*44*force-progress*progress*80,0);
+        half.position.set(side*(6+progress*(event.finisher?145:100)*force),15+Math.sin(progress*Math.PI)*44*force-progress*progress*80,0);
         half.rotation.set(progress*1.4,side*progress*1.1,side*progress*.6);
         half.scale.setScalar((.75+Math.sin(progress*Math.PI)*.2)*Math.min(1,fade*4));
       });

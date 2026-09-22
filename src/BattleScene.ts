@@ -6,6 +6,7 @@ import { JellyGuardian } from './scene/JellyGuardian';
 import { SliceEffects } from './scene/SliceEffects';
 import { makeBattleCamera, projectBodyAnchor } from './scene/layout';
 import { MonsterHitArea } from './scene/MonsterHitArea';
+import { ImpactPresentation } from './scene/ImpactPresentation';
 import { ringRadiusAt, type BossKind } from './domain/v2';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
@@ -28,6 +29,7 @@ export class BattleScene {
   private width=1;private height=1;private disposed=false;
   private jellyEnvironment:THREE.WebGLRenderTarget|null=null;
   private sliceEffects:SliceEffects;
+  private impactPresentation=new ImpactPresentation();
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
@@ -109,9 +111,10 @@ export class BattleScene {
     const verdict=phase==='verdictReady'||phase==='verdictSlash';
     const impact=phase==='impact'||phase==='stagger'||feedback?.kind==='Cut';
     const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
-    const shake=!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0;
+    const presentation=this.impactPresentation.update(state,reducedMotion);
+    const shake=presentation.shake+(!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0);
     this.camera.position.x=shake;this.camera.updateMatrixWorld();
-    this.guardian.update(state,reducedMotion);this.guardian.root.updateMatrixWorld(true);
+    this.guardian.update(presentation.actor,reducedMotion);this.guardian.root.updateMatrixWorld(true);
     this.hitArea.update(this.camera);
     const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:this.bossKind==='jelly'?0xa98cff:0xffc66b;
     this.arenaPulse.material.color.setHex(arenaColor);
@@ -135,7 +138,7 @@ export class BattleScene {
     }
     this.sliceEffects.update(state,reducedMotion,event=>event.anchorId
       ?projectBodyAnchor(this.guardian.getAnchor(event.anchorId),this.camera,w,h)
-      :{x:event.position.x*w,y:event.position.y*h});
+      :{x:event.position.x*w,y:event.position.y*h},w,h);
     this.renderer.clear();this.renderer.render(this.world,this.camera);this.renderer.clearDepth();this.renderer.render(this.overlay,this.overlayCamera);
     this.camera.position.x=0;this.camera.updateMatrixWorld();
   }

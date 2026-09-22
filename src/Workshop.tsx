@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useGame, type Screen } from './store';
 import {
   INGREDIENTS,
@@ -40,6 +40,9 @@ const INGREDIENT_ICON: Record<IngredientId, 'corn' | 'jelly'> = {
   ing_corn: 'corn',
   ing_jelly: 'jelly',
 };
+function iconForIngredient(id: string): 'corn' | 'jelly' {
+  return id.includes('jelly') ? 'jelly' : 'corn';
+}
 const DISH_INFO: Record<string, { name: string; icon: 'toast' | 'pudding' | 'combo' }> = {
   dish_corn_toast: { name: '烤玉米片', icon: 'toast' },
   dish_jelly_pudding: { name: '果冻布丁', icon: 'pudding' },
@@ -145,6 +148,15 @@ function ingredientQualityChoices(meta: MetaState, ingredientId: IngredientId): 
 function Kitchen({ meta, go, cook }: { meta: MetaState; go: (screen: WorkshopScreen) => void; cook: (selected: IngredientSelection[]) => Promise<boolean> | boolean }) {
   const [recipeId, setRecipeId] = useState(RECIPES[0].id);
   const [qualities, setQualities] = useState<Record<IngredientId, Quality | undefined>>({ ing_corn: undefined, ing_jelly: undefined });
+  const [cooking, setCooking] = useState(false);
+  const [presentation,setPresentation]=useState<{items:IngredientSelection[];dishId:string;name:string}|null>(null);
+  const cookingLock=useRef(false),alive=useRef(true);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
+  useEffect(()=>{
+    if(!presentation)return;
+    const timer=window.setTimeout(()=>setPresentation(null),1800);
+    return()=>window.clearTimeout(timer);
+  },[presentation]);
   const recipe = RECIPES.find(item => item.id === recipeId) ?? RECIPES[0];
   const requirements = Object.entries(recipe.requirements) as [IngredientId, number][];
   const canCook = requirements.every(([ingredientId, count]) => {
@@ -160,13 +172,25 @@ function Kitchen({ meta, go, cook }: { meta: MetaState; go: (screen: WorkshopScr
   const hasIngredients = requirements.every(([id, count]) => availableCount(meta, id) >= count);
   const runCook = () => {
     const state = getWorkshopState();
-    if (!canCook || state.saving || state.saveIssue) return;
-    void Promise.resolve(cook(selected)).catch(() => undefined);
+    if (!canCook || state.saving || state.saveIssue || cookingLock.current) return;
+    cookingLock.current=true;
+    const snapshot={items:selected.map(item=>({...item})),dishId:recipe.outputDishId,name:recipe.name};
+    setCooking(true);
+    void Promise.resolve().then(()=>cook(snapshot.items)).then(success=>{
+      if(success&&alive.current)setPresentation(snapshot);
+    }).catch(()=>undefined).finally(()=>{
+      cookingLock.current=false;if(alive.current)setCooking(false);
+    });
   };
   return <section className="ws-screen ws-screen--kitchen" data-testid="workshop-kitchen"><div className="ws-content">
     <PageHeading eyebrow="THE KITCHEN" title="厨房" subtitle="选择食材品质，烹调一份值得端上桌的料理。" back onBack={() => go('restaurant')} />
     <div className="ws-recipe-layout"><div className="ws-panel ws-recipes-panel"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">RECIPE BOOK</span><h2>选择食谱</h2></div><span className="ws-count">{RECIPES.length} 道基础配方</span></div><div className="ws-recipe-list">{RECIPES.map(item => { const dish = DISH_INFO[item.outputDishId]; const unlocked = meta.unlockedRecipeIds.includes(item.id); return <button type="button" key={item.id} className={`ws-recipe-card ${recipe.id === item.id ? 'is-selected' : ''}`} onClick={() => { setRecipeId(item.id); setQualities({ ing_corn: undefined, ing_jelly: undefined }); }}><Sprite name={dish?.icon ?? 'locked'} /><span><b>{item.name}</b><small>{unlocked ? '已掌握 · ' : '待解锁 · '}{Object.keys(item.requirements).length} 种食材</small></span><Icon name="arrow" size={17} /></button>; })}</div></div>
-      <div className="ws-panel ws-cook-panel"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">PREPARE</span><h2>{recipe.name}</h2></div><span className="ws-recipe-price">{price === null ? '—' : `预估售价 ${formatPrice(price)}`} <span>◈</span></span></div><div className="ws-recipe-requirements">{requirements.map(([ingredientId, count]) => { const choices = ingredientQualityChoices(meta, ingredientId); const selectedQuality = qualities[ingredientId]; const name = INGREDIENTS.find(item => item.id === ingredientId)?.name ?? ingredientId; return <div className="ws-requirement" key={ingredientId}><div className="ws-requirement-title"><Sprite name={INGREDIENT_ICON[ingredientId]} /><span><b>{name}</b><small>需要 ×{count}</small></span></div><div className="ws-quality-options">{choices.length ? choices.map(quality => <button type="button" key={quality} aria-label={`${name} ${QUALITY_LABEL[quality]}，库存 ${availableCount(meta, ingredientId, quality)} 份`} aria-pressed={selectedQuality === quality} className={`ws-quality-option ${selectedQuality === quality ? 'is-selected' : ''}`} onClick={() => setQualities(current => ({ ...current, [ingredientId]: quality }))}>{qualityBadge(quality, true)}<small>{availableCount(meta, ingredientId, quality)}份</small></button>) : <span className="ws-empty-inline">缺少食材</span>}</div></div>; })}</div><div className="ws-cook-summary"><div><span>成品品质</span><strong>{selected.length === requirements.length ? qualityBadge(dishQuality(selected)) : '待选择'}</strong></div><div><span>消耗食材</span><strong>{selected.length}/{requirements.length} 项</strong></div><ActionButton mutates testId="cook-submit" onClick={runCook} disabled={!canCook}><Icon name="pan" size={17} /> 开始烹调</ActionButton></div></div></div>
+      <div className={`ws-panel ws-cook-panel ${cooking ? 'is-cooking' : ''}`}><div className="ws-panel-heading"><div><span className="ws-panel-kicker">PREPARE</span><h2>{recipe.name}</h2></div><span className="ws-recipe-price">{price === null ? '—' : `预估售价 ${formatPrice(price)}`} <span>◈</span></span></div><div className="ws-recipe-requirements">{requirements.map(([ingredientId, count]) => { const choices = ingredientQualityChoices(meta, ingredientId); const selectedQuality = qualities[ingredientId]; const name = INGREDIENTS.find(item => item.id === ingredientId)?.name ?? ingredientId; return <div className="ws-requirement" key={ingredientId}><div className="ws-requirement-title"><Sprite name={INGREDIENT_ICON[ingredientId]} /><span><b>{name}</b><small>需要 ×{count}</small></span></div><div className="ws-quality-options">{choices.length ? choices.map(quality => <button type="button" key={quality} aria-label={`${name} ${QUALITY_LABEL[quality]}，库存 ${availableCount(meta, ingredientId, quality)} 份`} aria-pressed={selectedQuality === quality} className={`ws-quality-option ${selectedQuality === quality ? 'is-selected' : ''}`} onClick={() => setQualities(current => ({ ...current, [ingredientId]: quality }))}>{qualityBadge(quality, true)}<small>{availableCount(meta, ingredientId, quality)}份</small></button>) : <span className="ws-empty-inline">缺少食材</span>}</div></div>; })}</div><div className="ws-cook-summary"><div><span>成品品质</span><strong>{selected.length === requirements.length ? qualityBadge(dishQuality(selected)) : '待选择'}</strong></div><div><span>消耗食材</span><strong>{selected.length}/{requirements.length} 项</strong></div><ActionButton mutates testId="cook-submit" onClick={runCook} disabled={!canCook || cooking}><Icon name="pan" size={17} /> {cooking ? '入锅中…' : '开始烹调'}</ActionButton></div>{presentation && <div className="ws-cooking-presentation" role="status" data-testid="cooking-presentation">
+        <div className="ws-cooking-particles" aria-hidden="true">{presentation.items.flatMap(item=>Array.from({length:item.count},()=>item)).map((item,index)=><span key={index} style={{'--cook-index':index} as React.CSSProperties}><Sprite name={iconForIngredient(item.ingredientId)}/></span>)}</div>
+        <div className="ws-cooking-pot" aria-hidden="true"><Icon name="pan" size={54}/></div>
+        <div className="ws-cooking-dish"><Sprite name={DISH_INFO[presentation.dishId]?.icon??'locked'}/><strong>{presentation.name} · 已做好</strong></div>
+        <small>{presentation.items.map(item=>`${INGREDIENTS.find(i=>i.id===item.ingredientId)?.name??item.ingredientId} ×${item.count}`).join(' + ')}</small>
+      </div>}</div></div>
     <div className="ws-kitchen-next">{!hasIngredients && <div><span>缺少配方所需食材，下一场探险会有新收获。</span><ActionButton variant="quiet" testId="kitchen-explore" onClick={() => go('stages')}>去探险 <Icon name="arrow" size={16} /></ActionButton></div>}{meta.pendingDishes.length > 0 && <div><span>{meta.pendingDishes.length} 道料理已经做好，出售后可获得金币。</span><ActionButton testId="kitchen-sales" onClick={() => go('sales')}>查看菜架 <Icon name="arrow" size={16} /></ActionButton></div>}</div>
     <p className="ws-help"><span>TIP</span> 探险带回的食材按品质分组保存；料理品质取决于最低品质的那份食材。</p>
   </div><WorkshopNav active="kitchen" /></section>;
