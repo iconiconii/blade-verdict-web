@@ -147,7 +147,9 @@ export class CornGuardian {
     const recoil=success?Math.sin(Math.min(age/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
     const tremor=perfect&&!reducedMotion?Math.sin(t*68)*.035*Math.max(0,1-age/680):0;
     const defeated=state.battle.bossHp<=0;
-    const down=defeated?(phase==='settle'?1:smooth(age/650)):0;
+    // Keep the death pose on one continuous event timeline through settle;
+    // switching phases must not snap the actor from half-fallen to flat.
+    const down=defeated?smooth(age/900):0;
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const sway=Math.sin(t*1.7)*.025*motion*(1-w);
     // Placement root stays still: only this child rig recoils, so the cut volume never shrinks.

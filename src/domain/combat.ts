@@ -26,7 +26,7 @@ export const relayDelayMs = 420;
 export const feverConfig={comboThreshold:5,durationMs:3000};
 export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===null
   ?durations.verdict-s.elapsed:feverConfig.durationMs-(s.time-s.feverStartedAt));
-export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, verdictReady:650, verdict:3000, settle:1000 };
+export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:850, verdictReady:650, verdict:3000, settle:1000 };
 
 /** Difficulty follows successful play, never time spent failing. */
 export function tempoFor(bossKind:BossKind,successfulParries:number):CombatTempo {
@@ -131,7 +131,8 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
     }
     case 'impact':return next.elapsed>=durations.impact?transition(next,'stagger'):next;
     case 'stagger':{
-      if(next.elapsed<durations.stagger)return next;
+      const staggerDuration=next.battle.bossHp<=0?durations.deathStagger:durations.stagger;
+      if(next.elapsed<staggerDuration)return next;
       if(next.battle.bossHp<=0||next.battle.playerHp<=0)return transition(next,'settle');
       if(next.battle.meter>=100)return transition(next,'verdictReady');
       return prepareRound({...next,round:next.round+1});

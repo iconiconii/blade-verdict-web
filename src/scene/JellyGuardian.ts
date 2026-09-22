@@ -180,7 +180,9 @@ export class JellyGuardian {
     const recoil=success?Math.sin(Math.min(feedbackAge/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
     const tremor=perfect&&!reducedMotion?Math.sin(t*72)*.028*Math.max(0,1-feedbackAge/680):0;
     const defeated=state.battle.bossHp<=0;
-    const down=defeated?(phase==='settle'?1:smooth(elapsed/650)):0;
+    // Death is driven by the finisher timestamp, not by the stagger/settle
+    // boundary, so the soft body keeps falling instead of snapping down.
+    const down=defeated?smooth(feedbackAge/900):0;
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const bob=Math.sin(t*2)*.025*motion*(1-w);
     this.actor.position.set(tremor+pain.x*.035,.035+bob-down*.05,-recoil*(perfect?.18:.1));

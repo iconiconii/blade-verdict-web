@@ -58,7 +58,8 @@ export class SliceEffects {
     for(const slot of this.pool){
       const event=slot.event,age=event?state.time-event.time:Infinity;
       slot.root.visible=age<720;if(!event||age>=720)continue;
-      const progress=Math.min(1,age/720),fade=1-progress,cut=event.kind==='Cut',perfect=event.kind==='Perfect';
+      const fractureAge=event.finisher?Math.max(0,age-110):age;
+      const progress=Math.min(1,fractureAge/(event.finisher?610:720)),fade=1-progress,cut=event.kind==='Cut',perfect=event.kind==='Perfect';
       const force=reducedMotion?.25:event.finisher?1.8:perfect||cut?1:.6;
       slot.root.position.set(slot.x,-slot.y,36);
       slot.root.rotation.z=-event.angle;
@@ -80,7 +81,7 @@ export class SliceEffects {
       slot.blade.material.opacity=Math.max(0,1-age/(event.finisher?360:240));
       slot.halves.forEach((half,i)=>{
         const side=i===0?-1:1;
-        half.visible=cut;
+        half.visible=cut&&(!event.finisher||age>=110);
         half.position.set(side*(6+progress*(event.finisher?145:100)*force),15+Math.sin(progress*Math.PI)*44*force-progress*progress*80,0);
         half.rotation.set(progress*1.4,side*progress*1.1,side*progress*.6);
         half.scale.setScalar((.75+Math.sin(progress*Math.PI)*.2)*Math.min(1,fade*4));

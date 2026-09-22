@@ -124,7 +124,7 @@ describe('accessible web combat',()=>{
   });
   it('prioritizes victory over full-meter transition',()=>{
     let s=active();s=tapTarget({...s,battle:{...s.battle,bossHp:8,meter:90}},0);
-    s=tickCombat(s,durations.impact);s=tickCombat(s,durations.stagger);
+    s=tickCombat(s,durations.impact);s=tickCombat(s,durations.deathStagger);
     expect(s.phase).toBe('settle');
     expect(s.battle.verdictCount).toBe(0);
   });
@@ -165,6 +165,12 @@ describe('continuous body cutting',()=>{
     expect(lethal.feedback).toMatchObject({finisher:true,hitStopMs:80});
     expect(lethal.phase).toBe('stagger');
     expect(applyContinuousCut(lethal,{x:.5,y:.5},true)).toBe(lethal);
+  });
+  it('holds the death stagger long enough for the fall animation',()=>{
+    const lethal=applyContinuousCut({...verdict(),battle:{...verdict().battle,bossHp:12}}, {x:.5,y:.5},true);
+    expect(lethal.phase).toBe('stagger');
+    expect(tickCombat(lethal,durations.deathStagger-1).phase).toBe('stagger');
+    expect(tickCombat(lethal,durations.deathStagger).phase).toBe('settle');
   });
   it('enters Fever once after the configured combo threshold and resets next round',()=>{
     let s=verdict();
