@@ -8,6 +8,24 @@ import { swipeContact } from './domain/swipe';
 const phaseLabels={intro:'目标锁定',telegraph:'蓄力预警',targetActive:'准备招架',impact:'反击命中',stagger:'短暂破防',verdictReady:'裁决就绪',verdictSlash:'连续裁决',settle:'战斗结束'};
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
 
+function playCombatTone(feedback:CombatFeedback){
+  if(typeof window==='undefined'||!window.AudioContext)return;
+  try{
+    const context=new AudioContext();
+    if(context.state==='suspended')void context.resume();
+    const oscillator=context.createOscillator(),gain=context.createGain();
+    const cut=feedback.kind==='Cut',perfect=feedback.kind==='Perfect',ferocious=feedback.speed==='ferocious';
+    oscillator.type=perfect?'triangle':cut?'sawtooth':'sine';
+    oscillator.frequency.value=feedback.finisher?110:perfect?720:cut?(ferocious?330:feedback.speed==='fast'?270:210):460;
+    const duration=feedback.finisher?.14:perfect?.09:cut?.06:.07;
+    gain.gain.setValueAtTime(.0001,context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(feedback.finisher?.12:.055,context.currentTime+.008);
+    gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+duration);
+    oscillator.connect(gain).connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration+.02);
+    window.setTimeout(()=>void context.close(),Math.ceil((duration+.05)*1000));
+  }catch{/* Audio is optional and may be blocked by the browser. */}
+}
+
 function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|null;bossKind:'corn'|'jelly';origin:{x:number;y:number}|null}){
   if(!feedback||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')||feedback.pendingRound)return null;
   const count=ingredientBurstFor(bossKind,feedback.kind);
@@ -60,6 +78,7 @@ export function Battle(){
   },[]);
 
   useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:feedback.kind==='Cut'?(feedback.speed==='ferocious'?[12,18]:[8]):[8];navigator.vibrate(pattern)},[feedback?.id]);
+  useEffect(()=>{if(feedback)playCombatTone(feedback)},[feedback?.id]);
   const point=(event:ReactPointerEvent<HTMLDivElement>):VerdictPoint=>{const rect=event.currentTarget.getBoundingClientRect();return{x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,time:performance.now()}};
   const begin=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();if(event.button!==0||useGame.getState().combat.phase!=='verdictSlash'||useGame.getState().combat.paused||useGame.getState().combat.pointerId!==null)return;
