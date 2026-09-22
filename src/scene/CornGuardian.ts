@@ -26,6 +26,8 @@ export class CornGuardian {
   private head=new THREE.Group();
   private leftLeg=new THREE.Group();
   private rightLeg=new THREE.Group();
+  private armSegments:THREE.Group[][]=[];
+  private legSegments:THREE.Group[][]=[];
   private crest=new THREE.Group();
   private materials:THREE.MeshStandardMaterial[]=[];
   private leafGeometry:THREE.ExtrudeGeometry;
@@ -126,16 +128,20 @@ export class CornGuardian {
   }
   private makeArm(arm:THREE.Group,side:number,sleeve:THREE.Material,palm:THREE.Material){
     arm.position.set(side*.63,1.48,.02);arm.rotation.z=side*.08;
-    this.mesh(new THREE.CapsuleGeometry(.15,.38,4,10),sleeve,arm,[0,-.17,0],[1,1,.85]);
-    this.mesh(new THREE.SphereGeometry(.2,14,10),palm,arm,[0,-.48,.12],[1,.88,.8]);
-    for(let i=-1;i<=1;i++){const finger=this.mesh(new THREE.CapsuleGeometry(.045,.2,3,8),palm,arm,[i*.075,-.65,.19],[1,1,.65]);finger.rotation.x=-.3;}
+    const upper=new THREE.Group(),forearm=new THREE.Group(),hand=new THREE.Group();
+    upper.name='corn-upper-arm';forearm.name='corn-forearm';hand.name='corn-hand';arm.add(upper,forearm,hand);this.armSegments.push([upper,forearm,hand]);
+    this.mesh(new THREE.CapsuleGeometry(.15,.38,4,10),sleeve,upper,[0,-.17,0],[1,1,.85]);
+    this.mesh(new THREE.SphereGeometry(.2,14,10),palm,hand,[0,-.48,.12],[1,.88,.8]);
+    for(let i=-1;i<=1;i++){const finger=this.mesh(new THREE.CapsuleGeometry(.045,.2,3,8),palm,hand,[i*.075,-.65,.19],[1,1,.65]);finger.rotation.x=-.3;}
   }
   private makeLeg(leg:THREE.Group,side:number,boot:THREE.Material,knee:THREE.Material){
     leg.position.set(side*.3,.38,.01);
-    this.mesh(new THREE.CapsuleGeometry(.18,.4,4,10),knee,leg,[0,.02,0],[1,1,.9]);
-    const pad=this.mesh(new THREE.SphereGeometry(.19,12,8),this.material(0x58713c,.55),leg,[0,-.18,.25],[1,.72,.38]);pad.name='knee-pad';
-    this.mesh(new RoundedBoxGeometry(.42,.28,.56,3,.08),boot,leg,[0,-.48,.02]);
-    this.mesh(new RoundedBoxGeometry(.46,.12,.72,3,.045),this.material(0x596451,.65,.2),leg,[0,-.61,.16]);
+    const thigh=new THREE.Group(),shin=new THREE.Group(),foot=new THREE.Group();
+    thigh.name='corn-thigh';shin.name='corn-shin';foot.name='corn-foot';leg.add(thigh,shin,foot);this.legSegments.push([thigh,shin,foot]);
+    this.mesh(new THREE.CapsuleGeometry(.18,.4,4,10),knee,thigh,[0,.02,0],[1,1,.9]);
+    const pad=this.mesh(new THREE.SphereGeometry(.19,12,8),this.material(0x58713c,.55),shin,[0,-.18,.25],[1,.72,.38]);pad.name='knee-pad';
+    this.mesh(new RoundedBoxGeometry(.42,.28,.56,3,.08),boot,shin,[0,-.48,.02]);
+    this.mesh(new RoundedBoxGeometry(.46,.12,.72,3,.045),this.material(0x596451,.65,.2),foot,[0,-.61,.16]);
   }
   private addAnchor(id:BodyAnchorId,parent:THREE.Object3D,position:[number,number,number]){
     const anchor=new THREE.Object3D();anchor.name=`parry-anchor-${id}`;anchor.position.set(...position);parent.add(anchor);this.anchors[id]=anchor;this.rig.fxSockets[id]=anchor;
@@ -175,6 +181,18 @@ export class CornGuardian {
     this.rightArm.rotation.set(-charge*.42-slump*.1-pain.followY*.1+deathFall*.66,0,.12+recoil*(perfect?.3:.18)+down*.24+slump*.1-pain.followX*.18+deathFall*.18);
     this.leftLeg.rotation.set(slump*.12-deathFall*.95,0,sideLean(-1,charge,recoil)-slump*.055+pain.x*.025);
     this.rightLeg.rotation.set(slump*.08-deathFall*1.08,0,sideLean(1,charge,recoil)+slump*.04+pain.x*.025);
+    this.armSegments.forEach((segments,index)=>{
+      const side=index===0?-1:1;
+      segments[0].rotation.x=-charge*.18+deathFall*.25+pain.followY*.08;
+      segments[1].rotation.x=deathFall*(.3+index*.08)+pain.followX*.06;
+      segments[2].rotation.x=deathFall*.45+pain.followY*.05;
+      segments[2].rotation.z=side*deathFall*.16;
+    });
+    this.legSegments.forEach((segments,index)=>{
+      segments[0].rotation.x=-deathFall*(.18+index*.04);
+      segments[1].rotation.x=-deathFall*(.55+index*.08);
+      segments[2].rotation.x=-deathFall*.3;
+    });
     this.crest.rotation.set(Math.sin(t*2.2)*.04*motion*(1-w)+recoil*.18+slump*.12+pain.followY*.2+deathFall*.25,0,-pain.followX*.2);
     const expression=defeated?1:pain.pain;
     this.eyes.forEach((eye,i)=>{eye.scale.y=1-expression*.7;eye.rotation.z=(i===0?-1:1)*expression*.18});

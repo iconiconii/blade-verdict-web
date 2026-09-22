@@ -1,6 +1,8 @@
 import { expect,it } from 'vitest';
 import { createCombat, startVerdict, applyContinuousCut } from '../domain/combat';
 import { createGuardianRig, guardianStateFor, guardianPoseFor } from './GuardianRig';
+import { CornGuardian } from './CornGuardian';
+import { JellyGuardian } from './JellyGuardian';
 
 it('exposes a shared rig contract and state priority',()=>{
   const rig=createGuardianRig('test');
@@ -13,4 +15,12 @@ it('exposes a shared rig contract and state priority',()=>{
   const dead=applyContinuousCut({...breakState,battle:{...breakState.battle,bossHp:12}},{x:.5,y:.5},true);
   expect(guardianStateFor(dead)).toBe('Dead');
   expect(guardianPoseFor(dead).state).toBe('Dead');
+});
+
+it('exposes articulated corn limbs and three-segment jelly tentacles',()=>{
+  const corn=new CornGuardian(),jelly=new JellyGuardian();
+  expect(corn.root.getObjectByName('corn-upper-arm')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-thigh')).toBeTruthy();
+  expect(jelly.root.getObjectByName('jelly-fin-left-segment-0')).toBeTruthy();
+  expect(jelly.root.getObjectByName('jelly-fin-right-segment-2')).toBeTruthy();
 });

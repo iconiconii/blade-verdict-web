@@ -58,6 +58,7 @@ export class JellyGuardian {
   private face=new THREE.Group();
   private body=new THREE.Group();
   private fins:THREE.Group[]=[];
+  private finSegments:THREE.Group[][]=[];
   private feet:THREE.Group[]=[];
   private eyes:THREE.Mesh[]=[];
   private materials:Array<{material:THREE.MeshPhysicalMaterial;emissive:THREE.Color;intensity:number}>=[];
@@ -120,7 +121,16 @@ export class JellyGuardian {
       const fin=new THREE.Group();fin.name=side<0?'jelly-left-fin':'jelly-right-fin';
       fin.position.set(side*.53,1.61,-.035);this.root.add(fin);this.fins.push(fin);
       const points:XYZ[]=[[0,.075,0],[side*.14,-.12,.02],[side*.35,-.47,.06],[side*.43,-.75,.11],[side*.29,-.96,.19]];
-      this.mesh(jellyLimb(points,.21,.64),gel,fin,'jelly-fin-surface');
+      const segments:THREE.Group[]=[];this.finSegments.push(segments);
+      for(let segmentIndex=0;segmentIndex<3;segmentIndex++){
+        const segment=new THREE.Group();segment.name=`jelly-fin-${side<0?'left':'right'}-segment-${segmentIndex}`;
+        const start=points[segmentIndex],end=points[segmentIndex+1];
+        segment.position.set(...start);
+        const delta=new THREE.Vector3(end[0]-start[0],end[1]-start[1],end[2]-start[2]);
+        this.mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(),delta]),18,.17-segmentIndex*.025,10,false),gel,segment,'jelly-fin-segment-surface');
+        this.mesh(new THREE.SphereGeometry(.064,12,8),anchorGlow,segment,'jelly-fin-segment-joint',[delta.x,delta.y,delta.z],[1,.86,.5]);
+        fin.add(segment);segments.push(segment);
+      }
       const trace=new THREE.CatmullRomCurve3([new THREE.Vector3(side*.13,-.16,.115),new THREE.Vector3(side*.31,-.43,.187),new THREE.Vector3(side*.39,-.68,.20)]);
       this.mesh(new THREE.TubeGeometry(trace,24,.011,6,false),edge,fin,'jelly-fin-edge');
       this.mesh(new THREE.SphereGeometry(.064,12,8),anchorGlow,fin,'jelly-fin-joint',[side*.34,-.47,.205],[1,.86,.5]);
@@ -213,6 +223,12 @@ export class JellyGuardian {
       const side=i===0?-1:1;
       fin.rotation.set(-charge*.06-pain.followY*.17,side*charge*.04,
         side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07-deathFall*.22)-pain.followX*.22+side*pain.breath*.016);
+      this.finSegments[i].forEach((segment,segmentIndex)=>{
+        const delay=segmentIndex*.08;
+        segment.rotation.x=side*(pain.followY*.2+deathFall*(.18+segmentIndex*.14))+Math.sin(t*2.5+segmentIndex)*.025*(1-w);
+        segment.rotation.z=-pain.followX*.18+side*deathFall*(.08+segmentIndex*.07);
+        segment.scale.setScalar(1+pain.compression*.06*(segmentIndex+1)-deathFall*.04*segmentIndex);
+      });
     });
     this.feet.forEach((foot,i)=>foot.rotation.set(-deathFall*.55,0,Math.sin(t*2.4+i)*.04*motion*(1-w)-pain.followX*.08));
     const blink=reducedMotion||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
