@@ -3,6 +3,7 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
+import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 
 type XYZ = [number, number, number];
 const smooth = (t:number) => THREE.MathUtils.smoothstep(t,0,1);
@@ -51,6 +52,7 @@ function jellyLimb(points:XYZ[],width:number,depth:number){
 export class JellyGuardian {
   readonly root=new THREE.Group();
   readonly anchors:Partial<Record<BodyAnchorId,THREE.Object3D>>={};
+  readonly rig:GuardianRig;
   private actor=new THREE.Group();
   private hood=new THREE.Group();
   private face=new THREE.Group();
@@ -64,6 +66,7 @@ export class JellyGuardian {
   private painMouth:THREE.Mesh;
 
   constructor(){
+    this.rig=createGuardianRig('jelly-guardian-rig');
     this.root.name='jelly-guardian-3d';
     this.hood.name='jelly-hood';this.hood.position.set(0,1.78,-.025);
     this.face.name='jelly-face';this.face.position.set(0,1.48,.16);
@@ -147,6 +150,8 @@ export class JellyGuardian {
     // Keep the legacy lower-joint id on the flowing hem, not a third pillar-leg.
     this.addAnchor('lowerJoint',this.body,[0,-.28,.35]);
     this.actor.name='jelly-reaction-rig';this.actor.add(...this.root.children);this.root.add(this.actor);
+    this.rig.root=this.root;this.rig.poseRoot=this.actor;this.rig.visualRoot=this.actor;this.rig.anchors=this.anchors;
+    this.root.add(this.rig.hitProxy);
   }
 
   private material(options:THREE.MeshPhysicalMaterialParameters){
@@ -166,13 +171,14 @@ export class JellyGuardian {
   }
 
   private addAnchor(id:BodyAnchorId,parent:THREE.Object3D,position:XYZ,rotation:XYZ=[0,0,0]){
-    const anchor=new THREE.Object3D();anchor.name=`parry-anchor-${id}`;anchor.position.set(...position);anchor.rotation.set(...rotation);parent.add(anchor);this.anchors[id]=anchor;
+    const anchor=new THREE.Object3D();anchor.name=`parry-anchor-${id}`;anchor.position.set(...position);anchor.rotation.set(...rotation);parent.add(anchor);this.anchors[id]=anchor;this.rig.fxSockets[id]=anchor;
   }
   getAnchor(id:BodyAnchorId){return this.anchors[id]??this.body}
 
   update(state:CombatState,reducedMotion=false){
     const {phase,elapsed,feedback}=state;
     const pain=verdictMotion(state,reducedMotion),w=pain.weight;
+    this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
     const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<680;
     const perfect=success&&feedback?.kind==='Perfect';

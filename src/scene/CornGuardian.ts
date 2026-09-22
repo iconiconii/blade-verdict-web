@@ -4,6 +4,7 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
+import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 
 const smooth=(t:number)=>THREE.MathUtils.smoothstep(t,0,1);
 
@@ -20,6 +21,7 @@ export class CornGuardian {
   readonly leftArm=new THREE.Group();
   readonly rightArm=new THREE.Group();
   readonly anchors:Partial<Record<BodyAnchorId,THREE.Object3D>>={};
+  readonly rig:GuardianRig;
   private actor=new THREE.Group();
   private head=new THREE.Group();
   private leftLeg=new THREE.Group();
@@ -33,6 +35,7 @@ export class CornGuardian {
   private painMouth:THREE.Mesh;
 
   constructor(){
+    this.rig=createGuardianRig('corn-guardian-rig');
     this.root.name='corn-guardian-3d';
     this.body.name='corn-torso';this.head.name='corn-head';
     this.leftLeg.name='left-knee';this.rightLeg.name='right-knee';
@@ -108,6 +111,8 @@ export class CornGuardian {
     this.addAnchor('leftKnee',this.leftLeg,[0,-.08,.3]);
     this.addAnchor('rightKnee',this.rightLeg,[0,-.08,.3]);
     this.actor.name='corn-reaction-rig';this.actor.add(...this.root.children);this.root.add(this.actor);
+    this.rig.root=this.root;this.rig.poseRoot=this.actor;this.rig.visualRoot=this.actor;this.rig.anchors=this.anchors;
+    this.root.add(this.rig.hitProxy);
   }
 
   private material(color:number,roughness:number,metalness=0){
@@ -133,13 +138,14 @@ export class CornGuardian {
     this.mesh(new RoundedBoxGeometry(.46,.12,.72,3,.045),this.material(0x596451,.65,.2),leg,[0,-.61,.16]);
   }
   private addAnchor(id:BodyAnchorId,parent:THREE.Object3D,position:[number,number,number]){
-    const anchor=new THREE.Object3D();anchor.name=`parry-anchor-${id}`;anchor.position.set(...position);parent.add(anchor);this.anchors[id]=anchor;
+    const anchor=new THREE.Object3D();anchor.name=`parry-anchor-${id}`;anchor.position.set(...position);parent.add(anchor);this.anchors[id]=anchor;this.rig.fxSockets[id]=anchor;
   }
   getAnchor(id:BodyAnchorId){return this.anchors[id]??this.body}
 
   update(state:CombatState,reducedMotion=false){
     const {phase,elapsed,feedback}=state;
     const pain=verdictMotion(state,reducedMotion),w=pain.weight;
+    this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     const age=feedback?state.time-feedback.time:Infinity;
     const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&age<680;
     const perfect=success&&feedback?.kind==='Perfect';
