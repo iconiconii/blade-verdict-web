@@ -185,25 +185,29 @@ export class JellyGuardian {
     const down=defeated?smooth(feedbackAge/900):0;
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const bob=Math.sin(t*2)*.025*motion*(1-w);
-    this.actor.position.set(tremor+pain.x*.035,.035+bob-down*.05,-recoil*(perfect?.18:.1));
-    this.actor.rotation.set(-charge*.055+recoil*(perfect?.16:.08)-slump*.04-pain.y*.065,
-      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.08,down*.75-pain.x*.07);
+    // Soft-body death: cap buckles, fins lose lift, then the mantle folds
+    // forward onto the plinth rather than disappearing vertically.
+    const deathFall=defeated?down:0;
+    this.actor.position.set(tremor+pain.x*.035,.035+bob-down*.08,-recoil*(perfect?.18:.1)+deathFall*.18);
+    this.actor.rotation.set(-charge*.055+recoil*(perfect?.16:.08)-slump*.04-pain.y*.065+deathFall*.62,
+      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.08,deathFall*.12-pain.x*.07);
     this.actor.scale.set(1+down*.25+slump*.035,1-down*.65-slump*.05,1+down*.15);
     // Attached anchors share each part's motion, including the breathing squash.
     this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14,
       1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22,1+charge*.025+pain.compression*.07);
-    this.hood.position.y=1.78-slump*.035+Math.sin(t*2-.3)*.012*motion*(1-w)+pain.breath*.012;
-    this.hood.rotation.z=-pain.x*.06;
-    this.body.scale.set(1+charge*.055+pain.compression*.12,1-charge*.04-pain.compression*.17,1+pain.compression*.06);
-    this.body.rotation.z=-pain.followX*.085;
-    this.face.position.y=1.48-slump*.03-pain.compression*.012+pain.breath*.005;
-    this.face.rotation.z=-pain.followX*.04;
+    this.hood.position.y=1.78-slump*.035+Math.sin(t*2-.3)*.012*motion*(1-w)+pain.breath*.012-deathFall*.22;
+    this.hood.rotation.set(deathFall*.3,-deathFall*.08,-pain.x*.06);
+    this.hood.scale.y*=1-deathFall*.12;
+    this.body.scale.set(1+charge*.055+pain.compression*.12+deathFall*.15,1-charge*.04-pain.compression*.17-deathFall*.32,1+pain.compression*.06);
+    this.body.rotation.set(deathFall*.24,-deathFall*.06,-pain.followX*.085);
+    this.face.position.y=1.48-slump*.03-pain.compression*.012+pain.breath*.005-deathFall*.16;
+    this.face.rotation.set(deathFall*.4,0,-pain.followX*.04);
     this.fins.forEach((fin,i)=>{
       const side=i===0?-1:1;
       fin.rotation.set(-charge*.06-pain.followY*.17,side*charge*.04,
-        side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07)-pain.followX*.22+side*pain.breath*.016);
+        side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07-deathFall*.22)-pain.followX*.22+side*pain.breath*.016);
     });
-    this.feet.forEach((foot,i)=>foot.rotation.z=Math.sin(t*2.4+i)*.04*motion*(1-w)-pain.followX*.08);
+    this.feet.forEach((foot,i)=>foot.rotation.set(-deathFall*.55,0,Math.sin(t*2.4+i)*.04*motion*(1-w)-pain.followX*.08));
     const blink=reducedMotion||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
     const expression=defeated?1:pain.pain;
     this.eyes.forEach((eye,i)=>{

@@ -153,19 +153,22 @@ export class CornGuardian {
     const slump=w+(defeated?1-down:0),motion=reducedMotion?0:1;
     const sway=Math.sin(t*1.7)*.025*motion*(1-w);
     // Placement root stays still: only this child rig recoils, so the cut volume never shrinks.
-    this.actor.position.set(tremor+pain.x*.025,-slump*.045+down*.03,-recoil*(perfect?.34:.12));
-    this.actor.rotation.set(-charge*.06+recoil*(perfect?.28:.09)-slump*.04+pain.energy*.13-pain.y*.05,
-      (-.16+sway+tremor*.8)*(1-w)+pain.x*.09,down*1.1-pain.x*.065);
+    const deathFall=defeated?down:0;
+    // A readable forward collapse: knees give way first, hands reach down,
+    // then the cob rolls over the front edge instead of simply shrinking.
+    this.actor.position.set(tremor+pain.x*.025,-slump*.045+deathFall*.08,-recoil*(perfect?.34:.12)+deathFall*.2);
+    this.actor.rotation.set(-charge*.06+recoil*(perfect?.28:.09)-slump*.04+pain.energy*.13-pain.y*.05+deathFall*.82,
+      (-.16+sway+tremor*.8)*(1-w)+pain.x*.09,deathFall*.16-pain.x*.065);
     this.body.position.y=1.02+Math.sin(t*2.1)*.012*motion*(1-w)+pain.breath*.008;
     this.body.rotation.set(-slump*.055+pain.energy*.06,0,-pain.x*.035);
     this.body.scale.set(1-charge*.025+pain.compression*.022,1+charge*.03-pain.compression*.035,1);
-    this.head.position.y=1.98-slump*.035+Math.sin(t*2.1+.4)*.012*motion*(1-w)+pain.breath*.012;
-    this.head.rotation.set(slump*.13+pain.energy*.12-pain.followY*.08,0,recoil*.05-pain.followX*.12);
-    this.leftArm.rotation.set(-charge*.5+recoil*(perfect?.35:.22)-slump*.2+pain.followY*.14,0,-.12-charge*.12-down*.25-slump*.13-pain.followX*.18);
-    this.rightArm.rotation.set(-charge*.42-slump*.1-pain.followY*.1,0,.12+recoil*(perfect?.3:.18)+down*.24+slump*.1-pain.followX*.18);
-    this.leftLeg.rotation.set(slump*.12,0,sideLean(-1,charge,recoil)-slump*.055+pain.x*.025);
-    this.rightLeg.rotation.set(slump*.08,0,sideLean(1,charge,recoil)+slump*.04+pain.x*.025);
-    this.crest.rotation.set(Math.sin(t*2.2)*.04*motion*(1-w)+recoil*.18+slump*.12+pain.followY*.2,0,-pain.followX*.2);
+    this.head.position.y=1.98-slump*.035+Math.sin(t*2.1+.4)*.012*motion*(1-w)+pain.breath*.012-deathFall*.18;
+    this.head.rotation.set(slump*.13+pain.energy*.12-pain.followY*.08+deathFall*.42,0,recoil*.05-pain.followX*.12);
+    this.leftArm.rotation.set(-charge*.5+recoil*(perfect?.35:.22)-slump*.2+pain.followY*.14+deathFall*.72,0,-.12-charge*.12-down*.25-slump*.13-pain.followX*.18-deathFall*.18);
+    this.rightArm.rotation.set(-charge*.42-slump*.1-pain.followY*.1+deathFall*.66,0,.12+recoil*(perfect?.3:.18)+down*.24+slump*.1-pain.followX*.18+deathFall*.18);
+    this.leftLeg.rotation.set(slump*.12-deathFall*.95,0,sideLean(-1,charge,recoil)-slump*.055+pain.x*.025);
+    this.rightLeg.rotation.set(slump*.08-deathFall*1.08,0,sideLean(1,charge,recoil)+slump*.04+pain.x*.025);
+    this.crest.rotation.set(Math.sin(t*2.2)*.04*motion*(1-w)+recoil*.18+slump*.12+pain.followY*.2+deathFall*.25,0,-pain.followX*.2);
     const expression=defeated?1:pain.pain;
     this.eyes.forEach((eye,i)=>{eye.scale.y=1-expression*.7;eye.rotation.z=(i===0?-1:1)*expression*.18});
     this.brows.forEach((brow,i)=>{brow.rotation.z=(i===0?-1:1)*(.2-expression*.52)});
