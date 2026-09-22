@@ -117,10 +117,11 @@ export function Battle(){
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
   const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
-  return <section className={`battle battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
+  return <section className={`battle battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
+      {feedback?.finisher&&showFeedback&&<div className="finisher-impact" aria-hidden="true"><i className="finisher-impact__ring"/><i className="finisher-impact__slash finisher-impact__slash--one"/><i className="finisher-impact__slash finisher-impact__slash--two"/><strong>FINISH</strong><span>FINAL CUT · 击杀确认</span></div>}
       <IngredientBurst feedback={feedback} bossKind={bossKind} origin={ingredientOrigin}/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&combat.elapsed-target.startDelayMs<target.ringDurationMs&&!target.resolved&&!paused;
