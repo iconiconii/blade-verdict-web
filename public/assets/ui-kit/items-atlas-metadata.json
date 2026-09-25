@@ -1,0 +1,317 @@
+{
+  "source": "items-atlas.png",
+  "atlas": "items-atlas-packed.png",
+  "width": 768,
+  "height": 768,
+  "columns": 4,
+  "rows": 4,
+  "cellSize": 192,
+  "contentSize": 144,
+  "alphaThreshold": 32,
+  "icons": [
+    {
+      "name": "corn",
+      "index": 0,
+      "row": 0,
+      "column": 0,
+      "file": "icons/corn.png",
+      "sourceBounds": {
+        "left": 74,
+        "top": 81,
+        "width": 211,
+        "height": 233
+      },
+      "atlasBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "carrot",
+      "index": 1,
+      "row": 0,
+      "column": 1,
+      "file": "icons/carrot.png",
+      "sourceBounds": {
+        "left": 388,
+        "top": 80,
+        "width": 193,
+        "height": 227
+      },
+      "atlasBounds": {
+        "x": 192,
+        "y": 0,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "cabbage",
+      "index": 2,
+      "row": 0,
+      "column": 2,
+      "file": "icons/cabbage.png",
+      "sourceBounds": {
+        "left": 671,
+        "top": 102,
+        "width": 204,
+        "height": 201
+      },
+      "atlasBounds": {
+        "x": 384,
+        "y": 0,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "tomato",
+      "index": 3,
+      "row": 0,
+      "column": 3,
+      "file": "icons/tomato.png",
+      "sourceBounds": {
+        "left": 985,
+        "top": 93,
+        "width": 202,
+        "height": 208
+      },
+      "atlasBounds": {
+        "x": 576,
+        "y": 0,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "potato",
+      "index": 4,
+      "row": 1,
+      "column": 0,
+      "file": "icons/potato.png",
+      "sourceBounds": {
+        "left": 61,
+        "top": 402,
+        "width": 212,
+        "height": 206
+      },
+      "atlasBounds": {
+        "x": 0,
+        "y": 192,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "mushroom",
+      "index": 5,
+      "row": 1,
+      "column": 1,
+      "file": "icons/mushroom.png",
+      "sourceBounds": {
+        "left": 384,
+        "top": 394,
+        "width": 199,
+        "height": 220
+      },
+      "atlasBounds": {
+        "x": 192,
+        "y": 192,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "chili",
+      "index": 6,
+      "row": 1,
+      "column": 2,
+      "file": "icons/chili.png",
+      "sourceBounds": {
+        "left": 666,
+        "top": 398,
+        "width": 191,
+        "height": 204
+      },
+      "atlasBounds": {
+        "x": 384,
+        "y": 192,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "pumpkin",
+      "index": 7,
+      "row": 1,
+      "column": 3,
+      "file": "icons/pumpkin.png",
+      "sourceBounds": {
+        "left": 975,
+        "top": 386,
+        "width": 226,
+        "height": 224
+      },
+      "atlasBounds": {
+        "x": 576,
+        "y": 192,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "broccoli",
+      "index": 8,
+      "row": 2,
+      "column": 0,
+      "file": "icons/broccoli.png",
+      "sourceBounds": {
+        "left": 60,
+        "top": 686,
+        "width": 223,
+        "height": 227
+      },
+      "atlasBounds": {
+        "x": 0,
+        "y": 384,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "eggplant",
+      "index": 9,
+      "row": 2,
+      "column": 1,
+      "file": "icons/eggplant.png",
+      "sourceBounds": {
+        "left": 375,
+        "top": 685,
+        "width": 204,
+        "height": 225
+      },
+      "atlasBounds": {
+        "x": 192,
+        "y": 384,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "coin",
+      "index": 10,
+      "row": 2,
+      "column": 2,
+      "file": "icons/coin.png",
+      "sourceBounds": {
+        "left": 669,
+        "top": 701,
+        "width": 204,
+        "height": 203
+      },
+      "atlasBounds": {
+        "x": 384,
+        "y": 384,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "gem",
+      "index": 11,
+      "row": 2,
+      "column": 3,
+      "file": "icons/gem.png",
+      "sourceBounds": {
+        "left": 1003,
+        "top": 685,
+        "width": 174,
+        "height": 225
+      },
+      "atlasBounds": {
+        "x": 576,
+        "y": 384,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "pot",
+      "index": 12,
+      "row": 3,
+      "column": 0,
+      "file": "icons/pot.png",
+      "sourceBounds": {
+        "left": 49,
+        "top": 984,
+        "width": 240,
+        "height": 191
+      },
+      "atlasBounds": {
+        "x": 0,
+        "y": 576,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "chest",
+      "index": 13,
+      "row": 3,
+      "column": 1,
+      "file": "icons/chest.png",
+      "sourceBounds": {
+        "left": 363,
+        "top": 985,
+        "width": 220,
+        "height": 195
+      },
+      "atlasBounds": {
+        "x": 192,
+        "y": 576,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "map",
+      "index": 14,
+      "row": 3,
+      "column": 2,
+      "file": "icons/map.png",
+      "sourceBounds": {
+        "left": 642,
+        "top": 990,
+        "width": 254,
+        "height": 192
+      },
+      "atlasBounds": {
+        "x": 384,
+        "y": 576,
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "name": "book",
+      "index": 15,
+      "row": 3,
+      "column": 3,
+      "file": "icons/book.png",
+      "sourceBounds": {
+        "left": 961,
+        "top": 991,
+        "width": 253,
+        "height": 185
+      },
+      "atlasBounds": {
+        "x": 576,
+        "y": 576,
+        "width": 192,
+        "height": 192
+      }
+    }
+  ]
+}

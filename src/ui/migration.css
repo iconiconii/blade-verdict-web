@@ -1,0 +1,143 @@
+/* Phase 2/3 migration skin. Scoped to the legacy workshop DOM while screens are moved component by component. */
+.ws-root {
+  --ws-migration-ink: #4b250e;
+  --ws-migration-muted: #805631;
+  --ws-migration-wood: #673516;
+  --ws-migration-paper: #fff0c3;
+}
+.ws-root .ws-content { color: var(--ws-migration-paper); }
+.ws-root .ws-heading h1,
+.ws-root .ws-heading .gui-title h1 { color: #fff0c3; text-shadow: 0 3px #4b250e99; }
+.ws-root .ws-heading .gui-eyebrow,
+.ws-root .ws-heading .gui-title p { color: #f0cb79; }
+.ws-root .ws-panel,
+.ws-root .ws-inventory-group,
+.ws-root .ws-equipped-card,
+.ws-root .ws-owned-card,
+.ws-root .ws-dish-card,
+.ws-root .ws-sale-card,
+.ws-root .ws-shop-card,
+.ws-root .ws-recipe-card,
+.ws-root .ws-cook-panel,
+.ws-root .ws-recipes-panel {
+  border: 18px solid transparent;
+  border-image: url('/assets/ui-kit/controls/wood.png') 40 fill / 18px / 0 stretch;
+  border-radius: 0;
+  background: transparent;
+  color: #fff0c3;
+  box-shadow: 0 7px 0 #3c2118, 0 14px 26px #0005;
+}
+.ws-root .ws-panel-heading { border-bottom-color: #b8864b55; }
+.ws-root .ws-panel-heading h2,
+.ws-root .ws-equipped-card h2,
+.ws-root .ws-owned-card h2,
+.ws-root .ws-dish-info h2,
+.ws-root .ws-sale-copy h2,
+.ws-root .ws-shop-copy h2,
+.ws-root .ws-recipe-card b { color: #fff0c3; }
+.ws-root .ws-panel-kicker,
+.ws-root .ws-count,
+.ws-root .ws-subtitle,
+.ws-root .ws-dish-info p,
+.ws-root .ws-sale-copy p,
+.ws-root .ws-shop-copy p,
+.ws-root .ws-recipe-card small { color: #eacb8e; }
+.ws-root .ws-item-card,
+.ws-root .ws-stack-row,
+.ws-root .ws-loadout-strip,
+.ws-root .ws-shop-balance,
+.ws-root .ws-collection-note,
+.ws-root .ws-sales-toolbar,
+.ws-root .ws-cook-summary,
+.ws-root .ws-requirement {
+  border-color: #b8864b88;
+  background: #71411bdd;
+  color: #fff0c3;
+  box-shadow: inset 0 2px #fff3, 0 4px #3c2118;
+}
+.ws-root .ws-item-card strong,
+.ws-root .ws-item-card span,
+.ws-root .ws-stack-row b,
+.ws-root .ws-stack-row strong { color: #fff0c3; }
+.ws-root .ws-stack-bar { background: #3c2118; }
+.ws-root .ws-stack-bar i { background: #8bd24d; }
+.ws-root .ws-tabs { border-color: #b8864b88; background: #42230fe8; }
+.ws-root .ws-tabs button { color: #f0d49d; }
+.ws-root .ws-tabs button.is-active { background: #69bd27; color: #fff; box-shadow: inset 0 2px #e5ff9b; }
+.ws-root .ws-quality-option { border-color: #b8864b; background: #7b4b25; color: #fff0c3; }
+.ws-root .ws-quality-option.is-selected { border-color: #f4c944; background: #69bd27; color: #fff; }
+.ws-root .ws-quick-grid button,
+.ws-root .ws-quick-card { border: 14px solid transparent; border-image: url('/assets/ui-kit/controls/wood.png') 40 fill / 14px / 0 stretch; border-radius: 0; background: transparent; color: #fff0c3; box-shadow: 0 6px #3c2118; }
+.ws-root .ws-quick-grid b,
+.ws-root .ws-quick-grid small { color: #fff0c3; }
+.ws-root .ws-quick-icon { border-color: #94cf4d; background: #65a52c; color: #fff7da; }
+.ws-root .ws-quick-icon--gold { border-color: #f1c34f; background: #b7731e; }
+.ws-root .ws-recipe-card.is-selected { border-image-source: url('/assets/ui-kit/controls/green.png'); }
+.ws-root .ws-shop-price,
+.ws-root .ws-recipe-price,
+.ws-root .ws-bonus { color: #ffd552; }
+.ws-root .ws-empty { color: #fff0c3; }
+.ws-root .ws-empty p,
+.ws-root .ws-muted,
+.ws-root .ws-empty-inline { color: #eacb8e; }
+.ws-root .ws-notice { border: 12px solid transparent; border-image: url('/assets/ui-kit/controls/parchment.png') 45 fill / 12px / 0 stretch; background: transparent; color: #4b250e; }
+.ws-root .ws-nav.gui-nav { border: 8px solid transparent; border-image: url('/assets/ui-kit/controls/nav.png') 40 45 fill / 8px / 0 stretch; border-radius: 0; background: transparent; box-shadow: 0 5px #3c2118; }
+.ws-root .ws-nav.gui-nav button { border-image-source: url('/assets/ui-kit/controls/nav.png'); color: #4b250e; }
+.ws-root .ws-nav.gui-nav button[aria-current='page'] { border-image-source: url('/assets/ui-kit/controls/green.png'); color: #fff; }
+.battle .battle-icon.gui-button { min-width: 52px; min-height: 52px; border-width: 12px; border-image: url('/assets/ui-kit/controls/wood.png') 40 fill / 12px / 0 stretch; padding: 0; color: #fff0c3; font-size: 24px; }
+.battle .battle-modal .gui-button { min-height: 52px; border-width: 14px; border-image-slice: 40 fill; margin-top: 12px; }
+.battle .resource-meter__icon .gui-item-icon,
+.battle .resource-meter__icon img { display: block; object-fit: contain; }
+
+/* Stage and result screens now use the same presentation vocabulary as Workshop. */
+.game-ui .expedition-page,
+.game-ui .result { color: #fff0c3; }
+.game-ui .expedition-title h1,
+.game-ui .result-hero h1 { color: #fff0c3; text-shadow: 0 3px #4b250e99; }
+.game-ui .stage-card,
+.game-ui .result-reward { border: 18px solid transparent; border-image: url('/assets/ui-kit/controls/wood.png') 40 fill / 18px / 0 stretch; border-radius: 0; background: transparent; box-shadow: 0 7px #3c2118, 0 18px 32px #0006; }
+.game-ui .stage-card--jelly { border-image-source: url('/assets/ui-kit/controls/title.png'); }
+.game-ui .stage-card-body { color: #fff0c3; }
+.game-ui .stage-card h2,
+.game-ui .stage-card p,
+.game-ui .stage-card-kicker,
+.game-ui .stage-card-footer dt { color: #fff0c3; }
+.game-ui .stage-tags span { border-color: #c2945266; background: #71411bdd; color: #fff0c3; }
+.game-ui .stage-card-footer dd { color: #ffd552; }
+.game-ui .danger { border: 8px solid transparent; border-image: url('/assets/ui-kit/controls/danger.png') 40 45 fill / 8px / 0 stretch; background: transparent; color: #fff0c3; }
+.game-ui .danger--purple { border-image-source: url('/assets/ui-kit/controls/wood.png'); color: #fff0c3; }
+.game-ui .result-reward { color: #fff0c3; }
+.game-ui .result-reward-head,
+.game-ui .result-note,
+.game-ui .result-lede,
+.game-ui .result-stats span { color: #eacb8e; }
+.game-ui .result-reward b,
+.game-ui .result-reward em { color: #ffd552; }
+.game-ui .result-actions .gui-button { min-width: 150px; }
+.ws-root .ui-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.ws-root .ui-dish-card { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 16px; min-height: 170px; }
+.ws-root .ui-dish-card__art { display: grid; place-items: center; min-height: 110px; border-radius: 12px; background: #4b250e88; }
+.ws-root .ui-dish-card__body h2, .ws-root .ui-sale-card h2 { margin: 7px 0; color: #fff0c3; }
+.ws-root .ui-dish-card__body p, .ws-root .ui-sale-card p { color: #eacb8e; font-size: 12px; line-height: 1.6; }
+.ws-root .ui-dish-card__meta { display: flex; align-items: center; gap: 12px; color: #eacb8e; font-size: 11px; }
+.ws-root .ui-dish-card.is-locked { opacity: .65; }
+.ws-root .ui-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px 20px; border: 14px solid transparent; border-image: url('/assets/ui-kit/controls/wood.png') 40 fill / 14px / 0 stretch; color: #fff0c3; }
+.ws-root .ui-sale-card { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 140px; }
+.ws-root .ui-shop-card { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 140px; }
+.ws-root .ui-shop-card__art { display: grid; width: 64px; height: 64px; place-items: center; border-radius: 12px; background: #4b250eaa; color: #f4cb70; }
+.ws-root .ui-shop-card__copy h2 { margin: 5px 0; color: #fff0c3; }
+.ws-root .ui-shop-card__copy p, .ws-root .ui-shop-card__copy small { color: #eacb8e; font-size: 12px; line-height: 1.6; }
+.ws-root .ui-shop-card__action { display: flex; align-items: center; flex-direction: column; gap: 8px; }
+@media (max-width: 620px) { .ws-root .ui-card-grid { grid-template-columns: 1fr; gap: 14px; } .ws-root .ui-dish-card { grid-template-columns: 84px minmax(0, 1fr); } .ws-root .ui-sale-card { grid-template-columns: 64px minmax(0, 1fr); } .ws-root .ui-sale-card .gui-button { grid-column: 1 / -1; width: 100%; } .ws-root .ui-toolbar { flex-wrap: wrap; } }
+@media (max-width: 620px) {
+  .ws-root .ws-panel,
+  .ws-root .ws-inventory-group,
+  .ws-root .ws-equipped-card,
+  .ws-root .ws-owned-card,
+  .ws-root .ws-dish-card,
+  .ws-root .ws-sale-card,
+  .ws-root .ws-shop-card,
+  .ws-root .ws-recipe-card,
+  .ws-root .ws-cook-panel,
+  .ws-root .ws-recipes-panel { border-width: 13px; border-image-width: 13px; }
+}

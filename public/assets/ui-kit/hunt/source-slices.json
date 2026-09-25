@@ -1,0 +1,405 @@
+{
+  "chef-avatar": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      60,
+      37,
+      222,
+      198
+    ],
+    "size": [
+      162,
+      161
+    ]
+  },
+  "select-title": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      279,
+      178,
+      805,
+      328
+    ],
+    "size": [
+      526,
+      150
+    ]
+  },
+  "chapter-title": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      188,
+      323,
+      887,
+      470
+    ],
+    "size": [
+      699,
+      147
+    ]
+  },
+  "corn-portrait": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      183,
+      391,
+      905,
+      1038
+    ],
+    "size": [
+      722,
+      647
+    ]
+  },
+  "chapter-island": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      138,
+      533,
+      944,
+      1246
+    ],
+    "size": [
+      806,
+      713
+    ]
+  },
+  "back": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      42,
+      231,
+      166,
+      357
+    ],
+    "size": [
+      124,
+      126
+    ]
+  },
+  "arrow": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      64,
+      635,
+      133,
+      750
+    ],
+    "size": [
+      69,
+      115
+    ]
+  },
+  "coin": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      53,
+      64,
+      141,
+      155
+    ],
+    "size": [
+      88,
+      91
+    ]
+  },
+  "plus": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      359,
+      76,
+      426,
+      146
+    ],
+    "size": [
+      67,
+      70
+    ]
+  },
+  "settings": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      913,
+      48,
+      1030,
+      179
+    ],
+    "size": [
+      117,
+      131
+    ]
+  },
+  "unlocked": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      401,
+      1126,
+      684,
+      1218
+    ],
+    "size": [
+      283,
+      92
+    ]
+  },
+  "dot-active": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      341,
+      1266,
+      403,
+      1328
+    ],
+    "size": [
+      62,
+      62
+    ]
+  },
+  "dot": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      427,
+      1266,
+      489,
+      1328
+    ],
+    "size": [
+      62,
+      62
+    ]
+  },
+  "cta-start": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      190,
+      1602,
+      896,
+      1814
+    ],
+    "size": [
+      706,
+      212
+    ]
+  },
+  "cta-hunt": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      227,
+      1361,
+      850,
+      1590
+    ],
+    "size": [
+      623,
+      229
+    ]
+  },
+  "card-corn": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      44,
+      1297,
+      285,
+      1576
+    ],
+    "size": [
+      241,
+      279
+    ]
+  },
+  "card-carrot": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      301,
+      1297,
+      538,
+      1576
+    ],
+    "size": [
+      237,
+      279
+    ]
+  },
+  "card-cabbage": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      554,
+      1297,
+      791,
+      1576
+    ],
+    "size": [
+      237,
+      279
+    ]
+  },
+  "card-tomato": {
+    "source": "codex-clipboard-919f50d1-be84-4855-acdf-3664ef38a6a9.png",
+    "crop": [
+      806,
+      1297,
+      1042,
+      1576
+    ],
+    "size": [
+      236,
+      279
+    ]
+  },
+  "nav-kitchen": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      0,
+      1674,
+      216,
+      1920
+    ],
+    "size": [
+      216,
+      246
+    ]
+  },
+  "nav-inventory": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      216,
+      1674,
+      432,
+      1920
+    ],
+    "size": [
+      216,
+      246
+    ]
+  },
+  "nav-stages": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      432,
+      1674,
+      648,
+      1920
+    ],
+    "size": [
+      216,
+      246
+    ]
+  },
+  "nav-cookbook": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      648,
+      1674,
+      864,
+      1920
+    ],
+    "size": [
+      216,
+      246
+    ]
+  },
+  "nav-shop": {
+    "source": "codex-clipboard-e6f8da67-edd0-401a-b96b-a014a1ac248b.png",
+    "crop": [
+      864,
+      1674,
+      1080,
+      1920
+    ],
+    "size": [
+      216,
+      246
+    ]
+  },
+  "boss-mark": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      376,
+      223,
+      479,
+      323
+    ],
+    "size": [
+      103,
+      100
+    ]
+  },
+  "hp-fill": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      247,
+      343,
+      635,
+      369
+    ],
+    "size": [
+      388,
+      26
+    ]
+  },
+  "hp-track": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      655,
+      343,
+      837,
+      369
+    ],
+    "size": [
+      182,
+      26
+    ]
+  },
+  "hp-frame": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      207,
+      323,
+      875,
+      386
+    ],
+    "size": [
+      668,
+      63
+    ]
+  },
+  "meter-fill": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      68,
+      846,
+      101,
+      1528
+    ],
+    "size": [
+      33,
+      682
+    ]
+  },
+  "meter-track": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      74,
+      711,
+      101,
+      814
+    ],
+    "size": [
+      27,
+      103
+    ]
+  },
+  "meter-shaft": {
+    "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+    "crop": [
+      35,
+      650,
+      129,
+      1613
+    ],
+    "size": [
+      94,
+      963
+    ]
+  }
+}

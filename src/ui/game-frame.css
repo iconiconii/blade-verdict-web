@@ -1,0 +1,156 @@
+/* One portrait viewport for the game. Unlike a CSS scale transform, this keeps
+   text crisp and touch targets measured in CSS pixels on every host screen. */
+main.game-stage { width: 100%; height: 100dvh; background: #301307; overflow: hidden; }
+.game-frame {
+  --world-nav-height: clamp(76px, 12.8dvh, 104px);
+  --world-bottom: calc(var(--world-nav-height) + env(safe-area-inset-bottom, 0px) + 20px);
+  --ws-safe-top: env(safe-area-inset-top, 0px);
+  --ws-safe-bottom: env(safe-area-inset-bottom, 0px);
+  position: relative; width: min(100%, 56.25dvh); height: 100%; margin: 0 auto;
+  container: game / inline-size; contain: layout paint; isolation: isolate;
+  overflow: hidden; background: #4a1b07; color: #fff0c3;
+}
+/* Wide/short phones should use their full width, not grow side gutters when
+   the browser's address bar opens. Desktop keeps the reference portrait stage. */
+@media (max-width: 600px) and (orientation: portrait) { .game-frame { width: 100%; } }
+.game-frame .ws-root { height: 100%; min-height: 0; background: #4a1b07; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+.game-frame .ws-screen, .game-frame .result {
+  width: 100%; height: 100%; min-height: 0; overflow: auto; overflow-x: hidden;
+  overscroll-behavior: contain; scroll-padding-block: 16px var(--world-bottom);
+  background: #4a1b07; color: #fff0c3; scrollbar-width: thin; scrollbar-color: #b56c29 #4a1b07;
+}
+.game-frame .ws-screen::before, .game-frame .ws-screen::after,
+.game-frame .result-backdrop { display: none; }
+.game-frame .hunt-shell, .game-frame .hunt-screen,
+.game-frame .battle.battle--storybook { width: 100%; height: 100%; min-height: 0; }
+.game-frame .hunt-shell { overflow: auto; }
+.game-frame .hunt-screen { min-height: 520px; }
+
+/* Navigation is fixed to the containing game frame, never the browser. */
+.game-frame .world-navigation {
+  position: fixed; inset: auto 0 0; z-index: 25; display: flex;
+  height: calc(var(--world-nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px); background: #d39a30;
+}
+.game-frame .world-navigation button {
+  flex: 1; min-width: 44px; min-height: 44px; height: 100%; margin: 0; padding: 0;
+  border: 0; background: transparent; border-radius: 0; position: relative;
+}
+.game-frame .world-navigation img { display: block; width: 100%; height: 100%; object-fit: fill; }
+.game-frame .world-navigation button[aria-current='page'] { transform: translateY(-3px); filter: brightness(1.12); }
+.game-frame .world-navigation button:focus-visible { outline: 3px solid #fff8b6; outline-offset: -4px; }
+
+/* Mobile composition is also used inside the portrait desktop frame. Breakpoint
+   rules in legacy sheets are viewport-based and must not choose desktop grids. */
+.game-frame .ws-content { flex: none; width: calc(100% - 24px); min-height: 0; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 0 var(--world-bottom); }
+.game-frame .ws-heading { display: block; padding: 12px 40px 22px; min-height: 118px; text-align: center; letter-spacing: 0; }
+.game-frame .ws-heading .gui-title h1 { font: 950 clamp(28px, 8cqw, 42px)/1.25 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 4px 0 10px; color: #ffea92; text-shadow: 0 3px #793d0d; letter-spacing: .02em; }
+.game-frame .ws-heading .gui-eyebrow, .game-frame .ws-heading-mark { display: none; }
+.game-frame .ws-heading .gui-title p { font: 12px/1.6 system-ui, sans-serif; margin: 0 -12px; color: #f3d8a0; }
+.game-frame .ws-back { position: absolute; top: 14px; left: 0; width: 44px; height: 44px; padding: 0; margin: 0; background: transparent !important; border: 0 !important; box-shadow: none; }
+.game-frame .ws-back img { width: 100%; height: 100%; object-fit: contain; }
+.game-frame :is(.ws-panel-kicker, .result-kicker, .result-rule, .result-stamp) { display: none; }
+.game-frame .ws-recipe-layout, .game-frame .ws-equipment-layout,
+.game-frame .ws-inventory-groups, .game-frame .ws-shop-showcase,
+.game-frame .ws-shop-grid, .game-frame .ws-preview-shelf .ws-shop-grid,
+.game-frame .ui-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.game-frame :is(.ws-panel, .ws-inventory-group, .ws-equipped-card, .ws-owned-card, .gui-panel) { border-width: 12px; border-image-width: 12px; padding: 10px; min-width: 0; }
+.game-frame .ws-panel-heading { padding: 4px 2px 12px; gap: 8px; align-items: center; }
+.game-frame .ws-panel-heading h2, .game-frame .ws-equipped-card h2, .game-frame .ws-owned-card h2 { font: 850 18px/1.4 system-ui, sans-serif; }
+.game-frame .ws-count { padding: 0; font-size: 11px; white-space: nowrap; }
+.game-frame .ws-recipe-list { padding: 10px 0 0; gap: 10px; }
+.game-frame .ws-recipe-card { min-height: 76px; border-width: 9px; border-image-width: 9px; padding: 4px; gap: 9px; }
+.game-frame .ws-recipe-card .ws-sprite { width: 44px; height: 44px; }
+.game-frame .ws-recipe-card b { font-size: 14px; }
+.game-frame .ws-recipe-card small { font-size: 11px; letter-spacing: 0; }
+.game-frame .ws-recipe-price { font-size: 11px; text-align: right; }
+.game-frame .ws-recipe-requirements { padding: 0; }
+.game-frame .ws-requirement { flex-wrap: wrap; padding: 12px 6px; gap: 10px; }
+.game-frame .ws-requirement-title { min-width: 0; }
+.game-frame .ws-requirement-title .gui-item-icon { width: 42px; height: 42px; }
+.game-frame .ws-quality-options { justify-content: flex-start; }
+.game-frame .ws-cook-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 6px; gap: 12px; }
+.game-frame .ws-cook-summary > .gui-button { grid-column: 1 / -1; width: 100%; }
+.game-frame .ws-kitchen-next { grid-template-columns: 1fr; }
+.game-frame .ws-kitchen-next > div { flex-wrap: wrap; font-size: 12px; }
+.game-frame .ws-help { align-items: flex-start; font-size: 11px; }
+.game-frame .ws-help > span { flex-shrink: 0; }
+
+/* All action buttons use the actual UI-kit raster frames, not legacy gradients. */
+.game-frame .ws-button.gui-button { border: 10px solid transparent !important; border-image: var(--button-art) 40 fill / 10px / 0 stretch !important; background: transparent !important; box-shadow: none !important; border-radius: 0; min-height: 46px; min-width: 0; padding: 0 6px 2px; font: 850 14px/1.4 system-ui, sans-serif; color: #4b250e !important; }
+.game-frame .ws-button.gui-button--wood, .game-frame .ws-button.gui-button--danger { color: #fff0c3 !important; }
+.game-frame .ws-button > span { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.game-frame .ws-tabs { width: 100%; }
+.game-frame .ws-tabs button { flex: 1; justify-content: center; padding: 8px; }
+.game-frame .ws-group-title { gap: 8px; }
+.game-frame .ws-group-title > span { font-size: 11px; }
+.game-frame .ui-dish-card { grid-template-columns: 64px minmax(0, 1fr); min-height: 120px; gap: 12px; }
+.game-frame .ui-dish-card__art { min-height: 70px; }
+.game-frame .ui-dish-card__body h2, .game-frame .ui-sale-card h2, .game-frame .ui-shop-card__copy h2 { font: 850 18px/1.4 system-ui, sans-serif; }
+.game-frame .ui-dish-card__meta { flex-wrap: wrap; gap: 6px; }
+.game-frame .ui-sale-card, .game-frame .ui-shop-card { grid-template-columns: 56px minmax(0, 1fr); min-height: 0; gap: 12px; }
+.game-frame .ui-shop-card__art { width: 52px; height: 60px; }
+.game-frame .ui-shop-card__action, .game-frame .ui-sale-card > .gui-button { grid-column: 1 / -1; width: 100%; }
+.game-frame .ui-shop-card__action { flex-direction: row; justify-content: space-between; gap: 8px; }
+.game-frame .ui-shop-card__action .gui-button { flex: 1; }
+.game-frame .ui-toolbar, .game-frame .ws-collection-note, .game-frame .ws-shop-balance, .game-frame .ws-loadout-strip { flex-wrap: wrap; gap: 10px; padding: 12px; font-size: 12px; }
+.game-frame .ws-collection-note > .gui-button, .game-frame .ws-loadout-strip > .gui-button { width: 100%; margin: 0; }
+.game-frame .ws-showcase-copy { padding: 16px; background: #673516; }
+.game-frame .ws-showcase-copy h2 { font: 850 22px/1.4 system-ui, sans-serif; margin: 0 0 8px; color: #ffea92; }
+.game-frame .ws-showcase-copy p { font-size: 12px; margin: 0 0 12px; color: #f3d8a0; }
+.game-frame .ws-shop-balance small { width: 100%; font-size: 11px; margin: 0; }
+.game-frame .ws-preview-shelf summary { padding: 14px 0; gap: 8px; }
+.game-frame .ws-preview-shelf summary small { font-size: 11px; }
+.game-frame .ws-empty { padding: 24px 10px; }
+.game-frame .ws-empty {
+  border: 12px solid transparent;
+  border-image: url('/assets/ui-kit/panel-wood.png') 180 fill / 12px / 0 stretch;
+  background: #a9551d;
+  box-shadow: 0 5px #321307, 0 14px 26px #0007;
+}
+.game-frame .ws-empty h2 { font: 850 21px/1.4 system-ui, sans-serif; }
+.game-frame .ws-empty p { font-size: 13px; }
+
+/* Restaurant hub is a game menu, not a desktop marketing landing page. */
+.game-frame .ws-screen--restaurant { display: flex; }
+.game-frame .ws-topbar { flex: none; padding: max(16px, env(safe-area-inset-top)) 18px 8px; border: 0; background: none; }
+.game-frame .world-chef { width: 58px; height: 58px; object-fit: contain; }
+.game-frame .ws-restaurant-hero { flex: none; width: calc(100% - 32px); margin: 12px auto 0; padding: 0; text-align: center; }
+.game-frame .ws-restaurant-hero h1 { font: 950 clamp(32px, 10cqw, 50px)/1.2 system-ui, sans-serif; letter-spacing: .02em; color: #ffe773; text-shadow: 0 3px #8a4511; margin: 6px 0 12px; }
+.game-frame .world-restaurant-art { display: block; width: 76%; height: clamp(120px, 25dvh, 250px); object-fit: contain; margin: 0 auto; }
+.game-frame .ws-restaurant-hero > p:not(.ws-eyebrow) { margin: 12px auto; max-width: 100%; font: 13px/1.6 system-ui, sans-serif; color: #f3d8a0; }
+.game-frame .ws-restaurant-hero > .gui-button { width: 72%; min-height: 56px; margin-top: 8px; font-size: 20px; }
+.game-frame .ws-quick-grid { flex: none; width: calc(100% - 24px); grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 22px auto 0; gap: 10px; align-self: auto; }
+.game-frame .ws-quick-grid button { min-height: 90px; border-width: 10px; border-image-width: 10px; padding: 5px; gap: 6px; flex-wrap: wrap; }
+.game-frame .ws-quick-index, .game-frame .ws-quick-grid button > .ws-icon:last-child { display: none; }
+.game-frame .ws-quick-icon { width: 30px; height: 30px; }
+.game-frame .ws-quick-grid small { white-space: normal; font-size: 10px; }
+.game-frame .ws-restaurant-footer { flex: none; width: calc(100% - 32px); min-height: 42px; margin: 16px auto var(--world-bottom); font-size: 10px; color: #f3d8a0; }
+
+.game-frame .result { padding: max(16px, env(safe-area-inset-top)) 16px var(--world-bottom); }
+.game-frame .result-top { width: 100%; padding: 0 0 18px; gap: 12px; }
+.game-frame .result-top small { font-size: 10px; }
+.game-frame .result-layout { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; margin: 18px 0 0; gap: 24px; }
+.game-frame .result-hero { text-align: center; }
+.game-frame .result-hero h1 { font: 950 clamp(38px, 12cqw, 56px)/1.2 system-ui, sans-serif; color: #ffe773; letter-spacing: .02em; }
+.game-frame .result-lede { font: 13px/1.7 system-ui, sans-serif; margin: 16px 0; }
+.game-frame .result-stats { justify-content: center; gap: 20px; }
+.game-frame .result-stats strong { font-size: 23px; }
+.game-frame .result-actions { width: 100%; flex-direction: column; margin: 22px 0 0; gap: 12px; }
+.game-frame .result-actions > .gui-button { width: 100%; }
+.game-frame .result-reward .loot { padding: 0; margin: 16px 0; }
+.game-frame .result .gui-banner { border-width: 18px 26px; border-image-width: 18px 26px; min-height: 86px; }
+
+/* Fixed overlays inherit the game frame's containing block. Native dialogs are
+   in the top layer, so give them an explicit matching width as well. */
+.game-frame .ws-cooking-modal { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.game-frame .ws-cooking-modal__dialog { width: 100%; max-height: 100%; overflow: auto; border: 14px solid transparent; border-image: url('/assets/ui-kit/panel-wood.png') 180 fill / 14px / 0 stretch; border-radius: 0; background: #673516; }
+.game-frame .ws-cooking-modal__header { padding: 8px; }
+.game-frame .ws-cooking-modal__stage { min-height: 240px; background: #48230d; }
+.game-frame .ws-cooking-modal__copy { padding: 12px 8px; }
+.game-frame .ws-cooking-modal__close { min-width: 44px; min-height: 44px; }
+.game-frame .ws-notice { max-width: calc(100% - 24px); width: max-content; font-size: 12px; }
+.game-frame .gui-dialog { width: min(calc(100vw - 24px), calc(56.25dvh - 24px)); border-width: 18px; border-image-width: 18px; }
+.game-frame .gui-dialog-heading h2 { font-size: 22px; }
+.game-frame .gui-dialog-actions > button { flex: 1; min-width: 0; }
+@media (max-width: 600px) and (orientation: portrait) { .game-frame .gui-dialog { width: calc(100vw - 24px); } }

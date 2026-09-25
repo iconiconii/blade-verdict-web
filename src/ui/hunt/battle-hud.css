@@ -1,0 +1,57 @@
+.game-ui:has(.battle--storybook) { background: #09142d; }
+.battle.battle--storybook { container-type: inline-size; width: min(100vw, 56.25dvh); height: 100dvh; margin: auto; background: #152e57 url('/assets/ui-kit/hunt/battle-garden.webp') center / cover no-repeat; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; color: #fff5d6; }
+.battle--storybook .battle-vignette { background: none; }
+.battle--storybook.battle--verdictReady .battle-vignette, .battle--storybook.battle--verdictSlash .battle-vignette { background: #0a123748; }
+.hunt-battle-toolbar { position: absolute; inset: max(1.2%, env(safe-area-inset-top)) 1.8% auto; height: 9%; padding: 0; display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 6; }
+.hunt-battle-toolbar img, .hunt-boss-hud img, .hunt-charge img, .hunt-item-slots img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.hunt-battle-timer { position: relative; width: 44%; height: 100%; }
+.hunt-battle-timer time { position: absolute; left: 32%; right: 9%; top: 30%; color: #fff9df; font-weight: 950; font-size: 6.6cqw; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.1; text-align: center; text-shadow: 0 2px 2px #170a03; }
+.hunt-battle-pause { width: 13%; height: 90%; min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; pointer-events: auto; }
+.hunt-battle-pause:focus-visible { outline: 3px solid #fff2ac; outline-offset: 3px; }
+.hunt-boss-hud { position: absolute; z-index: 5; top: calc(12% + env(safe-area-inset-top)); left: 19%; right: 19%; text-align: center; pointer-events: none; }
+.hunt-boss-hud h2 { display: flex; align-items: center; justify-content: center; gap: 3%; margin: 0 0 1cqw; color: #fff8db; font-size: 5.6cqw; font-weight: 950; line-height: 1.3; text-shadow: 0 2px 3px #281305, 2px 0 #281305, -2px 0 #281305; }
+.hunt-boss-hud h2 img { width: 15%; height: 8.5cqw; }
+.hunt-health { position: relative; width: 100%; height: 5.6cqw; }
+.hunt-health > img { position: absolute; inset: 0; object-fit: fill; }
+.hunt-health-well { position: absolute; inset: 26% 3.4%; background: #252331 url('/assets/ui-kit/hunt/hp-track.webp') center / 100% 100%; border-radius: 10px; overflow: hidden; }
+.hunt-health-well i { display: block; height: 100%; background: #f72133 url('/assets/ui-kit/hunt/hp-fill.webp') center / auto 100%; transition: width .38s ease; }
+.hunt-boss-hud > strong { display: block; margin-top: .5cqw; color: #fff9e3; font-weight: 950; font-size: 3.6cqw; font-variant-numeric: tabular-nums; text-shadow: 0 2px 2px #1b140d; }
+.hunt-charge { position: absolute; z-index: 5; top: 34%; bottom: max(5%, env(safe-area-inset-bottom)); left: .5%; width: 24%; pointer-events: none; }
+.hunt-charge-shaft { position: absolute; left: 14%; right: 49%; top: 0; bottom: 14%; }
+.hunt-charge-shaft > img { position: absolute; inset: 0; object-fit: fill; }
+.hunt-charge-well { position: absolute; top: 6.7%; bottom: 4%; left: 27%; right: 22%; background: #36231b url('/assets/ui-kit/hunt/meter-track.webp') center / 100% 100%; overflow: hidden; border-radius: 6px; display: flex; align-items: flex-end; }
+.hunt-charge-well i { width: 100%; background: #ffe835 url('/assets/ui-kit/hunt/meter-fill.webp') center / 100% 100%; transition: height .4s ease-out; border-radius: 4px; }
+.hunt-charge-medallion { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; }
+.hunt-charge-medallion span { position: absolute; bottom: 12%; width: 100%; text-align: center; color: #fff8b8; text-shadow: 0 2px #6c2405; font-size: 3.3cqw; font-weight: 900; }
+.hunt-charge.is-verdict .hunt-charge-medallion { filter: drop-shadow(0 0 12px #ffc53d); }
+.hunt-charge-caption { position: absolute; bottom: -4%; left: 0; width: 100%; font-size: 2.5cqw; font-weight: 900; text-align: center; color: #ffeaac; text-shadow: 0 2px #311c15; }
+.hunt-item-slots { position: absolute; z-index: 5; bottom: max(5%, env(safe-area-inset-bottom)); right: 2%; width: 36%; display: flex; gap: 4%; pointer-events: none; }
+.hunt-item-slot { position: relative; width: 48%; }
+.hunt-item-slot small { display: block; color: #f1d4a3; font-size: 2.2cqw; text-align: center; margin-top: -5%; letter-spacing: 0; text-shadow: 0 1px 3px #000; }
+.hunt-player-status { position: absolute; z-index: 5; left: 34%; right: 5%; bottom: 17%; font-size: 2.7cqw; color: #fff4cb; text-shadow: 0 1px 3px #25140c; pointer-events: none; }
+.hunt-player-status > div:first-child { display: flex; align-items: center; gap: 6px; }
+.hunt-player-status span:last-child { margin-left: auto; }
+.hunt-player-health { height: 5px; margin-top: 3px; border: 1px solid #ae753a; background: #362318; border-radius: 4px; overflow: hidden; }
+.hunt-player-health i { display: block; height: 100%; background: #82df36; transition: width .35s; }
+.battle--storybook .phase-ribbon { top: 22.5%; width: 75%; left: 50%; justify-content: center; font-size: 2.5cqw; color: #fff3c6; border: 0; background: none; letter-spacing: .04em; }
+.battle--storybook .phase-dot { display: none; }
+.battle--storybook .target-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
+.battle--storybook .hit-feedback { top: 26%; }
+.battle--storybook .hit-feedback strong { font-size: 7cqw; font-weight: 950; letter-spacing: .03em; text-shadow: 0 3px #4d240c, 0 5px 10px #191015; }
+.battle--storybook .hit-feedback span { font-size: 3cqw; letter-spacing: .02em; margin-top: 3px; }
+.battle.battle--storybook .hit-feedback--Cut { top: 66%; left: 44%; right: 3%; }
+.battle--storybook .hit-feedback--Cut strong { font-size: 6cqw; }
+.battle--storybook .verdict-heading { top: 25%; }
+.battle--storybook .verdict-heading small { display: none; }
+.battle--storybook .verdict-heading h2 { font: 950 8cqw/1 system-ui, sans-serif; color: #ffed8b; margin: 0; }
+.battle--storybook .verdict-clock { margin-top: 9px; }
+.battle--storybook .ready-go { top: 46%; border: 0; background: none; box-shadow: none; }
+.battle--storybook .ready-go strong { font: 950 13cqw/1.1 system-ui, sans-serif; letter-spacing: -.03em; color: #fff09b; text-shadow: 0 5px #744216, 0 8px 16px #20100d; }
+.battle--storybook .ready-go small { display: none; }
+.battle--storybook .ready-go span { color: #fff9e6; font-size: 3.5cqw; }
+.battle--storybook .battle-modal { color: #fff3d4; border: 22px solid transparent; border-image: url('/assets/ui-kit/panel-wood.png') 180 fill / 22px / 0 stretch; background: none; width: calc(100% - 36px); padding: 10px; }
+.battle--storybook .battle-modal h2 { font: 900 25px/1.4 'PingFang SC', sans-serif; color: #fff6dc; }
+.battle--storybook .battle-modal p { color: #ffe7bc; font-size: 13px; }
+.battle--storybook .battle-modal small { color: #e6c18d; }
+.battle--storybook .ingredient-burst img { width: 22px; height: 22px; }
+@media (prefers-reduced-motion: reduce) { .hunt-health-well i, .hunt-charge-well i, .hunt-player-health i { transition: none; } }

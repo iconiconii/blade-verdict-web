@@ -1,0 +1,27 @@
+Use case: stylized-concept.
+Asset type: production game UI sprite atlas, precisely 3 columns x 4 rows, 12 separate empty horizontal UI plates.
+Create a new 1536x1024 PNG with GENUINE TRANSPARENT ALPHA BACKGROUND. Grid cell size exactly 512x256. Do not draw grid boundaries. One centered plate per cell, all plates 470 pixels wide and approximately 128 pixels tall, center at x=256,768,1280; y=128,384,640,896. Nothing crosses a cell boundary. Transparent space surrounds every plate.
+Match the attached reference game artwork: bold cheerful hand-painted fantasy kitchen game, thick dark warm brown outlines, chunky beveled cut corners, raised pale top edge, thick dark bottom depth edge, soft simplified wood grain and painted cartoon texture. Warm timber and cream parchment; rich saturated gold/yellow blue and leaf green.
+Exact row-major plate order:
+Row 1: golden yellow primary button; bright sky-blue button; rich leaf-green button.
+Row 2: dark warm wooden secondary button; warm red danger button; desaturated taupe disabled button.
+Row 3: warm wooden title sign with small green leaf clusters tucked around both ends; golden victory banner base; dark wooden defeat banner base.
+Row 4: pale creamy parchment label base; recessed dark wooden item-slot base; golden selected navigation tab base.
+ALL plates are blank empty surfaces with NO TEXT, NO LETTERS, NO NUMBERS, NO SYMBOLS, NO ICONS. Keep broad blank centers suitable for runtime overlaid game labels. Plates must remain essentially horizontal rectangles with straight long central top and bottom edges, short chamfered corners, no dramatic curves, suitable for 9-slice scaling. For row 3 leaf title alone decorative small leaves allowed at side edges. Victory and defeat banner are also simple blank rectangular plates without crowns, horns or skulls. Front-facing orthographic 2D UI assets, no perspective. Avoid photorealism, metallic filigree, UI screenshots, compositions with panels nested inside panels. Actual alpha transparency, not white or black background and not baked checkerboard.
+
+Generated with built-in image_gen, using 设置.png and 胜利结算.png as style references.
+Final atlas: controls-atlas.png, RGBA PNG, 1536 x 1024, three columns and four rows.
+Generation deviation: nominal cell size was 512 x 256, but actual row centers are uneven. Do NOT crop a strict equal grid; use the measured alpha>=128 global bounds below (left, top, right-exclusive, bottom-exclusive), optionally adding 4px padding.
+0 gold: 34,97,488,230
+1 blue: 541,97,995,230
+2 green: 1049,97,1503,230
+3 wood: 34,319,488,455
+4 red: 541,319,995,455
+5 disabled: 1049,319,1503,455
+6 leaf title: 20,538,502,696
+7 victory: 537,545,999,689
+8 defeat: 1046,546,1506,688
+9 parchment: 35,768,487,919
+10 recessed slot: 545,761,991,927
+11 navigation selected: 1051,773,1502,915
+Alpha validation: 787911 fully transparent pixels. Border and gutter samples have alpha 0. Plate center sampled alpha 253. Preserve the alpha channel; RGB in transparent pixels contains color and should not be flattened.

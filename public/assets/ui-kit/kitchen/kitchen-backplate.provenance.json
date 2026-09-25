@@ -1,0 +1,22 @@
+{
+  "asset": "kitchen-backplate.png",
+  "tool": "built-in image_gen edit",
+  "useCase": "precise-object-edit",
+  "referencePath": "/var/folders/s3/p9s2byvj5mvg1n264f3nl3kh0000gn/T/codex-clipboard-b019cf32-2ac5-4dd6-bc7b-8ef3a3ebabf1.png",
+  "generatedSourcePath": "/Users/icon/.codex/generated_images/01a0d85d-93f2-7482-8448-f44b510660ba/exec-fe000dec-a0fb-43ae-8b7a-e541c4262dbf.png",
+  "requestedDimensions": { "width": 1080, "height": 1920 },
+  "actualDimensions": { "width": 941, "height": 1672 },
+  "intendedCanvas": { "width": 1080, "height": 1920 },
+  "prompt": "Use case: precise-object-edit. Asset type: production static kitchen UI backplate for functional mobile game, NOT a redesigned mockup. Input image 1 is the EDIT TARGET. Output one opaque PNG with exactly the SAME 1080x1920 portrait 9:16 canvas and pixel-aligned composition. Perform strictly surgical object/text removals; inpaint only the removed regions with the natural immediately surrounding underlying material. Preserve EVERY other pixel-level position, shape, color, scale, stroke, shading, lighting, perspective and visible text. Preserve large silver pot centered near x540 y650 including water and monster mark, wooden handles, stone stove, orange fire, kitchen furniture, all decorative leaves and blackboard drawing/Chinese chalk writing. Preserve all plate and tile outlines. REMOVE ONLY these foreground elements: (1) remove the white number '1280' at upper left, retain black capsule background, coin and green plus button exactly; (2) remove timer digits '00:30', retain yellow alarm clock, pale panel, wood support, leaves and title '烹饪时间'; (3) inside each of the three ingredient selection slots around x170–910 y940–1130, remove central plus glyph and '放食材' text, keep all three wood frames and dashed borders exactly; (4) remove all ingredient pictures AND number badges from ALL TEN inventory wells at x78–1004 y1244–1566, leaving TEN empty dark wooden wells, keep their complete frames, 5-column 2-row grid, the '现有食材' title and entire shelf wood structure exactly; (5) remove only the cloche and question mark from recipe target hanging board, preserve '菜谱目标' title and all board paper, clips/frame; (6) remove '开始烹饪' text from blue button but keep entire blue button highlights/outline/shape exactly. Preserve entire bottom navigation exactly, with kitchen tab green, other tabs gold, all icons and all labels '厨房', '仓库', '探险', '图鉴', '商店'. No new text, no new numbers, no new objects. Do not shift or resize anything; do not redraw design, do not crop or zoom. This backplate must line up with original screenshot for interactive HTML overlays.",
+  "visualQA": {
+    "requestedRemovalsComplete": true,
+    "mainCompositionPreserved": true,
+    "selectedSlotCount": 3,
+    "inventoryWellCount": 10,
+    "bottomNavigationPreserved": true,
+    "deviations": [
+      "Built-in tool emitted 941x1672 instead of 1080x1920; aspect ratio differs from exact 9:16 by approximately 0.053 percent. Render at intended 1080x1920 logical canvas.",
+      "Generative editing is not pixel-identical: small texture, outline and highlight differences remain in retained artwork, including the pot and bottom navigation icons. The overall placements and proportions visually track the reference."
+    ]
+  }
+}

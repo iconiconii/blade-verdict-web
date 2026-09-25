@@ -1,0 +1,14 @@
+{
+  "source": "codex-clipboard-6445adae-92d7-43df-ae8e-294f39e55d9d.png",
+  "mode": "precise-object-edit",
+  "output": "hud-parts.png",
+  "dimensions": "1254x1254",
+  "hasTransparentAlpha": true,
+  "prompt": "Reconstruct four reference-style chunky wooden and golden HUD components on transparent alpha: empty timer plaque with stopwatch and leaves, wooden pause button, orange glowing cut medallion, and charcoal item socket with plus. No words or digits. Source warm beveled low-poly cartoon style.",
+  "cropBoxesXYWH": {
+    "timer": [16, 148, 771, 343],
+    "pause": [806, 111, 417, 426],
+    "cutMedallion": [59, 635, 528, 512],
+    "itemSocket": [672, 637, 535, 510]
+  }
+}

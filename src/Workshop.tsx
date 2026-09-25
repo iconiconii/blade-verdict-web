@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useGame, type Screen } from './store';
 import {
   INGREDIENTS,
   RECIPES,
   SHOP_ITEMS,
-  dishPrice,
-  dishQuality,
   type IngredientId,
-  type IngredientSelection,
   type MetaState,
   type ShopItemDefinition,
 } from './domain/meta';
 import type { Quality } from './domain/v2';
 import './workshop.css';
+import { GameButton, GamePanel, GameTitle, ItemIcon, ResourceChip } from './ui';
+import { WorldNavigation } from './ui/WorldNavigation';
+import { KitchenWorkbench } from './ui/kitchen/KitchenWorkbench';
+import './ui/migration.css';
 
 export type WorkshopScreen = Screen;
 type GameState = ReturnType<typeof useGame.getState>;
@@ -65,6 +66,7 @@ function Icon({ name, size = 18 }: { name: 'arrow' | 'back' | 'pan' | 'bag' | 'b
 }
 
 function Sprite({ name, label }: { name: 'corn' | 'jelly' | 'toast' | 'pudding' | 'combo' | 'locked'; label?: string }) {
+  if (name === 'corn') return <ItemIcon name="corn" label={label} size={64} />;
   return <span className={`ws-sprite ws-sprite--${name}`} aria-label={label} role={label ? 'img' : undefined} />;
 }
 
@@ -88,22 +90,13 @@ function qualityBadge(quality: Quality, compact = false) {
 
 function ActionButton({ children, onClick, disabled, variant = 'primary', testId, ariaLabel, mutates = false }: { children: ReactNode; onClick?: () => void; disabled?: boolean; variant?: 'primary' | 'quiet' | 'danger'; testId?: string; ariaLabel?: string; mutates?: boolean }) {
   const operationsBlocked = useGame(state => state.saving || Boolean(state.saveIssue));
-  return <button type="button" data-testid={testId} aria-label={ariaLabel} className={`ws-button ws-button--${variant}`} onClick={onClick} disabled={disabled || (mutates && operationsBlocked)}>{children}</button>;
+  const mappedVariant = variant === 'primary' ? 'gold' : variant === 'quiet' ? 'wood' : 'danger';
+  return <GameButton type="button" data-testid={testId} aria-label={ariaLabel} className={`ws-button ws-button--${variant}`} variant={mappedVariant} onClick={onClick} disabled={disabled || (mutates && operationsBlocked)}>{children}</GameButton>;
 }
 
 export function WorkshopNav({ active }: { active?: WorkshopScreen } = {}) {
-  const state = useWorkshopStore(value => value);
-  const requested = active ?? state.screen;
-  const current = requested === 'kitchen' || requested === 'sales' ? 'restaurant' : requested;
-  const go = (screen: WorkshopScreen) => state.go(screen);
-  const items: Array<{ id: WorkshopScreen; label: string; icon: 'pan' | 'sword' | 'bag' | 'book' | 'shop'; testId: string }> = [
-    { id: 'restaurant', label: '餐厅', icon: 'pan', testId: 'nav-restaurant' },
-    { id: 'stages', label: '探险', icon: 'sword', testId: 'nav-stages' },
-    { id: 'inventory', label: '仓库', icon: 'bag', testId: 'nav-inventory' },
-    { id: 'cookbook', label: '图鉴', icon: 'book', testId: 'nav-cookbook' },
-    { id: 'shop', label: '商店', icon: 'shop', testId: 'nav-shop' },
-  ];
-  return <nav className="ws-nav" aria-label="局外导航"><span className="ws-nav-caption">WORKSHOP</span>{items.map((item, index) => <button type="button" key={item.id} data-testid={item.testId} data-nav-index={index + 1} className={current === item.id ? 'is-active' : ''} aria-current={current === item.id ? 'page' : undefined} onClick={() => go(item.id)}><Icon name={item.icon} size={19} /><span>{item.label}</span><small>0{index + 1}</small></button>)}</nav>;
+  const screen = useWorkshopStore(value => value.screen);
+  return <WorldNavigation active={active ?? screen} />;
 }
 
 function Notice({ notice, clearNotice, saving, saveIssue }: Pick<GameState, 'notice' | 'clearNotice' | 'saving' | 'saveIssue'>) {
@@ -116,129 +109,31 @@ function Notice({ notice, clearNotice, saving, saveIssue }: Pick<GameState, 'not
 
 function PageHeading({ eyebrow, title, subtitle, back, backLabel = '返回餐厅', onBack }: { eyebrow: string; title: string; subtitle?: string; back?: boolean; backLabel?: string; onBack?: () => void }) {
   return <header className="ws-heading">
-    {back && <button type="button" className="ws-back" onClick={onBack} aria-label={backLabel}><Icon name="back" size={22} /></button>}
-    <div className="ws-heading-copy"><p className="ws-eyebrow">{eyebrow}</p><h1>{title}</h1>{subtitle && <p className="ws-subtitle">{subtitle}</p>}</div><span className="ws-heading-mark" aria-hidden="true" />
+    {back && <button type="button" className="ws-back" onClick={onBack} aria-label={backLabel}><img src="/assets/ui-kit/hunt/back.webp" alt="" /></button>}
+    <div className="ws-heading-copy"><GameTitle eyebrow={eyebrow} subtitle={subtitle} level={1}>{title}</GameTitle></div><span className="ws-heading-mark" aria-hidden="true" />
   </header>;
 }
 
 function CoinPill({ coins }: { coins: number }) {
-  return <div className="ws-coins" aria-label={`金币 ${coins}`}><Icon name="coin" size={17} /><strong>{formatPrice(coins)}</strong><span>金币</span></div>;
+  return <ResourceChip icon="coin" value={coins} label="金币" />;
 }
 
 function IngredientCard({ ingredientId, stackCount, onClick }: { ingredientId: IngredientId; stackCount: number; onClick?: () => void }) {
   const info = INGREDIENTS.find(entry => entry.id === ingredientId)!;
-  const content = <><Sprite name={INGREDIENT_ICON[ingredientId]} label={info.name} /><div><strong>{info.name}</strong><span>{stackCount} 份</span></div></>;
+  const content = <><ItemIcon name={INGREDIENT_ICON[ingredientId] === 'jelly' ? 'gem' : 'corn'} label={info.name} size={64} /><div><strong>{info.name}</strong><span>{stackCount} 份</span></div></>;
   return onClick ? <button type="button" className="ws-item-card ws-item-card--button" onClick={onClick}>{content}</button> : <div className="ws-item-card">{content}</div>;
 }
 
 function Restaurant({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   const ingredientCount = meta.inventory.reduce((sum, item) => sum + item.count, 0);
   return <section className="ws-screen ws-screen--restaurant" data-testid="workshop-restaurant">
-    <div className="ws-topbar"><div className="ws-brand"><span className="ws-brand-mark">BV</span><span>BLADE <em>VERDICT</em></span></div><CoinPill coins={meta.coins} /></div>
-    <div className="ws-restaurant-hero"><div className="ws-hero-seal" aria-hidden="true"><span>BV</span><i /></div><p className="ws-eyebrow">深渊餐厅 · 今夜营业</p><h1>把战利品，<br /><em>做成传说。</em></h1><p>精准招架，收集食材，以一桌热气腾腾的料理换取下一场冒险。</p><ActionButton testId="explore" onClick={() => go('stages')}>前往探险 <Icon name="arrow" size={19} /></ActionButton></div>
+    <div className="ws-topbar"><img className="world-chef" src="/assets/ui-kit/hunt/chef-avatar.webp" alt="怪兽厨房" /><CoinPill coins={meta.coins} /></div>
+    <div className="ws-restaurant-hero"><p className="ws-eyebrow">— 今 日 营 业 —</p><h1>怪兽厨房</h1><img className="world-restaurant-art" src="/assets/ui-kit/hunt/chapter-island.webp" alt="今天的食材来自蔬菜园" /><p>出发收集食材，回来烹调美味。</p><ActionButton testId="explore" onClick={() => go('stages')}>前往探险</ActionButton></div>
     <div className="ws-quick-grid"><button className="ws-quick-card" type="button" onClick={() => go('kitchen')}><span className="ws-quick-index">01</span><span className="ws-quick-icon"><Icon name="pan" size={24} /></span><span><b>厨房</b><small>{ingredientCount ? `${ingredientCount} 份食材可用` : '等待新鲜食材'}</small></span><Icon name="arrow" size={17} /></button><button className="ws-quick-card" type="button" onClick={() => go('sales')}><span className="ws-quick-index">02</span><span className="ws-quick-icon ws-quick-icon--gold"><Icon name="shop" size={24} /></span><span><b>菜架</b><small>{meta.pendingDishes.length ? `${meta.pendingDishes.length} 道料理待售` : '还没有待售料理'}</small></span><Icon name="arrow" size={17} /></button></div>
     <div className="ws-restaurant-footer"><span><Icon name="spark" size={15} /> 今日营业</span><span>第 1 章 · 荒芜农场</span></div><WorkshopNav active="restaurant" />
   </section>;
 }
 
-function ingredientQualityChoices(meta: MetaState, ingredientId: IngredientId): Quality[] {
-  return meta.inventory.filter(stack => stack.ingredientId === ingredientId && stack.count > 0).map(stack => stack.quality).sort((a, b) => qualityRank(a) - qualityRank(b));
-}
-
-interface CookingPresentation {
-  items: IngredientSelection[];
-  dishId: string;
-  name: string;
-  quality: Quality;
-  price: number;
-}
-
-function CookingPresentationModal({ presentation, onClose }: { presentation: CookingPresentation; onClose: () => void }) {
-  const ingredientSummary = presentation.items.map(item => `${INGREDIENTS.find(entry => entry.id === item.ingredientId)?.name ?? item.ingredientId} ×${item.count}`).join('  ·  ');
-  const ingredientParticles = presentation.items.flatMap(item => Array.from({ length: item.count }, () => item));
-  return <div className="ws-cooking-modal" role="presentation">
-    <div className="ws-cooking-modal__backdrop" onClick={onClose} />
-    <section className="ws-cooking-modal__dialog" role="dialog" aria-modal="true" aria-live="polite" aria-label={`${presentation.name} 制作反馈`} data-testid="cooking-presentation" onClick={event => event.stopPropagation()}>
-      <header className="ws-cooking-modal__header">
-        <div><span className="ws-panel-kicker">CRAFTING MOMENT</span><strong>料理制作完成</strong></div>
-        <button type="button" className="ws-cooking-modal__close" onClick={onClose} aria-label="关闭料理制作反馈">×</button>
-      </header>
-      <div className="ws-cooking-modal__stage">
-        <div className="ws-cooking-modal__orbit ws-cooking-modal__orbit--outer" aria-hidden="true" />
-        <div className="ws-cooking-modal__orbit ws-cooking-modal__orbit--inner" aria-hidden="true" />
-        <div className="ws-cooking-modal__ingredients" aria-hidden="true">
-          {ingredientParticles.map((item, index) => {
-            const angle=(index/Math.max(1,ingredientParticles.length))*Math.PI*2-.7;
-            const radius=84+(index%3)*22;
-            const style={ '--cook-index': index, '--cook-count': ingredientParticles.length, '--cook-start-x': `${Math.cos(angle)*radius}px`, '--cook-start-y': `${Math.sin(angle)*radius*.62}px`, '--cook-delay': `${index*72}ms` } as React.CSSProperties;
-            return <span key={`${item.ingredientId}-${index}`} style={style}><Sprite name={iconForIngredient(item.ingredientId)} /></span>;
-          })}
-        </div>
-        <div className="ws-cooking-modal__pot" aria-hidden="true"><i /><Icon name="pan" size={76} /><b>入锅</b></div>
-        <div className="ws-cooking-modal__steam" aria-hidden="true"><i /><i /><i /></div>
-        <div className="ws-cooking-modal__result">
-          <span className="ws-cooking-modal__result-glow" aria-hidden="true" />
-          <Sprite name={DISH_INFO[presentation.dishId]?.icon ?? 'locked'} label={presentation.name} />
-          <span className="ws-panel-kicker">READY TO SERVE</span>
-          <strong>{presentation.name}</strong>
-          <div>{qualityBadge(presentation.quality)} <span className="ws-cooking-modal__price">{formatPrice(presentation.price)} ◈</span></div>
-        </div>
-      </div>
-      <div className="ws-cooking-modal__copy">
-        <span className="ws-cooking-modal__phase ws-cooking-modal__phase--input">食材投入锅中 · 火候稳定</span>
-        <span className="ws-cooking-modal__phase ws-cooking-modal__phase--done">料理已做好 · 已放入待售菜架</span>
-        <small>{ingredientSummary}</small>
-      </div>
-      <button type="button" className="ws-button ws-button--quiet ws-cooking-modal__confirm" onClick={onClose}>继续</button>
-    </section>
-  </div>;
-}
-
-function Kitchen({ meta, go, cook }: { meta: MetaState; go: (screen: WorkshopScreen) => void; cook: (selected: IngredientSelection[]) => Promise<boolean> | boolean }) {
-  const [recipeId, setRecipeId] = useState(RECIPES[0].id);
-  const [qualities, setQualities] = useState<Record<IngredientId, Quality | undefined>>({ ing_corn: undefined, ing_jelly: undefined });
-  const [cooking, setCooking] = useState(false);
-  const [presentation,setPresentation]=useState<CookingPresentation|null>(null);
-  const cookingLock=useRef(false),alive=useRef(true);
-  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
-  useEffect(()=>{
-    if(!presentation)return;
-    const timer=window.setTimeout(()=>setPresentation(null),3600);
-    return()=>window.clearTimeout(timer);
-  },[presentation]);
-  const recipe = RECIPES.find(item => item.id === recipeId) ?? RECIPES[0];
-  const requirements = Object.entries(recipe.requirements) as [IngredientId, number][];
-  const canCook = requirements.every(([ingredientId, count]) => {
-    const quality = qualities[ingredientId];
-    return Boolean(quality && availableCount(meta, ingredientId, quality) >= count);
-  });
-  const selected = requirements.reduce<IngredientSelection[]>((entries, [ingredientId, count]) => {
-    const quality = qualities[ingredientId];
-    if (quality && availableCount(meta, ingredientId, quality) >= count) entries.push({ ingredientId, quality, count });
-    return entries;
-  }, []);
-  const price = selected.length === requirements.length ? dishPrice(selected, recipe) : null;
-  const hasIngredients = requirements.every(([id, count]) => availableCount(meta, id) >= count);
-  const runCook = () => {
-    const state = getWorkshopState();
-    if (!canCook || state.saving || state.saveIssue || cookingLock.current) return;
-    cookingLock.current=true;
-    const snapshot:CookingPresentation={items:selected.map(item=>({...item})),dishId:recipe.outputDishId,name:recipe.name,quality:dishQuality(selected),price:dishPrice(selected,recipe)};
-    setCooking(true);
-    void Promise.resolve().then(()=>cook(snapshot.items)).then(success=>{
-      if(success&&alive.current)setPresentation(snapshot);
-    }).catch(()=>undefined).finally(()=>{
-      cookingLock.current=false;if(alive.current)setCooking(false);
-    });
-  };
-  return <section className="ws-screen ws-screen--kitchen" data-testid="workshop-kitchen"><div className="ws-content">
-    <PageHeading eyebrow="THE KITCHEN" title="厨房" subtitle="选择食材品质，烹调一份值得端上桌的料理。" back onBack={() => go('restaurant')} />
-    <div className="ws-recipe-layout"><div className="ws-panel ws-recipes-panel"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">RECIPE BOOK</span><h2>选择食谱</h2></div><span className="ws-count">{RECIPES.length} 道基础配方</span></div><div className="ws-recipe-list">{RECIPES.map(item => { const dish = DISH_INFO[item.outputDishId]; const unlocked = meta.unlockedRecipeIds.includes(item.id); return <button type="button" key={item.id} className={`ws-recipe-card ${recipe.id === item.id ? 'is-selected' : ''}`} onClick={() => { setRecipeId(item.id); setQualities({ ing_corn: undefined, ing_jelly: undefined }); }}><Sprite name={dish?.icon ?? 'locked'} /><span><b>{item.name}</b><small>{unlocked ? '已掌握 · ' : '待解锁 · '}{Object.keys(item.requirements).length} 种食材</small></span><Icon name="arrow" size={17} /></button>; })}</div></div>
-      <div className={`ws-panel ws-cook-panel ${cooking ? 'is-cooking' : ''}`}><div className="ws-panel-heading"><div><span className="ws-panel-kicker">PREPARE</span><h2>{recipe.name}</h2></div><span className="ws-recipe-price">{price === null ? '—' : `预估售价 ${formatPrice(price)}`} <span>◈</span></span></div><div className="ws-recipe-requirements">{requirements.map(([ingredientId, count]) => { const choices = ingredientQualityChoices(meta, ingredientId); const selectedQuality = qualities[ingredientId]; const name = INGREDIENTS.find(item => item.id === ingredientId)?.name ?? ingredientId; return <div className="ws-requirement" key={ingredientId}><div className="ws-requirement-title"><Sprite name={INGREDIENT_ICON[ingredientId]} /><span><b>{name}</b><small>需要 ×{count}</small></span></div><div className="ws-quality-options">{choices.length ? choices.map(quality => <button type="button" key={quality} aria-label={`${name} ${QUALITY_LABEL[quality]}，库存 ${availableCount(meta, ingredientId, quality)} 份`} aria-pressed={selectedQuality === quality} className={`ws-quality-option ${selectedQuality === quality ? 'is-selected' : ''}`} onClick={() => setQualities(current => ({ ...current, [ingredientId]: quality }))}>{qualityBadge(quality, true)}<small>{availableCount(meta, ingredientId, quality)}份</small></button>) : <span className="ws-empty-inline">缺少食材</span>}</div></div>; })}</div><div className="ws-cook-summary"><div><span>成品品质</span><strong>{selected.length === requirements.length ? qualityBadge(dishQuality(selected)) : '待选择'}</strong></div><div><span>消耗食材</span><strong>{selected.length}/{requirements.length} 项</strong></div><ActionButton mutates testId="cook-submit" onClick={runCook} disabled={!canCook || cooking}><Icon name="pan" size={17} /> {cooking ? '入锅中…' : '开始烹调'}</ActionButton></div></div></div>
-    <div className="ws-kitchen-next">{!hasIngredients && <div><span>缺少配方所需食材，下一场探险会有新收获。</span><ActionButton variant="quiet" testId="kitchen-explore" onClick={() => go('stages')}>去探险 <Icon name="arrow" size={16} /></ActionButton></div>}{meta.pendingDishes.length > 0 && <div><span>{meta.pendingDishes.length} 道料理已经做好，出售后可获得金币。</span><ActionButton testId="kitchen-sales" onClick={() => go('sales')}>查看菜架 <Icon name="arrow" size={16} /></ActionButton></div>}</div>
-    <p className="ws-help"><span>TIP</span> 探险带回的食材按品质分组保存；料理品质取决于最低品质的那份食材。</p>
-  </div>{presentation && <CookingPresentationModal presentation={presentation} onClose={() => setPresentation(null)} />}<WorkshopNav active="kitchen" /></section>;
-}
 
 function Inventory({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   const [tab, setTab] = useState<'ingredients' | 'equipment'>('ingredients');
@@ -248,16 +143,26 @@ function Inventory({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen)
 
 function EquipmentPanel({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   const owned = SHOP_ITEMS.filter(item => meta.purchasedShopItemIds.includes(item.id));
-  return <div className="ws-equipment-layout"><div className="ws-equipped-card"><span className="ws-panel-kicker">CURRENT LOADOUT</span><h2>当前装备</h2><div className="ws-loadout-item"><span className="ws-loadout-icon"><Icon name="sword" size={27} /></span><div><b>{meta.equippedWeaponId ? (SHOP_ITEMS.find(item => item.id === meta.equippedWeaponId)?.name ?? '未知装备') : '基础厨刀'}</b><small>{meta.equippedWeaponId ? '裁决伤害加成已生效' : '没有额外加成'}</small></div></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => { void Promise.resolve(getWorkshopState().equipItem(null)).catch(() => undefined); }}>卸下装备</ActionButton></div><div className="ws-owned-card"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">OWNED ITEMS</span><h2>已拥有</h2></div><ActionButton variant="quiet" onClick={() => go('shop')}>前往商店 <Icon name="arrow" size={16} /></ActionButton></div>{owned.length ? owned.map(item => <div className="ws-owned-row" key={item.id}><Icon name={item.category === 'weapon' ? 'sword' : 'spark'} size={20} /><span><b>{item.name}</b><small>{item.description}</small></span><span className="ws-owned-tag">已拥有</span></div>) : <EmptyState title="还没有装备" text="在商店购买第一把专属武器。" action="查看商店" onAction={() => go('shop')} />}</div></div>;
+  return <div className="ws-equipment-layout"><GamePanel material="wood" className="ws-equipped-card"><span className="ws-panel-kicker">CURRENT LOADOUT</span><h2>当前装备</h2><div className="ws-loadout-item"><span className="ws-loadout-icon"><Icon name="sword" size={27} /></span><div><b>{meta.equippedWeaponId ? (SHOP_ITEMS.find(item => item.id === meta.equippedWeaponId)?.name ?? '未知装备') : '基础厨刀'}</b><small>{meta.equippedWeaponId ? '裁决伤害加成已生效' : '没有额外加成'}</small></div></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => { void Promise.resolve(getWorkshopState().equipItem(null)).catch(() => undefined); }}>卸下装备</ActionButton></GamePanel><GamePanel material="wood" className="ws-owned-card"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">OWNED ITEMS</span><h2>已拥有</h2></div><ActionButton variant="quiet" onClick={() => go('shop')}>前往商店 <Icon name="arrow" size={16} /></ActionButton></div>{owned.length ? owned.map(item => <div className="ws-owned-row" key={item.id}><Icon name={item.category === 'weapon' ? 'sword' : 'spark'} size={20} /><span><b>{item.name}</b><small>{item.description}</small></span><span className="ws-owned-tag">已拥有</span></div>) : <EmptyState title="还没有装备" text="在商店购买第一把专属武器。" action="查看商店" onAction={() => go('shop')} />}</GamePanel></div>;
 }
 
 function Cookbook({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
-  return <section className="ws-screen ws-screen--cookbook" data-testid="workshop-cookbook"><div className="ws-content"><PageHeading eyebrow="THE ARCHIVE" title="料理图鉴" subtitle="每一道料理，都记录着你走过的战斗。" back onBack={() => go('restaurant')} /><div className="ws-cookbook-grid">{RECIPES.map(recipe => { const dish = DISH_INFO[recipe.outputDishId]; const unlocked = meta.unlockedRecipeIds.includes(recipe.id); const record = meta.dishRecords.find(item => item.dishId === recipe.outputDishId); return <article className={`ws-dish-card ${unlocked ? 'is-unlocked' : 'is-locked'}`} key={recipe.id}><div className="ws-dish-art"><Sprite name={unlocked ? (dish?.icon ?? 'toast') : 'locked'} />{!unlocked && <span className="ws-lock-label">未解锁</span>}</div><div className="ws-dish-info"><div><span className="ws-panel-kicker">{unlocked ? 'DISCOVERED' : 'UNKNOWN RECIPE'}</span><h2>{unlocked ? recipe.name : '???'}</h2></div>{unlocked ? <><p>{Object.entries(recipe.requirements).map(([id, count]) => `${INGREDIENTS.find(item => item.id === id)?.name ?? id} ×${count}`).join(' · ')}</p><div className="ws-dish-stats"><span>最佳 {record ? qualityBadge(record.bestQuality) : '—'}</span><span>制作 {record?.cookCount ?? 0} 次</span></div></> : <p className="ws-muted">制作一次后解锁详细记录</p>}</div></article>; })}</div><div className="ws-collection-note"><Icon name="book" size={19} /><span>已掌握 <b>{meta.unlockedRecipeIds.length}</b> / {RECIPES.length} 道配方</span><ActionButton variant="quiet" onClick={() => go('kitchen')}>去厨房制作 <Icon name="arrow" size={16} /></ActionButton></div></div><WorkshopNav active="cookbook" /></section>;
+  return <section className="ws-screen ws-screen--cookbook" data-testid="workshop-cookbook"><div className="ws-content"><PageHeading eyebrow="THE ARCHIVE" title="料理图鉴" subtitle="每一道料理，都记录着你走过的战斗。" back onBack={() => go('restaurant')} /><div className="ui-card-grid">{RECIPES.map(recipe => <CatalogDishCard key={recipe.id} recipe={recipe} unlocked={meta.unlockedRecipeIds.includes(recipe.id)} record={meta.dishRecords.find(item => item.dishId === recipe.outputDishId)} />)}</div><div className="ws-collection-note"><Icon name="book" size={19} /><span>已掌握 <b>{meta.unlockedRecipeIds.length}</b> / {RECIPES.length} 道配方</span><ActionButton variant="quiet" onClick={() => go('kitchen')}>去厨房制作 <Icon name="arrow" size={16} /></ActionButton></div></div><WorkshopNav active="cookbook" /></section>;
+}
+
+function CatalogDishCard({ recipe, unlocked, record }: { recipe: typeof RECIPES[number]; unlocked: boolean; record?: MetaState['dishRecords'][number] }) {
+  const dish = DISH_INFO[recipe.outputDishId];
+  return <GamePanel material="wood" className={`ui-dish-card ${unlocked ? '' : 'is-locked'}`}><div className="ui-dish-card__art"><Sprite name={unlocked ? (dish?.icon ?? 'toast') : 'locked'} label={unlocked ? recipe.name : '未解锁'} /></div><div className="ui-dish-card__body"><span className="ws-panel-kicker">{unlocked ? 'DISCOVERED' : 'UNKNOWN RECIPE'}</span><h2>{unlocked ? recipe.name : '???'}</h2>{unlocked ? <><p>{Object.entries(recipe.requirements).map(([id, count]) => `${INGREDIENTS.find(item => item.id === id)?.name ?? id} ×${count}`).join(' · ')}</p><div className="ui-dish-card__meta">{qualityBadge(record?.bestQuality ?? 'Normal')}<span>制作 {record?.cookCount ?? 0} 次</span></div></> : <p>制作一次后解锁详细记录</p>}</div></GamePanel>;
 }
 
 function Sales({ meta, go, sellDish, sellAllDishes }: { meta: MetaState; go: (screen: WorkshopScreen) => void; sellDish: (id: string) => Promise<boolean> | boolean; sellAllDishes: () => Promise<boolean> | boolean }) {
   const runSellAll = () => { void Promise.resolve(sellAllDishes()).catch(() => undefined); };
-  return <section className="ws-screen ws-screen--sales" data-testid="workshop-sales"><div className="ws-content"><PageHeading eyebrow="THE COUNTER" title="菜架" subtitle="料理完成了。现在，把它们交给愿意付出金币的客人。" back onBack={() => go('restaurant')} />{meta.pendingDishes.length ? <><div className="ws-sales-toolbar"><div><span className="ws-panel-kicker">READY TO SERVE</span><strong>{meta.pendingDishes.length} 道料理</strong></div><ActionButton mutates variant="primary" testId="sell-all" onClick={runSellAll}><Icon name="coin" size={17} /> 全部出售 · {formatPrice(meta.pendingDishes.reduce((sum, dish) => sum + dish.sellPrice, 0))}</ActionButton></div><div className="ws-sales-grid">{meta.pendingDishes.map(dish => { const info = DISH_INFO[dish.dishId]; return <article className="ws-sale-card" key={dish.instanceId}><div className="ws-sale-art"><Sprite name={info?.icon ?? 'toast'} /></div><div className="ws-sale-copy"><span className="ws-panel-kicker">FRESHLY COOKED</span><h2>{info?.name ?? dish.dishId}</h2><div>{qualityBadge(dish.quality)} <span className="ws-price">{formatPrice(dish.sellPrice)} ◈</span></div></div><ActionButton mutates variant="quiet" testId={`sell-${dish.instanceId}`} onClick={() => { void Promise.resolve(sellDish(dish.instanceId)).catch(() => undefined); }}>出售</ActionButton></article>; })}</div></> : <EmptyState icon="shop" title="菜架还空着" text="用探险带回的食材烹调料理，完成后会在这里等待出售。" action="去厨房" onAction={() => go('kitchen')} />}</div><WorkshopNav active="sales" /></section>;
+  return <section className="ws-screen ws-screen--sales" data-testid="workshop-sales"><div className="ws-content"><PageHeading eyebrow="THE COUNTER" title="菜架" subtitle="料理完成了。现在，把它们交给愿意付出金币的客人。" back onBack={() => go('restaurant')} />{meta.pendingDishes.length ? <><div className="ui-toolbar"><div><span className="ws-panel-kicker">READY TO SERVE</span><strong>{meta.pendingDishes.length} 道料理</strong></div><ActionButton mutates variant="primary" testId="sell-all" onClick={runSellAll}><Icon name="coin" size={17} /> 全部出售 · {formatPrice(meta.pendingDishes.reduce((sum, dish) => sum + dish.sellPrice, 0))}</ActionButton></div><div className="ui-card-grid">{meta.pendingDishes.map(dish => <SaleDishCard key={dish.instanceId} dish={dish} onSell={() => { void Promise.resolve(sellDish(dish.instanceId)).catch(() => undefined); }} />)}</div></> : <EmptyState icon="shop" title="菜架还空着" text="用探险带回的食材烹调料理，完成后会在这里等待出售。" action="去厨房" onAction={() => go('kitchen')} />}</div><WorkshopNav active="sales" /></section>;
+}
+
+function SaleDishCard({ dish, onSell }: { dish: MetaState['pendingDishes'][number]; onSell: () => void }) {
+  const info = DISH_INFO[dish.dishId];
+  return <GamePanel material="wood" className="ui-sale-card"><Sprite name={info?.icon ?? 'toast'} label={info?.name ?? dish.dishId} /><div><span className="ws-panel-kicker">FRESHLY COOKED</span><h2>{info?.name ?? dish.dishId}</h2><div>{qualityBadge(dish.quality)} <span className="ws-price">{formatPrice(dish.sellPrice)} ◈</span></div></div><ActionButton mutates variant="quiet" testId={`sell-${dish.instanceId}`} onClick={onSell}>出售</ActionButton></GamePanel>;
 }
 
 function Shop({ meta, go, buyItem, equipItem }: { meta: MetaState; go: (screen: WorkshopScreen) => void; buyItem: (id: string) => Promise<boolean> | boolean; equipItem: (id: string | null) => Promise<boolean> | boolean }) {
@@ -277,7 +182,7 @@ function Shop({ meta, go, buyItem, equipItem }: { meta: MetaState; go: (screen: 
 
 function ShopCard({ item, owned, equipped, disabled, onAction, actionLabel, featured = false, coins }: { item: ShopItemDefinition; owned: boolean; equipped: boolean; disabled?: boolean; onAction: () => void; actionLabel: string; featured?: boolean; coins: number }) {
   const shortfall = Math.max(0, item.cost - coins);
-  return <article className={`ws-shop-card ${item.implemented ? '' : 'is-preview'} ${equipped ? 'is-equipped' : ''} ${featured ? 'is-featured' : ''}`}><div className={`ws-shop-art ws-shop-art--${item.category}`}><Icon name={item.category === 'weapon' ? 'sword' : item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} />{!item.implemented && <span>PREVIEW</span>}</div><div className="ws-shop-copy"><span className="ws-panel-kicker">{item.category === 'weapon' ? 'WEAPON' : item.category === 'skin' ? 'OUTFIT' : 'SUPPLY'}</span><h2>{item.name}</h2><p>{item.description}</p>{item.verdictDamageBonus > 0 && <strong className="ws-bonus">+{item.verdictDamageBonus} 裁决伤害</strong>}{item.implemented && !owned && shortfall > 0 && <small className="ws-affordability">还差 {formatPrice(shortfall)} 金币</small>}{item.implemented && owned && <small className="ws-affordability ws-affordability--ready">已解锁 · 可随时切换</small>}</div><div className="ws-shop-action"><strong className="ws-shop-price">{item.cost ? `${formatPrice(item.cost)} ◈` : '免费'}</strong><ActionButton mutates variant={item.implemented ? 'primary' : 'quiet'} disabled={disabled || equipped} onClick={onAction}>{equipped ? <><span className="ws-check">✓</span> 已装备</> : owned ? '装备' : actionLabel}</ActionButton></div></article>;
+  return <GamePanel material="wood" className={`ui-shop-card ${item.implemented ? '' : 'is-preview'} ${equipped ? 'is-equipped' : ''} ${featured ? 'is-featured' : ''}`}><div className="ui-shop-card__art"><Icon name={item.category === 'weapon' ? 'sword' : item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} /></div><div className="ui-shop-card__copy"><span className="ws-panel-kicker">{item.category === 'weapon' ? 'WEAPON' : item.category === 'skin' ? 'OUTFIT' : 'SUPPLY'}</span><h2>{item.name}</h2><p>{item.description}</p>{item.verdictDamageBonus > 0 && <strong className="ws-bonus">+{item.verdictDamageBonus} 裁决伤害</strong>}{item.implemented && !owned && shortfall > 0 && <small>还差 {formatPrice(shortfall)} 金币</small>}{item.implemented && owned && <small>已解锁 · 可随时切换</small>}</div><div className="ui-shop-card__action"><strong className="ws-shop-price">{item.cost ? `${formatPrice(item.cost)} ◈` : '免费'}</strong><ActionButton mutates variant={item.implemented ? 'primary' : 'quiet'} disabled={disabled || equipped} onClick={onAction}>{equipped ? <><span className="ws-check">✓</span> 已装备</> : owned ? '装备' : actionLabel}</ActionButton></div></GamePanel>;
 }
 
 function EmptyState({ icon, title, text, action, onAction }: { icon?: 'bag' | 'shop' | 'book'; title: string; text: string; action?: string; onAction?: () => void }) {
@@ -299,7 +204,7 @@ export function Workshop() {
   const clearNotice = useWorkshopStore(state => state.clearNotice);
   const content = useMemo(() => {
     switch (screen) {
-      case 'kitchen': return <Kitchen meta={meta} go={go} cook={cook} />;
+      case 'kitchen': return <KitchenWorkbench meta={meta} go={go} cook={cook} saving={saving} saveIssue={saveIssue} />;
       case 'inventory': return <Inventory meta={meta} go={go} />;
       case 'cookbook': return <Cookbook meta={meta} go={go} />;
       case 'sales': return <Sales meta={meta} go={go} sellDish={sellDish} sellAllDishes={sellAllDishes} />;
@@ -307,6 +212,6 @@ export function Workshop() {
       case 'restaurant':
       default: return <Restaurant meta={meta} go={go} />;
     }
-  }, [screen, meta, go, cook, sellDish, sellAllDishes, buyItem, equipItem]);
+  }, [screen, meta, go, cook, sellDish, sellAllDishes, buyItem, equipItem, saving, saveIssue]);
   return <div className="ws-root"><Notice notice={notice} clearNotice={clearNotice} saving={saving} saveIssue={saveIssue} />{content}</div>;
 }

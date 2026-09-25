@@ -21,6 +21,16 @@ it('exposes articulated corn limbs and three-segment jelly tentacles',()=>{
   const corn=new CornGuardian(),jelly=new JellyGuardian();
   expect(corn.root.getObjectByName('corn-upper-arm')).toBeTruthy();
   expect(corn.root.getObjectByName('corn-thigh')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-cob-undercoat')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-top-cut')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-wooden-spatula')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-round-shield')).toBeTruthy();
+  expect(corn.root.getObjectByName('corn-husk-cloak')).toBeTruthy();
+  expect(corn.getAnchor('leftHand')?.parent?.name).toBe('corn-left-hand');
+  expect(corn.getAnchor('rightHand')?.parent?.name).toBe('corn-right-hand');
+  const spatula = corn.root.getObjectByName('corn-wooden-spatula');
+  expect(spatula?.parent?.name).toBe('corn-left-hand');
+  expect(spatula?.position.z).toBeGreaterThan(.3);
   expect(jelly.root.getObjectByName('jelly-fin-left-segment-0')).toBeTruthy();
   expect(jelly.root.getObjectByName('jelly-fin-right-segment-2')).toBeTruthy();
 });

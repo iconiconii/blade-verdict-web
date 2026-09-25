@@ -34,16 +34,16 @@ export class BattleScene {
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
     this.hitArea=new MonsterHitArea(this.guardian.root);
-    this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure=1.1;
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;
-    this.renderer.autoClear=false;this.renderer.setClearColor(0x101e23);
+    this.renderer.autoClear=false;this.renderer.setClearColor(0x101e23,0);
     this.renderer.domElement.dataset.scene='true-3d';
     this.host.appendChild(this.renderer.domElement);
     this.renderer.domElement.addEventListener('webglcontextlost',this.contextLost);
-    this.world.fog=new THREE.FogExp2(0x101e23,.055);
+    // Transparent renderer composites live geometry over the reference garden art.
     this.world.add(this.guardian.root);this.setupArena();
     this.overlayCamera.position.z=100;
     this.sliceEffects=new SliceEffects(this.overlay,bossKind);
@@ -73,25 +73,14 @@ export class BattleScene {
       try{this.jellyEnvironment=pmrem.fromScene(room,.06,.1,100,{size:128});this.world.environment=this.jellyEnvironment.texture;this.world.environmentIntensity=.55}
       finally{room.dispose();pmrem.dispose()}
     }
-    const hemi=new THREE.HemisphereLight(jelly?0xb799d9:0x9accc9,jelly?0x241d3b:0x40341d,1.8);this.world.add(hemi);
-    const key=new THREE.DirectionalLight(jelly?0xe1c7ff:0xffe4aa,3.3);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
+    const hemi=new THREE.HemisphereLight(jelly?0xb799d9:0xd1e1ff,jelly?0x241d3b:0x987350,jelly?1.8:1.3);this.world.add(hemi);
+    const key=new THREE.DirectionalLight(jelly?0xe1c7ff:0xffe4aa,jelly?3.3:2.4);key.position.set(-3,6,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-3,right:3,top:4,bottom:-2,near:.5,far:14});key.shadow.normalBias=.025;key.shadow.bias=-.0001;this.world.add(key);
     const rim=new THREE.DirectionalLight(jelly?0x9f80ff:0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
-    const floorMat=new THREE.MeshStandardMaterial({color:jelly?0x2d2948:0x324238,roughness:.94});
-    const floor=new THREE.Mesh(new THREE.CircleGeometry(24,64),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
-    const plinth=new THREE.Mesh(new THREE.CylinderGeometry(1.67,1.76,.17,48),new THREE.MeshStandardMaterial({color:jelly?0x49416b:0x4e5740,roughness:.9}));plinth.position.y=-.085;plinth.receiveShadow=true;this.world.add(plinth);
-    const rimRing=new THREE.Mesh(new THREE.TorusGeometry(1.6,.024,6,64),new THREE.MeshStandardMaterial({color:jelly?0xb697ed:0xb89550,metalness:.3,roughness:.65}));rimRing.rotation.x=-Math.PI/2;rimRing.position.y=.015;this.world.add(rimRing);
-    this.arenaPulse=new THREE.Mesh(new THREE.RingGeometry(1.16,1.51,72),basic(jelly?0xa88cff:0xffca70,.12));
-    this.arenaPulse.name='battle-arena-pulse';this.arenaPulse.rotation.x=-Math.PI/2;this.arenaPulse.position.y=.026;this.arenaPulse.renderOrder=3;this.arenaPulse.frustumCulled=false;this.world.add(this.arenaPulse);
-    const stalkGeometry=new THREE.CylinderGeometry(.025,.04,1.25,5),stalkMat=new THREE.MeshStandardMaterial({color:jelly?0x463d62:0x315440,roughness:1});
-    const earGeo=new THREE.CapsuleGeometry(.075,.19,2,6),earMat=new THREE.MeshStandardMaterial({color:0xa68b3d,roughness:.9});
-    for(let i=0;i<26;i++){
-      const side=i%2?1:-1,x=side*(2.3+(i%5)*.48),z=-.5-Math.floor(i/5)*.85;
-      const stalk=new THREE.Mesh(stalkGeometry,stalkMat);stalk.position.set(x,.45,z);stalk.rotation.z=side*.15;this.world.add(stalk);
-      const ear=new THREE.Mesh(earGeo,jelly?new THREE.MeshStandardMaterial({color:0x665591,roughness:.8}):earMat);ear.position.set(x-side*.07,.94,z);ear.rotation.z=side*.15;this.world.add(ear);
-    }
-    // Low-poly stones at the arena perimeter establish depth and scale.
-    const stoneGeo=new THREE.DodecahedronGeometry(.16,0),stoneMat=new THREE.MeshStandardMaterial({color:jelly?0x3c3452:0x384944,roughness:1});
-    for(let i=0;i<16;i++){const a=i/16*Math.PI*2;const stone=new THREE.Mesh(stoneGeo,stoneMat);stone.position.set(Math.cos(a)*2.02,-.09,Math.sin(a)*2.02);stone.scale.set(1.1,.6,.8);stone.rotation.y=i;this.world.add(stone)}
+    // Invisible shadow catcher grounds the 3D actor in the painted arena.
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.ShadowMaterial({opacity:.23}));
+    floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
+    this.arenaPulse=new THREE.Mesh(new THREE.RingGeometry(1.16,1.51,72),basic(jelly?0xa88cff:0xffca70,.06));
+    this.arenaPulse.name='battle-arena-pulse';this.arenaPulse.rotation.x=-Math.PI/2;this.arenaPulse.position.y=-.12;this.arenaPulse.renderOrder=3;this.world.add(this.arenaPulse);
   }
   private contextLost=(event:Event)=>{event.preventDefault();this.onFailure()};
   resize(){
@@ -135,10 +124,16 @@ export class BattleScene {
       this.targetLayouts[i]={round:state.round,...center,diameter:Math.max(44,radius*2),visible:show};
       if(!show)continue;
       group.position.set(center.x,-center.y,24);group.scale.setScalar(radius);
-      const color=target.phase==='perfect'?0x7fffe0:0xffd277;
+      const color=target.phase==='perfect'
+        ?0x6dffe0
+        :target.phase==='nice'
+          ?0xffd76a
+          :target.phase==='late'
+            ?0xff8f52
+            :0xffb84d;
       group.children.forEach(child=>(child as EffectMesh).material.color.setHex(color));
       const halo=group.children[1] as EffectMesh;
-      halo.material.opacity=target.phase==='perfect'?.36:.16;
+      halo.material.opacity=target.phase==='perfect'?.42:target.phase==='nice'?.22:.17;
     }
     this.sliceEffects.update(state,reducedMotion,event=>event.anchorId
       ?projectBodyAnchor(this.guardian.getAnchor(event.anchorId),this.camera,w,h)

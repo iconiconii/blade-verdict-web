@@ -1,0 +1,55 @@
+/* Measured against the supplied 1080×1920 kitchen. All controls share the
+   artwork's coordinate system; dynamic UI isn't baked into the backplate. */
+.kitchen-workbench { position: relative; width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; background: #572b10; color: #fff0bf; }
+.kitchen-scene { container-type: inline-size; position: relative; width: 100%; height: 100%; min-height: 568px; isolation: isolate; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; font-weight: 900; }
+.kitchen-backplate { position: absolute; width: 100%; height: 100%; inset: 0; display: block; pointer-events: none; user-select: none; }
+.kitchen-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.kitchen-scene .kitchen-hotspot { position: absolute; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; min-width: 44px; min-height: 44px; touch-action: manipulation; cursor: pointer; }
+.kitchen-scene .kitchen-hotspot:focus-visible { outline: 3px solid #fff5b1; outline-offset: 2px; border-radius: 8px; }
+.kitchen-scene .kitchen-hotspot:disabled { cursor: default; opacity: 1; }
+.kitchen-source-art { display: block; width: 100%; height: 100%; background-image: url('/assets/ui-kit/kitchen/reference-ui.png'); background-repeat: no-repeat; pointer-events: none; }
+.kitchen-wallet { position: absolute; left: 13.2%; top: max(4.1%, env(safe-area-inset-top)); width: 19.5%; height: 3.5%; display: grid; place-items: center; }
+.kitchen-wallet strong { font-size: 4.35cqw; line-height: 1; color: #fff9e4; font-variant-numeric: tabular-nums; text-shadow: 0 2px 2px #210b00; }
+.kitchen-scene .kitchen-wallet-add { left: 32.8%; top: max(3.5%, env(safe-area-inset-top)); width: 7.5%; height: 4.3%; }
+.kitchen-scene .kitchen-settings { left: 83.8%; top: max(2.65%, env(safe-area-inset-top)); width: 12%; height: 6.3%; }
+.kitchen-time { position: absolute; left: 46.2%; top: 16.6%; width: 17%; height: 3.8%; display: grid; place-items: center; }
+.kitchen-time time { color: #321000; font-size: 5.55cqw; font-weight: 950; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.03em; }
+.kitchen-scene .kitchen-recipe-target { top: 31.7%; left: 79.7%; width: 17%; height: 7.7%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #542f0f; }
+.kitchen-recipe-target .kitchen-source-art { height: 76%; }
+.kitchen-recipe-target .ws-sprite { width: 10cqw; height: 10cqw; flex-shrink: 0; }
+.kitchen-recipe-target b { font-size: 2.7cqw; line-height: 1.1; }
+.kitchen-recipe-target small { font-size: 1.9cqw; color: #714417; line-height: 1.2; letter-spacing: 0; white-space: nowrap; }
+.kitchen-scene .kitchen-start { left: 34.2%; top: 42.65%; width: 31.8%; height: 5.3%; color: #fffceb; font-size: 4cqw; font-weight: 950; text-shadow: 0 2px #06517b, 1px 0 #06517b, -1px 0 #06517b; }
+.kitchen-scene .kitchen-start:active { transform: translateY(2px); }
+.kitchen-slots { position: absolute; left: 16.1%; top: 49.45%; width: 67.85%; height: 8.65%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10.5%; }
+.kitchen-scene .kitchen-slot { position: relative; min-width: 0; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.kitchen-slot.is-filled .gui-item-icon { width: 11.5cqw; height: 10.5cqw; }
+.kitchen-slot b { font-size: 2.7cqw; line-height: 1.1; color: #ffdf87; }
+.kitchen-slot small { font-size: 2.3cqw; line-height: 1.1; color: #ffe6ad; letter-spacing: 0; }
+.kitchen-pantry { position: absolute; inset: 65.05% 7.45% auto; height: 16.55%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); column-gap: 3%; row-gap: 5%; }
+.kitchen-scene .kitchen-pantry-item { position: relative; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+.kitchen-pantry-item .gui-item-icon { width: 100%; height: 100%; max-height: 13.5cqw; object-fit: contain; padding: 2%; }
+.kitchen-stock { position: absolute; bottom: 1%; right: 2%; min-width: 22%; padding: 0 4%; border-radius: 5px; background: #321500dd; color: #fff8de; font-size: 2.65cqw; line-height: 1.25; text-shadow: 0 1px #281000; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.kitchen-scene .kitchen-pantry-page { right: 5%; top: 60.7%; width: 22%; height: 3.8%; font-size: 2.75cqw; color: #ffdb8f; text-shadow: 0 1px #58240d; }
+.kitchen-scene .kitchen-sales-link { right: 5%; top: 82.6%; width: 29%; height: 3.8%; font-size: 2.8cqw; color: #ffe2a1; }
+.kitchen-hint { position: absolute; z-index: 6; top: 22%; left: 10%; width: 80%; background: #3b1b0deb; border: 1px solid #d99844; padding: 8px 10px; border-radius: 8px; color: #fff1bd; font-size: 12px; text-align: center; font-weight: 700; }
+.kitchen-navigation { position: absolute; left: 0; right: 0; top: 86.5%; bottom: 0; display: flex; padding-bottom: env(safe-area-inset-bottom); }
+.kitchen-scene .kitchen-navigation button { position: relative; flex: 1; height: 100%; }
+.kitchen-pot-animation { position: absolute; z-index: 3; left: 50%; top: 34%; pointer-events: none; }
+.kitchen-pot-animation > span { position: absolute; animation: kitchen-ingredient-flight 1.2s ease-in calc(var(--flight) * .18s) both; }
+.kitchen-pot-animation img { width: 14cqw; height: 14cqw; }
+.kitchen-ingredient-choices { margin: 14px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.kitchen-ingredient-choices > div { width: 100%; display: flex; gap: 10px; align-items: center; }
+.kitchen-ingredient-choices .gui-button { min-width: 0; font-size: 13px; }
+.kitchen-recipe-option { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
+.kitchen-recipe-option .ws-sprite { flex-shrink: 0; }
+.kitchen-recipe-option p { margin: 0; font-size: 12px; }
+.kitchen-dish-result { text-align: center; animation: kitchen-dish-pop .5s ease-out both; }
+.kitchen-dish-result .ws-sprite { width: 100px; height: 100px; }
+.kitchen-dish-result h2 { margin: 10px 0; }
+.kitchen-dish-result p { margin: 4px 0; }
+.kitchen-workbench .gui-dialog .gui-button { border: 10px solid transparent; border-image: var(--button-art) 40 fill / 10px / 0 stretch; background: transparent; color: #4b250e; min-height: 46px; padding: 0 5px 2px; }
+.kitchen-workbench .gui-dialog .gui-button--wood { color: #fff0c3; }
+@keyframes kitchen-ingredient-flight { from { opacity: 0; transform: translate(calc(-110px + var(--flight) * 70px), -80px) scale(.7); } 20% { opacity: 1; } to { opacity: 0; transform: translate(-25px, 20px) scale(.1) rotate(35deg); } }
+@keyframes kitchen-dish-pop { from { opacity: 0; transform: scale(.75) translateY(20px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .kitchen-pot-animation { display: none; } .kitchen-dish-result { animation: none; } }
