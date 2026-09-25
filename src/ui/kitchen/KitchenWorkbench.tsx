@@ -6,6 +6,7 @@ import { GameButton, GameDialog, ItemIcon, type ItemIconName } from '../index';
 import { worldNavigationItems } from '../WorldNavigation';
 import { cookingClock, cookingPresentationMs, emptyKitchenSlots, placeIngredient, remainingForSelection, selectedIngredients } from './selection';
 import './kitchen.css';
+import { assetUrl } from '../assets';
 
 const qualityNames: Record<Quality, string> = { Broken: '破损', Normal: '普通', High: '优质', Top: '极品' };
 const ingredientIcon = (id: string): ItemIconName => id === 'ing_corn' ? 'corn' : 'gem';
@@ -102,7 +103,7 @@ export function KitchenWorkbench({ meta, go, cook, saving = false, saveIssue }: 
 
   return <section className="kitchen-workbench" data-testid="workshop-kitchen" aria-label="厨房烹饪工作台">
     <div className={`kitchen-scene ${job?.phase === 'cooking' ? 'is-cooking' : ''}`}>
-      <img className="kitchen-backplate" src="/assets/ui-kit/kitchen/kitchen-backplate.png" alt="" draggable={false} />
+      <img className="kitchen-backplate" src={assetUrl('assets/ui-kit/kitchen/kitchen-backplate.png')} alt="" draggable={false} />
       <div className="kitchen-wallet" aria-label={`金币 ${meta.coins}`}><strong>{meta.coins.toLocaleString('zh-CN')}</strong></div>
       <button className="kitchen-wallet-add kitchen-hotspot" aria-label="前往菜架赚取金币" onClick={() => go('sales')} disabled={busy} />
       <button className="kitchen-settings kitchen-hotspot" aria-label="厨房设置" onClick={() => setSettings(true)} disabled={busy} />

@@ -4,8 +4,9 @@ import type { BossKind } from '../../domain/v2';
 import { GameButton, GameDialog } from '../index';
 import './hunt.css';
 import { WorldNavigation } from '../WorldNavigation';
+import { assetUrl } from '../assets';
 
-const asset = (name: string) => `/assets/ui-kit/hunt/${name}.webp`;
+const asset = (name: string) => assetUrl(`assets/ui-kit/hunt/${name}.webp`);
 const chapters = [
   { name: '蔬菜园', number: '第一章', boss: 'corn' as BossKind },
   { name: '果冻秘境', number: '第二章', boss: 'jelly' as BossKind },

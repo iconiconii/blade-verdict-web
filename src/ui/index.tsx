@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
 import './ui.css';
+import { assetUrl } from './assets';
 
 export type Material = 'parchment' | 'wood';
 export type ButtonVariant = 'gold' | 'blue' | 'green' | 'wood' | 'danger';
@@ -27,7 +28,7 @@ export function GameBanner({ title, children, tone = 'reward' }: { title: string
 }
 
 export function ItemIcon({ name, label, size = 64 }: { name: ItemIconName; label?: string; size?: number }) {
-  return <img className="gui-item-icon" src={`/assets/ui-kit/icons/${name}.png`} alt={label ?? ''} width={size} height={size} draggable={false} />;
+  return <img className="gui-item-icon" src={assetUrl(`assets/ui-kit/icons/${name}.png`)} alt={label ?? ''} width={size} height={size} draggable={false} />;
 }
 
 export function RarityBadge({ rarity }: { rarity: Rarity }) {

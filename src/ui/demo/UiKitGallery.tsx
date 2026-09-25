@@ -1,3 +1,4 @@
+import { assetUrl } from '../assets';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { GameTheme, GamePanel, GameButton, GameTitle, GameBanner, ItemIcon, ItemCard, RarityBadge, ResourceChip, GameProgress, GameNav, GameDialog, GameEmptyState, GameSwitch, GameSlider, GameSegmented, IngredientSlot, GameToast, GameDivider, StatTile, itemIconNames, type ItemIconName, type NavigationItem, type Rarity } from '../index';
 
@@ -70,7 +71,7 @@ export function UiKitGallery() {
 
         <Section id="items" number="04" title="道具与图标" description="16 枚透明 PNG，统一视觉尺寸。点选查看、搜索名称，下载后即可使用。">
           <div className="kit-search-row"><label>查找图标<input type="search" placeholder="玉米 / corn" value={filter} onChange={event => setFilter(event.target.value)} /></label><span>{filtered.length} / 16</span></div>
-          <div className="kit-item-library"><div className="kit-icon-grid">{filtered.map(name => <button key={name} type="button" aria-pressed={selected === name} onClick={() => setSelected(name)}><ItemIcon name={name} size={68} /><span>{names[name]}</span><code>{name}</code></button>)}{!filtered.length && <p>没有匹配的图标，请换个名称。</p>}</div><div className="kit-icon-inspector"><ItemIcon name={selected} label={names[selected]} size={144} /><strong>{names[selected]}</strong><code>{selected}.png</code><p>192 × 192 · 透明 PNG</p><a href={`/assets/ui-kit/icons/${selected}.png`} download>下载此图标</a><pre>{`<ItemIcon\n  name="${selected}"\n  size={64}\n  label="${names[selected]}"\n/>`}</pre></div></div>
+          <div className="kit-item-library"><div className="kit-icon-grid">{filtered.map(name => <button key={name} type="button" aria-pressed={selected === name} onClick={() => setSelected(name)}><ItemIcon name={name} size={68} /><span>{names[name]}</span><code>{name}</code></button>)}{!filtered.length && <p>没有匹配的图标，请换个名称。</p>}</div><div className="kit-icon-inspector"><ItemIcon name={selected} label={names[selected]} size={144} /><strong>{names[selected]}</strong><code>{selected}.png</code><p>192 × 192 · 透明 PNG</p><a href={assetUrl(`assets/ui-kit/icons/${selected}.png`)} download>下载此图标</a><pre>{`<ItemIcon\n  name="${selected}"\n  size={64}\n  label="${names[selected]}"\n/>`}</pre></div></div>
           <Example name="ItemCard · RarityBadge" code={'<ItemCard name="玉米" icon="corn" count={12}\n  rarity="fine" selected={selected}\n  onClick={onSelect} />'}><div className="kit-cards">{(['common', 'fine', 'rare', 'legendary'] as Rarity[]).map((rarity, index) => <ItemCard key={rarity} name={names[itemIconNames[index]]} icon={itemIconNames[index]} rarity={rarity} count={[12, 8, 10, 6][index]} selected={selected === itemIconNames[index]} onClick={() => setSelected(itemIconNames[index])} />)}</div><div className="kit-inline kit-rarity-row">{(['common', 'fine', 'rare', 'legendary'] as Rarity[]).map(rarity => <RarityBadge key={rarity} rarity={rarity} />)}</div></Example>
         </Section>
 
@@ -86,7 +87,7 @@ export function UiKitGallery() {
           <Example name="GameDialog · GameSlider · GameSwitch · GameSegmented" code={'<GameDialog open={open} onClose={() => setOpen(false)} title="设置">\n  <GameSlider label="音乐" value={music} onChange={setMusic} />\n  <GameSwitch label="震动" checked={enabled} onChange={setEnabled} />\n</GameDialog>'}><p className="kit-demo-note">弹窗支持 Escape 关闭、焦点锁定及关闭后焦点恢复。滑杆支持方向键，分段选择支持原生单选键盘操作。</p></Example>
         </Section>
 
-        <footer className="kit-footer"><strong>怪兽厨房 · UI 工坊</strong><p>素材与交互分层，组件与游戏规则解耦。</p><a href="/assets/ui-kit/items-atlas-packed.png" download>下载图标图集</a><a href="/assets/ui-kit/controls-atlas.png" download>下载控件底板</a><a href="#top">回到顶部</a></footer>
+        <footer className="kit-footer"><strong>怪兽厨房 · UI 工坊</strong><p>素材与交互分层，组件与游戏规则解耦。</p><a href={assetUrl('assets/ui-kit/items-atlas-packed.png')} download>下载图标图集</a><a href={assetUrl('assets/ui-kit/controls-atlas.png')} download>下载控件底板</a><a href="#top">回到顶部</a></footer>
       </main>
     </div>
     {toast && <div className="kit-live-toast"><GameToast>{toast}</GameToast></div>}

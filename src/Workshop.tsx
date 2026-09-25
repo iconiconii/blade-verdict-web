@@ -13,6 +13,7 @@ import './workshop.css';
 import { GameButton, GamePanel, GameTitle, ItemIcon, ResourceChip } from './ui';
 import { WorldNavigation } from './ui/WorldNavigation';
 import { KitchenWorkbench } from './ui/kitchen/KitchenWorkbench';
+import { assetUrl } from './ui/assets';
 import './ui/migration.css';
 
 export type WorkshopScreen = Screen;
@@ -109,7 +110,7 @@ function Notice({ notice, clearNotice, saving, saveIssue }: Pick<GameState, 'not
 
 function PageHeading({ eyebrow, title, subtitle, back, backLabel = '返回餐厅', onBack }: { eyebrow: string; title: string; subtitle?: string; back?: boolean; backLabel?: string; onBack?: () => void }) {
   return <header className="ws-heading">
-    {back && <button type="button" className="ws-back" onClick={onBack} aria-label={backLabel}><img src="/assets/ui-kit/hunt/back.webp" alt="" /></button>}
+    {back && <button type="button" className="ws-back" onClick={onBack} aria-label={backLabel}><img src={assetUrl('assets/ui-kit/hunt/back.webp')} alt="" /></button>}
     <div className="ws-heading-copy"><GameTitle eyebrow={eyebrow} subtitle={subtitle} level={1}>{title}</GameTitle></div><span className="ws-heading-mark" aria-hidden="true" />
   </header>;
 }
@@ -127,8 +128,8 @@ function IngredientCard({ ingredientId, stackCount, onClick }: { ingredientId: I
 function Restaurant({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   const ingredientCount = meta.inventory.reduce((sum, item) => sum + item.count, 0);
   return <section className="ws-screen ws-screen--restaurant" data-testid="workshop-restaurant">
-    <div className="ws-topbar"><img className="world-chef" src="/assets/ui-kit/hunt/chef-avatar.webp" alt="怪兽厨房" /><CoinPill coins={meta.coins} /></div>
-    <div className="ws-restaurant-hero"><p className="ws-eyebrow">— 今 日 营 业 —</p><h1>怪兽厨房</h1><img className="world-restaurant-art" src="/assets/ui-kit/hunt/chapter-island.webp" alt="今天的食材来自蔬菜园" /><p>出发收集食材，回来烹调美味。</p><ActionButton testId="explore" onClick={() => go('stages')}>前往探险</ActionButton></div>
+    <div className="ws-topbar"><img className="world-chef" src={assetUrl('assets/ui-kit/hunt/chef-avatar.webp')} alt="怪兽厨房" /><CoinPill coins={meta.coins} /></div>
+    <div className="ws-restaurant-hero"><p className="ws-eyebrow">— 今 日 营 业 —</p><h1>怪兽厨房</h1><img className="world-restaurant-art" src={assetUrl('assets/ui-kit/hunt/chapter-island.webp')} alt="今天的食材来自蔬菜园" /><p>出发收集食材，回来烹调美味。</p><ActionButton testId="explore" onClick={() => go('stages')}>前往探险</ActionButton></div>
     <div className="ws-quick-grid"><button className="ws-quick-card" type="button" onClick={() => go('kitchen')}><span className="ws-quick-index">01</span><span className="ws-quick-icon"><Icon name="pan" size={24} /></span><span><b>厨房</b><small>{ingredientCount ? `${ingredientCount} 份食材可用` : '等待新鲜食材'}</small></span><Icon name="arrow" size={17} /></button><button className="ws-quick-card" type="button" onClick={() => go('sales')}><span className="ws-quick-index">02</span><span className="ws-quick-icon ws-quick-icon--gold"><Icon name="shop" size={24} /></span><span><b>菜架</b><small>{meta.pendingDishes.length ? `${meta.pendingDishes.length} 道料理待售` : '还没有待售料理'}</small></span><Icon name="arrow" size={17} /></button></div>
     <div className="ws-restaurant-footer"><span><Icon name="spark" size={15} /> 今日营业</span><span>第 1 章 · 荒芜农场</span></div><WorkshopNav active="restaurant" />
   </section>;

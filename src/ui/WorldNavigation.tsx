@@ -1,4 +1,5 @@
 import { useGame, type Screen } from '../store';
+import { assetUrl } from './assets';
 
 export const worldNavigationItems = [
   { id: 'kitchen', label: '厨房' },
@@ -15,7 +16,7 @@ export function WorldNavigation({ active }: { active: Screen }) {
     {worldNavigationItems.map(item => <button type="button" key={item.id}
       aria-label={item.label} aria-current={selected === item.id ? 'page' : undefined}
       data-testid={`nav-${item.id}`} onClick={() => useGame.getState().go(item.id)}>
-      <img src={`/assets/ui-kit/hunt/nav-${item.id}.webp`} alt="" draggable={false} />
+      <img src={assetUrl(`assets/ui-kit/hunt/nav-${item.id}.webp`)} alt="" draggable={false} />
     </button>)}
   </nav>;
 }
