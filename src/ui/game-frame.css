@@ -55,6 +55,12 @@ main.game-stage { width: 100%; height: 100dvh; background: #301307; overflow: hi
 .game-frame .ws-shop-grid, .game-frame .ws-preview-shelf .ws-shop-grid,
 .game-frame .ui-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .game-frame :is(.ws-panel, .ws-inventory-group, .ws-equipped-card, .ws-owned-card, .gui-panel) { border-width: 12px; border-image-width: 12px; padding: 10px; min-width: 0; }
+.game-frame .ws-inventory-groups > *, .game-frame .ws-inventory-group,
+.game-frame .ws-group-title, .game-frame .ws-item-card, .game-frame .ws-item-card > div {
+  min-width: 0; max-width: 100%;
+}
+.game-frame .ws-inventory-group { width: 100%; overflow: hidden; }
+.game-frame .ws-group-title { overflow: hidden; }
 .game-frame .ws-panel-heading { padding: 4px 2px 12px; gap: 8px; align-items: center; }
 .game-frame .ws-panel-heading h2, .game-frame .ws-equipped-card h2, .game-frame .ws-owned-card h2 { font: 850 18px/1.4 system-ui, sans-serif; }
 .game-frame .ws-count { padding: 0; font-size: 11px; white-space: nowrap; }
