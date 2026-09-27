@@ -25,7 +25,10 @@ export class MonsterHitArea {
     }
     // Preserve the existing forgiving mobile ellipse and minimum touch coverage.
     Object.assign(this.ellipse,{x:(minX+maxX)/2,y:(minY+maxY)/2,
-      rx:Math.max(.12,(maxX-minX)*.47),ry:Math.max(.12,(maxY-minY)*.43)});
+      // The visible verdict lean can move the crown/face beyond a tight rest
+      // box. Keep the forgiving input volume slightly wider than the visual
+      // silhouette so a fast cut never loses contact mid-reaction.
+      rx:Math.max(.18,(maxX-minX)*.62),ry:Math.max(.17,(maxY-minY)*.56)});
   }
 
   contains(point:{x:number;y:number}){

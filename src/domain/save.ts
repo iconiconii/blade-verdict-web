@@ -297,14 +297,14 @@ export function settleBattle(save: SavedWorkshop, battleId: string, bossKind: Bo
   assertSave(save);
   const id = text(battleId, 'battleId');
   if (!id.trim()) fail('battleId 必须是非空字符串');
-  if (bossKind !== 'corn' && bossKind !== 'jelly') fail(`未知 Boss 类型 ${String(bossKind)}`);
+  if (!['corn','carrot','cabbage','tomato','jelly'].includes(bossKind)) fail(`未知 Boss 类型 ${String(bossKind)}`);
   if (typeof won !== 'boolean') fail('won 必须是布尔值');
   const next = cloneSave(save);
   if (next.settledBattleIds.includes(id)) return next;
   if (next.revision === Number.MAX_SAFE_INTEGER) fail('revision 已达到上限');
   next.settledBattleIds.push(id);
   if (won) {
-    const ingredientId: IngredientId = bossKind === 'corn' ? 'ing_corn' : 'ing_jelly';
+    const ingredientId: IngredientId = bossKind === 'jelly' ? 'ing_jelly' : `ing_${bossKind}` as IngredientId;
     const updatedMeta = addInventory(next.meta, { ingredientId, quality: 'Top', count: 3 });
     next.meta = updatedMeta;
     if (!next.discoveredIngredientIds.includes(ingredientId)) next.discoveredIngredientIds.push(ingredientId);

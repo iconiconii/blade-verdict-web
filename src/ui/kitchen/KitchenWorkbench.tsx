@@ -9,13 +9,14 @@ import './kitchen.css';
 import { assetUrl } from '../assets';
 
 const qualityNames: Record<Quality, string> = { Broken: '破损', Normal: '普通', High: '优质', Top: '极品' };
-const ingredientIcon = (id: string): ItemIconName => id === 'ing_corn' ? 'corn' : 'gem';
+const ingredientIcon = (id: string): ItemIconName => id === 'ing_corn' ? 'corn' : id === 'ing_carrot' ? 'carrot' : id === 'ing_cabbage' ? 'cabbage' : id === 'ing_tomato' ? 'tomato' : 'gem';
 const ingredientName = (id: string) => INGREDIENTS.find(item => item.id === id)?.name ?? id;
-const dishIcons: Record<string, string> = { dish_corn_toast: 'toast', dish_jelly_pudding: 'pudding', dish_corn_jelly: 'combo' };
-// Visual catalog only. Preview vegetables never become fake stock or recipes.
+const dishIcons: Record<string, string> = { dish_corn_toast: 'toast', dish_jelly_pudding: 'pudding', dish_corn_jelly: 'combo', dish_carrot_roast: 'toast', dish_cabbage_roll: 'combo', dish_tomato_salsa: 'pudding' };
+// The first four vegetables and jelly are real pantry entries; the remaining
+// icons stay visual-only previews until their chapters ship.
 const pantry: Array<{ icon: ItemIconName; name: string; id?: IngredientId }> = [
-  { icon: 'corn', name: '玉米粒', id: 'ing_corn' }, { icon: 'carrot', name: '胡萝卜' },
-  { icon: 'cabbage', name: '白菜' }, { icon: 'tomato', name: '西红柿' }, { icon: 'potato', name: '土豆' },
+  { icon: 'corn', name: '玉米粒', id: 'ing_corn' }, { icon: 'carrot', name: '胡萝卜', id: 'ing_carrot' },
+  { icon: 'cabbage', name: '白菜', id: 'ing_cabbage' }, { icon: 'tomato', name: '西红柿', id: 'ing_tomato' }, { icon: 'potato', name: '土豆' },
   { icon: 'mushroom', name: '蘑菇' }, { icon: 'chili', name: '辣椒' }, { icon: 'pumpkin', name: '南瓜' },
   { icon: 'broccoli', name: '西兰花' }, { icon: 'eggplant', name: '茄子' },
   { icon: 'gem', name: '果冻核', id: 'ing_jelly' },
@@ -99,7 +100,7 @@ export function KitchenWorkbench({ meta, go, cook, saving = false, saveIssue }: 
     finally { if (alive.current && version === request.current) { setSubmitting(false); lock.current = false; } }
   };
   const closeResult = () => { setJob(null); setRemaining(cookingPresentationMs); };
-  const resetSelections = () => { setSlots(emptyKitchenSlots()); setRecipesOpen(false); setHint('点击库存食材选择品质；玉米 + 果冻可以制作组合料理。'); };
+  const resetSelections = () => { setSlots(emptyKitchenSlots()); setRecipesOpen(false); setHint('点击库存食材选择品质；每种蔬菜都可以单独制作料理。'); };
 
   return <section className="kitchen-workbench" data-testid="workshop-kitchen" aria-label="厨房烹饪工作台">
     <div className={`kitchen-scene ${job?.phase === 'cooking' ? 'is-cooking' : ''}`}>
@@ -124,7 +125,7 @@ export function KitchenWorkbench({ meta, go, cook, saving = false, saveIssue }: 
       <div className="kitchen-pantry" aria-label="现有食材">
         {items.map(item => <button className="kitchen-pantry-item kitchen-hotspot" type="button" key={item.icon} disabled={busy}
           data-testid={`pantry-${item.icon}`} aria-label={`${item.name}，${item.id ? `库存 ${inventoryCount(meta, item.id)}，选择品质` : '尚未开放'}`}
-          onClick={() => item.id ? openIngredient(item.id) : setHint(`${item.name}尚未开放，当前可烹饪玉米粒和果冻核。`)}>
+          onClick={() => item.id ? openIngredient(item.id) : setHint(`${item.name}尚未开放，当前可烹饪已收集的蔬菜与果冻核。`)}>
           <ItemIcon name={item.icon} /><span className="kitchen-stock">{item.id ? inventoryCount(meta, item.id) : '未开放'}</span>
         </button>)}
       </div>

@@ -32,7 +32,7 @@ describe('out-of-battle V2 economy', () => {
   });
 
   it('uses the Unity ingredient ids and quality base prices', () => {
-    expect(RECIPES.map(recipe => recipe.outputDishId)).toEqual(['dish_corn_toast', 'dish_jelly_pudding', 'dish_corn_jelly']);
+    expect(RECIPES.map(recipe => recipe.outputDishId)).toEqual(['dish_corn_toast', 'dish_jelly_pudding', 'dish_corn_jelly', 'dish_carrot_roast', 'dish_cabbage_roll', 'dish_tomato_salsa']);
     expect(dishPrice([corn('Broken')], RECIPES[0])).toBe(6); // 5 * 1.2
     expect(dishPrice([corn('Top')], RECIPES[0])).toBe(120); // 100 * 1.2
   });

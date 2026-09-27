@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { BattleScene } from './BattleScene';
-import { durations, verdictRemainingMs, type CombatFeedback } from './domain/combat';
-import { bodyAnchorLabel, ingredientBurstFor, type VerdictPoint } from './domain/v2';
+import { durations, verdictDurationFor, verdictRemainingMs, type CombatFeedback } from './domain/combat';
+import { bodyAnchorLabel, bossIngredientIcon, ingredientBurstFor, type BossKind, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 import { swipeContact } from './domain/swipe';
-import { GameButton, ItemIcon } from './ui';
+import { GameButton, ItemIcon, type ItemIconName } from './ui';
 import './ui/migration.css';
 import { BattleHud } from './ui/hunt/BattleHud';
 
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
+const battleIcon=(bossKind:BossKind):ItemIconName=>bossIngredientIcon(bossKind);
 
 let combatAudio:AudioContext|null=null;
 function playCombatTone(feedback:CombatFeedback){
@@ -20,20 +21,20 @@ function playCombatTone(feedback:CombatFeedback){
     const cut=feedback.kind==='Cut',perfect=feedback.kind==='Perfect',ferocious=feedback.speed==='ferocious';
     oscillator.type=perfect?'triangle':cut?'sawtooth':'sine';
     oscillator.frequency.value=feedback.finisher?110:perfect?720:cut?(ferocious?330:feedback.speed==='fast'?270:210):460;
-    const duration=feedback.finisher?.14:perfect?.09:cut?.06:.07;
+    const duration=feedback.finisher?.16:perfect?.09:cut?(ferocious?.1:feedback.speed==='fast'?.08:.07):.07;
     gain.gain.setValueAtTime(.0001,context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(feedback.finisher?.12:.055,context.currentTime+.008);
+    gain.gain.exponentialRampToValueAtTime(feedback.finisher?.14:cut?.075:.055,context.currentTime+.008);
     gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+duration);
     oscillator.connect(gain).connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration+.02);
   }catch{/* Audio is optional and may be blocked by the browser. */}
 }
 
-function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|null;bossKind:'corn'|'jelly';origin:{x:number;y:number}|null}){
+function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|null;bossKind:BossKind;origin:{x:number;y:number}|null}){
   if(!feedback||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')||feedback.pendingRound)return null;
   const count=ingredientBurstFor(bossKind,feedback.kind);
   const source=origin??{x:0,y:0};
   return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:source.x,top:source.y}} aria-hidden="true">
-    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count} as React.CSSProperties}><ItemIcon name={bossKind==='corn'?'corn':'gem'} size={22}/></i>)}
+    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count} as React.CSSProperties}><ItemIcon name={battleIcon(bossKind)} size={22}/></i>)}
   </div>;
 }
 
@@ -143,7 +144,7 @@ export function Battle(){
     <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'储蓄已满 · 连续划过怪物':targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'点击身体光环 · 青色时 Perfect'}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>
     {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}
     {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind} ${feedback.finisher?'hit-feedback--finisher':''}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.finisher?'FINISH':feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind==='Nice'?'GOOD':feedback.kind.toUpperCase()}</strong><span>{feedback.pendingRound?'已判定 · 继续下一环':feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?(feedback.finisher?'击杀确认 · 怪物崩解':`主体切割 · Combo ×${combat.verdictCombo}`):feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} {!feedback.pendingRound&&<b>−{feedback.amount}</b>}</span></div>}
-    {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'破防！':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/durations.verdict*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}
+    {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'破防！':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/verdictDurationFor(combat)*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}
 
     {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>光环出现后的 1.8 秒内都可以点击。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>储蓄条满后会自动进入连续裁决。</p></>}{ready&&!failed&&<GameButton autoFocus variant="gold" onClick={()=>{clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</GameButton>}{(paused||failed)&&<GameButton variant="wood" onClick={()=>useGame.getState().go('stages')}>退出讨伐</GameButton>}</div></div>}
   </section>;

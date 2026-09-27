@@ -1,12 +1,14 @@
 import { durations, type CombatState } from '../domain/combat';
 
 const smooth=(value:number)=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t)};
+// The strike is front-loaded into roughly 120–180ms. A longer, low-energy
+// tail lets consecutive cuts overlap instead of snapping back to neutral.
 const lifetime=650;
 
 /** An analytic damped impulse: no render-rate integration or restarting on a new cut. */
 function impulse(age:number){
   if(age<0||age>=lifetime)return 0;
-  return Math.sin((age+24)/70)*Math.exp(-age/170)*(1-smooth(age/lifetime));
+  return Math.sin((age+10)/48)*Math.exp(-age/135)*(1-smooth(age/lifetime));
 }
 
 export function verdictMotion(state:CombatState,reducedMotion=false){
@@ -22,7 +24,7 @@ export function verdictMotion(state:CombatState,reducedMotion=false){
     if(event.kind!=='Cut'||age<0||age>=lifetime||seen.has(event.id))continue;
     seen.add(event.id);
     const dx=Math.cos(event.angle),dy=Math.sin(event.angle);
-    const force=impulse(age),follow=impulse(age-45);
+    const force=impulse(age),follow=impulse(age-38);
     const envelope=Math.exp(-age/190)*(1-smooth(age/lifetime));
     x+=dx*force;y+=dy*force;followX+=dx*follow;followY+=dy*follow;
     compression+=Math.cos(age/85)*envelope;

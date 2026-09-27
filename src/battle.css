@@ -75,8 +75,8 @@
 .finisher-impact strong{position:relative;z-index:2;font:900 clamp(42px,12vw,112px)/.85 'Noto Serif SC',serif;letter-spacing:.12em;padding-left:.12em;color:#fffbe2;text-shadow:0 0 18px #fff,0 0 48px #ffb32e,0 5px 0 #7a3917;transform:skewX(-10deg)}
 .finisher-impact span{position:relative;z-index:2;margin-top:16px;color:#ffe0a0;font-size:10px;letter-spacing:.32em;text-shadow:0 2px 8px #000}
 .finisher-impact__ring{position:absolute;width:min(78vw,420px);aspect-ratio:1;border:2px solid #fff5bf;border-radius:50%;box-shadow:0 0 0 12px #ffc34c33,0 0 70px #ffad2e;animation:finisher-ring .72s ease-out both}
-.finisher-impact__slash{position:absolute;width:min(90vw,520px);height:3px;background:linear-gradient(90deg,transparent,#fff8d2 30%,#ffaf31 50%,transparent 70%);box-shadow:0 0 16px #fff,0 0 34px #ff9d24;transform:rotate(-18deg) scaleX(0);animation:finisher-slash .38s cubic-bezier(.2,.8,.2,1) .04s both}
-.finisher-impact__slash--two{transform:rotate(18deg) scaleX(0);animation-delay:.11s}
+.finisher-impact__slash{position:absolute;width:min(90vw,520px);height:3px;background:linear-gradient(90deg,transparent,#fff8d2 30%,#ffaf31 50%,transparent 70%);box-shadow:0 0 16px #fff,0 0 34px #ff9d24;transform:rotate(-18deg) scaleX(0);animation:finisher-slash .38s cubic-bezier(.2,.8,.2,1) .08s both}
+.finisher-impact__slash--two{transform:rotate(18deg) scaleX(0);animation-delay:.15s}
 .battle--finisher .battle-vignette{background:radial-gradient(circle at 50% 47%,#fff5c944 0 8%,transparent 34%),linear-gradient(#ffbd3038,transparent 45%,#190a02cc);animation:finisher-vignette .72s ease-out both}
 .battle--finisher .hit-feedback--finisher{display:none}
 .verdict-heading{position:absolute;top:25%;left:0;right:0;text-align:center;pointer-events:none;color:#f6e9c7;text-shadow:0 3px 12px #000}

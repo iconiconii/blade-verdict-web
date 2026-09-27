@@ -2,14 +2,14 @@ import type { Quality } from './v2';
 
 /**
  * The out-of-battle economy deliberately has its own ids.  The battle layer
- * can still use the shorter `corn`/`jelly` labels; `ingredientIdForBoss` is
+ * can still use the shorter boss labels; `ingredientIdForBoss` is
  * the single conversion point when a drop is added to the pantry.
  */
-export type IngredientId = 'ing_corn' | 'ing_jelly';
-export type BossIngredientId = 'corn' | 'jelly';
+export type IngredientId = 'ing_corn' | 'ing_carrot' | 'ing_cabbage' | 'ing_tomato' | 'ing_jelly';
+export type BossIngredientId = 'corn' | 'carrot' | 'cabbage' | 'tomato' | 'jelly';
 
 export const QUALITY_ORDER: readonly Quality[] = ['Broken', 'Normal', 'High', 'Top'];
-export const INGREDIENT_IDS: readonly IngredientId[] = ['ing_corn', 'ing_jelly'];
+export const INGREDIENT_IDS: readonly IngredientId[] = ['ing_corn', 'ing_carrot', 'ing_cabbage', 'ing_tomato', 'ing_jelly'];
 
 export interface IngredientDefinition {
   id: IngredientId;
@@ -115,6 +115,9 @@ const freezeRecord = <T extends object>(value: T): Readonly<T> => Object.freeze(
 
 export const INGREDIENTS: readonly IngredientDefinition[] = Object.freeze([
   { id: 'ing_corn', bossKind: 'corn', name: '玉米粒', basePrice: BASE_PRICES },
+  { id: 'ing_carrot', bossKind: 'carrot', name: '胡萝卜', basePrice: BASE_PRICES },
+  { id: 'ing_cabbage', bossKind: 'cabbage', name: '白菜', basePrice: BASE_PRICES },
+  { id: 'ing_tomato', bossKind: 'tomato', name: '西红柿', basePrice: BASE_PRICES },
   { id: 'ing_jelly', bossKind: 'jelly', name: '果冻核', basePrice: BASE_PRICES },
 ]);
 
@@ -139,6 +142,27 @@ export const RECIPES: readonly RecipeDefinition[] = Object.freeze([
     name: '玉米果冻盅',
     requirements: freezeRecord({ ing_corn: 1, ing_jelly: 1 }),
     multiplier: 1.5,
+  },
+  {
+    id: 'recipe_carrot_roast',
+    outputDishId: 'dish_carrot_roast',
+    name: '烤胡萝卜根',
+    requirements: freezeRecord({ ing_carrot: 1 }),
+    multiplier: 1.2,
+  },
+  {
+    id: 'recipe_cabbage_roll',
+    outputDishId: 'dish_cabbage_roll',
+    name: '白菜卷',
+    requirements: freezeRecord({ ing_cabbage: 1 }),
+    multiplier: 1.2,
+  },
+  {
+    id: 'recipe_tomato_salsa',
+    outputDishId: 'dish_tomato_salsa',
+    name: '西红柿莎莎',
+    requirements: freezeRecord({ ing_tomato: 1 }),
+    multiplier: 1.2,
   },
 ]);
 
@@ -240,6 +264,9 @@ export const shop = (): ShopItemDefinition[] => SHOP_ITEMS.map(item => ({ ...ite
 
 export function ingredientIdForBoss(value: IngredientId | BossIngredientId): IngredientId {
   if (value === 'corn' || value === 'ing_corn') return 'ing_corn';
+  if (value === 'carrot' || value === 'ing_carrot') return 'ing_carrot';
+  if (value === 'cabbage' || value === 'ing_cabbage') return 'ing_cabbage';
+  if (value === 'tomato' || value === 'ing_tomato') return 'ing_tomato';
   if (value === 'jelly' || value === 'ing_jelly') return 'ing_jelly';
   throw new Error(`Unknown ingredient: ${String(value)}`);
 }

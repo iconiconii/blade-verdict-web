@@ -38,17 +38,27 @@ const QUALITY_CLASS: Record<Quality, string> = {
   High: 'high',
   Top: 'top',
 };
-const INGREDIENT_ICON: Record<IngredientId, 'corn' | 'jelly'> = {
+const INGREDIENT_ICON: Record<IngredientId, 'corn' | 'carrot' | 'cabbage' | 'tomato' | 'jelly'> = {
   ing_corn: 'corn',
+  ing_carrot: 'carrot',
+  ing_cabbage: 'cabbage',
+  ing_tomato: 'tomato',
   ing_jelly: 'jelly',
 };
-function iconForIngredient(id: string): 'corn' | 'jelly' {
-  return id.includes('jelly') ? 'jelly' : 'corn';
+function iconForIngredient(id: string): 'corn' | 'carrot' | 'cabbage' | 'tomato' | 'jelly' {
+  if (id.includes('jelly')) return 'jelly';
+  if (id.includes('carrot')) return 'carrot';
+  if (id.includes('cabbage')) return 'cabbage';
+  if (id.includes('tomato')) return 'tomato';
+  return 'corn';
 }
 const DISH_INFO: Record<string, { name: string; icon: 'toast' | 'pudding' | 'combo' }> = {
   dish_corn_toast: { name: '烤玉米片', icon: 'toast' },
   dish_jelly_pudding: { name: '果冻布丁', icon: 'pudding' },
   dish_corn_jelly: { name: '玉米果冻盅', icon: 'combo' },
+  dish_carrot_roast: { name: '烤胡萝卜根', icon: 'toast' },
+  dish_cabbage_roll: { name: '白菜卷', icon: 'combo' },
+  dish_tomato_salsa: { name: '西红柿莎莎', icon: 'pudding' },
 };
 
 function Icon({ name, size = 18 }: { name: 'arrow' | 'back' | 'pan' | 'bag' | 'book' | 'shop' | 'sword' | 'coin' | 'spark'; size?: number }) {
@@ -121,7 +131,8 @@ function CoinPill({ coins }: { coins: number }) {
 
 function IngredientCard({ ingredientId, stackCount, onClick }: { ingredientId: IngredientId; stackCount: number; onClick?: () => void }) {
   const info = INGREDIENTS.find(entry => entry.id === ingredientId)!;
-  const content = <><ItemIcon name={INGREDIENT_ICON[ingredientId] === 'jelly' ? 'gem' : 'corn'} label={info.name} size={64} /><div><strong>{info.name}</strong><span>{stackCount} 份</span></div></>;
+  const icon = INGREDIENT_ICON[ingredientId];
+  const content = <><ItemIcon name={icon === 'jelly' ? 'gem' : icon} label={info.name} size={64} /><div><strong>{info.name}</strong><span>{stackCount} 份</span></div></>;
   return onClick ? <button type="button" className="ws-item-card ws-item-card--button" onClick={onClick}>{content}</button> : <div className="ws-item-card">{content}</div>;
 }
 

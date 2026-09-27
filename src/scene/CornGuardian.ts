@@ -4,6 +4,7 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
+import { goodParryDurationMs, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 
 const smooth = (value:number) => THREE.MathUtils.smoothstep(Math.max(0, Math.min(1, value)), 0, 1);
@@ -330,13 +331,16 @@ export class CornGuardian {
     const pain = verdictMotion(state, reducedMotion);
     const breakWeight = pain.weight;
     const feedbackAge = feedback ? Math.max(0, state.time - feedback.time) : Infinity;
-    const success = (feedback?.kind === 'Nice' || feedback?.kind === 'Perfect') && feedbackAge < 680;
+    const success = (feedback?.kind === 'Nice' || feedback?.kind === 'Perfect') && feedbackAge < parryDuration(feedback.kind);
     const perfect = success && feedback?.kind === 'Perfect';
     const defeated = state.battle.bossHp <= 0;
     const t = state.time / 1000;
     const charge = phase === 'telegraph' ? smooth(elapsed / state.tempo.telegraphMs) : phase === 'targetActive' ? 1 - smooth(elapsed / 360) : 0;
-    const recoil = success ? Math.sin(Math.min(feedbackAge / (perfect ? 680 : 460), 1) * Math.PI) : 0;
-    const tremor = perfect && !reducedMotion ? Math.sin(t * 72) * .032 * Math.max(0, 1 - feedbackAge / 680) : 0;
+    const parryMs = perfect ? perfectParryDurationMs : goodParryDurationMs;
+    const recoil = success ? parryImpulse(feedbackAge, parryMs) : 0;
+    const squash = success ? parrySquash(feedbackAge, parryMs) : 0;
+    const verdictSquash = pain.compression * (.2 + Math.abs(pain.y) * .8);
+    const tremor = perfect && !reducedMotion ? Math.sin(t * 72) * .032 * Math.max(0, 1 - feedbackAge / parryMs) : 0;
     const death = defeated ? smooth(feedbackAge / deathFallDurationMs) : 0;
     const slump = breakWeight + (defeated ? 1 - death : 0);
     const idle = reducedMotion ? 0 : 1;
@@ -344,16 +348,22 @@ export class CornGuardian {
     this.rig.root.userData.guardianPose = guardianPoseFor(state, pain.x, pain.y, pain.compression);
     // The actor is the only placement that moves. Hit testing remains stable,
     // while all visible parts still share the same forward collapse.
-    this.actor.position.set(tremor + pain.x * .025, -death * .08, -recoil * (perfect ? .18 : .1) + death * .18);
-    this.actor.rotation.set(-charge * .07 + recoil * (perfect ? .2 : .1) - slump * .035 - pain.y * .05 + death * .92,
-      tremor * .5 + pain.x * .08, death * .15 - pain.x * .06);
-    this.actor.scale.set(1 + death * .08, 1 - death * .16, 1);
+    // Verdict cuts use the blade vector directly. The actor root is at the
+    // ground pivot, so the visible body reacts while the contact volume stays
+    // stable at the planted feet.
+    this.actor.position.set(tremor + pain.x * .11, -death * .08 - Math.max(0, verdictSquash) * .035,
+      -recoil * (perfect ? .18 : .1) + death * .18);
+    this.actor.rotation.set(-charge * .07 + recoil * (perfect ? .21 : .105) - slump * .035 - pain.y * .29 + death * .92,
+      tremor * .5 + pain.x * .15, death * .15 - pain.x * .25 - pain.followX * .05);
+    this.actor.scale.set(1 + death * .08 + squash * (perfect ? .055 : .025) + verdictSquash * .04,
+      1 - death * .16 - squash * (perfect ? .09 : .045) - verdictSquash * .08,
+      1 + squash * (perfect ? .028 : .012) + verdictSquash * .025);
 
-    this.body.position.y = 1.13 + Math.sin(t * 2.1) * .018 * idle * (1 - breakWeight) + pain.breath * .008 - death * .15;
+    this.body.position.y = 1.13 + Math.sin(t * 2.1) * .018 * idle * (1 - breakWeight) + pain.breath * .008 - squash * (perfect ? .035 : .018) - death * .15;
     this.body.rotation.set(-slump * .04 + pain.energy * .06 + death * .24, 0, -pain.x * .035);
-    this.body.scale.set(1 - charge * .02 + pain.compression * .04 + death * .12,
-      1 + charge * .04 - pain.compression * .08 - death * .22,
-      1 - charge * .01);
+    this.body.scale.set(1 - charge * .02 + pain.compression * .10 + death * .12,
+      1 + charge * .04 - verdictSquash * .08 - squash * (perfect ? .12 : .06) - death * .22,
+      1 - charge * .01 + squash * (perfect ? .04 : .02) + verdictSquash * .025);
     this.face.rotation.set(death * .38, 0, -pain.followX * .04);
     this.face.position.y = .05 - death * .13;
     this.topCap.rotation.set(death * .28 + pain.followY * .06, 0, -pain.followX * .08);

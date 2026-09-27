@@ -3,6 +3,7 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
+import { goodParryDurationMs, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 
 type XYZ = [number, number, number];
@@ -190,12 +191,15 @@ export class JellyGuardian {
     const pain=verdictMotion(state,reducedMotion),w=pain.weight;
     this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
-    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<680;
+    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<parryDuration(feedback.kind);
     const perfect=success&&feedback?.kind==='Perfect';
     const t=state.time/1000;
     const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/360):0;
-    const recoil=success?Math.sin(Math.min(feedbackAge/(perfect?680:460),1)*Math.PI)*(reducedMotion?.15:1):0;
-    const tremor=perfect&&!reducedMotion?Math.sin(t*72)*.028*Math.max(0,1-feedbackAge/680):0;
+    const parryMs=perfect?perfectParryDurationMs:goodParryDurationMs;
+    const recoil=success?parryImpulse(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
+    const squash=success?parrySquash(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
+    const verdictSquash=pain.compression*(.2+Math.abs(pain.y)*.8);
+    const tremor=perfect&&!reducedMotion?Math.sin(t*72)*.028*Math.max(0,1-feedbackAge/parryMs):0;
     const defeated=state.battle.bossHp<=0;
     // Death is driven by the finisher timestamp, not by the stagger/settle
     // boundary, so the soft body keeps falling instead of snapping down.
@@ -205,17 +209,25 @@ export class JellyGuardian {
     // Soft-body death: cap buckles, fins lose lift, then the mantle folds
     // forward onto the plinth rather than disappearing vertically.
     const deathFall=defeated?down:0;
-    this.actor.position.set(tremor+pain.x*.035,.035+bob-down*.08,-recoil*(perfect?.18:.1)+deathFall*.18);
-    this.actor.rotation.set(-charge*.055+recoil*(perfect?.16:.08)-slump*.04-pain.y*.065+deathFall*.62,
-      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.08,deathFall*.12-pain.x*.07);
-    this.actor.scale.set(1+down*.25+slump*.035,1-down*.65-slump*.05,1+down*.15);
+    // Match the cut direction with a fast whole-body response. The actor
+    // pivots at the feet: horizontal strokes sway sideways while vertical
+    // strokes buckle and squash; diagonals naturally combine both.
+    this.actor.position.set(tremor+pain.x*.11,.035+bob-down*.08-Math.max(0,verdictSquash)*.035,
+      -recoil*(perfect?.18:.1)+deathFall*.18);
+    this.actor.rotation.set(-charge*.055+recoil*(perfect?.21:.105)-slump*.04-pain.y*.29+deathFall*.62,
+      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.15,deathFall*.12-pain.x*.24-pain.followX*.05);
+    this.actor.scale.set(1+down*.25+slump*.035+squash*(perfect?.06:.028)+verdictSquash*.04,
+      1-down*.65-slump*.05-squash*(perfect?.1:.05)-verdictSquash*.08,
+      1+down*.15+squash*(perfect?.035:.016)+verdictSquash*.025);
     // Attached anchors share each part's motion, including the breathing squash.
-    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14,
-      1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22,1+charge*.025+pain.compression*.07);
+    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14+squash*(perfect?.05:.022),
+      1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22-squash*(perfect?.09:.045),1+charge*.025+pain.compression*.07+squash*(perfect?.025:.01));
     this.hood.position.y=1.78-slump*.035+Math.sin(t*2-.3)*.012*motion*(1-w)+pain.breath*.012-deathFall*.22;
     this.hood.rotation.set(deathFall*.3,-deathFall*.08,-pain.x*.06);
     this.hood.scale.y*=1-deathFall*.12;
-    this.body.scale.set(1+charge*.055+pain.compression*.12+deathFall*.15,1-charge*.04-pain.compression*.17-deathFall*.32,1+pain.compression*.06);
+    this.body.scale.set(1+charge*.055+verdictSquash*.18+squash*(perfect?.06:.028)+deathFall*.15,
+      1-charge*.04-verdictSquash*.24-squash*(perfect?.12:.06)-deathFall*.32,
+      1+verdictSquash*.09+squash*(perfect?.035:.016));
     this.body.rotation.set(deathFall*.24,-deathFall*.06,-pain.followX*.085);
     this.face.position.y=1.48-slump*.03-pain.compression*.012+pain.breath*.005-deathFall*.16;
     this.face.rotation.set(deathFall*.4,0,-pain.followX*.04);

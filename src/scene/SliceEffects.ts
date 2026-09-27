@@ -13,6 +13,15 @@ export class SliceEffects {
   private cursor=0;
   private dummy=new THREE.Object3D();
   constructor(private scene:THREE.Scene,kind:BossKind){
+    const palette=kind==='corn'
+      ?{face:0xffecab,edge:0xdf911e,kernels:0xe8ab23,dust:0xffbf42,detail:1.2}
+      :kind==='carrot'
+        ?{face:0xffb06a,edge:0xd95724,kernels:0xf28a31,dust:0xffa43d,detail:1.05}
+        :kind==='cabbage'
+          ?{face:0xd8efad,edge:0x5ca05a,kernels:0x9fc96c,dust:0xc7e58a,detail:.82}
+          :kind==='tomato'
+            ?{face:0xff9a75,edge:0xb52e38,kernels:0xe95b3d,dust:0xff875f,detail:.82}
+            :{face:0xd8bcff,edge:0x8657c8,kernels:0x9d7aea,dust:0xb894ff,detail:.6};
     const bladeShape=new THREE.Shape();
     bladeShape.moveTo(-110,-20);bladeShape.quadraticCurveTo(-5,64,110,20);
     bladeShape.quadraticCurveTo(12,12,-110,-20);
@@ -23,8 +32,8 @@ export class SliceEffects {
     const kernelGeo=new THREE.SphereGeometry(3.2,8,6),dropGeo=new THREE.SphereGeometry(1,8,6);
     for(let n=0;n<14;n++){
       const root=new THREE.Group();root.visible=false;root.position.z=36;scene.add(root);
-      const bladeMat=flat(0xffe6a1),face=flat(kind==='corn'?0xffecab:0xd8bcff),edge=flat(kind==='corn'?0xdf911e:0x8657c8);
-      const kernels=flat(kind==='corn'?0xe8ab23:0x9d7aea),dustMat=flat(kind==='corn'?0xffbf42:0xb894ff);
+      const bladeMat=flat(0xffe6a1),face=flat(palette.face),edge=flat(palette.edge);
+      const kernels=flat(palette.kernels),dustMat=flat(palette.dust);
       const blade=new THREE.Mesh(bladeGeo,bladeMat);blade.position.z=18;blade.renderOrder=45;root.add(blade);
       const trail=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-80,0,19),new THREE.Vector3(80,0,19)]),new THREE.LineBasicMaterial({color:0xfff1c8,transparent:true,opacity:.8,depthTest:false,depthWrite:false,toneMapped:false}));
       trail.renderOrder=46;root.add(trail);
@@ -36,7 +45,7 @@ export class SliceEffects {
         for(let i=0;i<9;i++){
           const a=-Math.PI/2+(i+1)/10*Math.PI;
           this.dummy.position.set(side*(Math.cos(a)*18+2),Math.sin(a)*18,12);
-          this.dummy.rotation.set(0,0,a);this.dummy.scale.set(kind==='corn'?1.2:.6,1,.45);this.dummy.updateMatrix();detail.setMatrixAt(i,this.dummy.matrix);
+          this.dummy.rotation.set(0,0,a);this.dummy.scale.set(palette.detail,1,.45);this.dummy.updateMatrix();detail.setMatrixAt(i,this.dummy.matrix);
         }
         half.add(detail);root.add(half);halves.push(half);
       }
@@ -58,9 +67,11 @@ export class SliceEffects {
     for(const slot of this.pool){
       const event=slot.event,age=event?state.time-event.time:Infinity;
       slot.root.visible=age<720;if(!event||age>=720)continue;
-      const fractureAge=event.finisher?Math.max(0,age-150):age;
+      // Keep the actor visually frozen for the requested 60–80ms, then let
+      // the final cut release its reused halves and dust immediately after.
+      const fractureAge=event.finisher?Math.max(0,age-80):age;
       const progress=Math.min(1,fractureAge/(event.finisher?780:720)),fade=1-progress,cut=event.kind==='Cut',perfect=event.kind==='Perfect';
-      const force=reducedMotion?.25:event.finisher?1.8:perfect||cut?1:.6;
+      const force=reducedMotion?.25:event.finisher?2.25:cut?(event.speed==='ferocious'?1.55:event.speed==='fast'?1.3:1.12):.6;
       slot.root.position.set(slot.x,-slot.y,36);
       slot.root.rotation.z=-event.angle;
       const path=event.path&&event.path.length>1?event.path:null;
@@ -73,15 +84,16 @@ export class SliceEffects {
         trailPosition.setXYZ(0,-slot.length*.5,0,19);trailPosition.setXYZ(1,slot.length*.5,0,19);
       }
       trailPosition.needsUpdate=true;
-      slot.trail.visible=age<260;slot.trail.material.opacity=Math.max(0,1-age/260)*(event.finisher?1:.65);
-      slot.blade.visible=age<240;
-      const tierScale=event.finisher?1.75:event.speed==='ferocious'?1.35:event.speed==='fast'?1.12:.9;
-      slot.blade.scale.set(tierScale*slot.length/220,(perfect?1.12:.78)*(1+Math.min(age/240,1)*.2),1);
+      slot.trail.visible=age<(event.finisher?320:cut?280:260);
+      slot.trail.material.opacity=Math.max(0,1-age/(event.finisher?320:cut?280:260))*(event.finisher?1:cut?.86:.65);
+      slot.blade.visible=age<(event.finisher?270:cut?250:240);
+      const tierScale=event.finisher?1.9:event.speed==='ferocious'?1.48:event.speed==='fast'?1.22:cut?1.06:.9;
+      slot.blade.scale.set(tierScale*slot.length/220,(perfect?1.12:cut?1.02:.78)*(1+Math.min(age/240,1)*.2),1);
       slot.blade.material.color.setHex(event.finisher?0xffffff:perfect?0xc3fff2:cut?0xfff1d2:0xffda8d);
       slot.blade.material.opacity=Math.max(0,1-age/(event.finisher?360:240));
       slot.halves.forEach((half,i)=>{
         const side=i===0?-1:1;
-        half.visible=cut&&(!event.finisher||age>=150);
+        half.visible=cut&&(!event.finisher||age>=80);
         half.position.set(side*(6+progress*(event.finisher?145:100)*force),15+Math.sin(progress*Math.PI)*44*force-progress*progress*80,0);
         half.rotation.set(progress*1.4,side*progress*1.1,side*progress*.6);
         half.scale.setScalar((.75+Math.sin(progress*Math.PI)*.2)*Math.min(1,fade*4));
@@ -90,7 +102,7 @@ export class SliceEffects {
       for(let i=0;i<12;i++){
         const a=i*2.39996+event.id*.3,r=(8+progress*(65+(i%3)*28))*force;
         this.dummy.position.set(Math.cos(a)*r,Math.sin(a)*r-progress*progress*80,15);
-        this.dummy.rotation.set(0,0,a);this.dummy.scale.set((2+i%3)*fade*(cut?1.5:1),3*fade,1);
+        this.dummy.rotation.set(0,0,a);this.dummy.scale.set((2+i%3)*fade*(cut?2.1:1),3*fade*(cut?1.18:1),1);
         this.dummy.updateMatrix();slot.dust.setMatrixAt(i,this.dummy.matrix);
       }
       slot.dust.instanceMatrix.needsUpdate=true;

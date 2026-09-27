@@ -1,5 +1,5 @@
 import {
-  applyParry, cornAttack, deterministicBodyAnchor, deterministicTarget, jellyAttack,
+  applyParry, attackForBoss, deterministicBodyAnchor, deterministicTarget,
   newBattle, resolveRingParry, ringPhaseAt,
   type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState,
   type BodyAnchorId, type BossKind, type ParryResult, type VerdictStroke,
@@ -25,20 +25,28 @@ export interface CombatState {
 export const relayDelayMs = 420;
 export const feverConfig={comboThreshold:5,durationMs:3000};
 export const deathFallDurationMs=1250;
+export const verdictDurationFor=(s:Pick<CombatState,'attack'>)=>s.attack.verdictDurationMs??durations.verdict;
+export const verdictDamageCapFor=(s:Pick<CombatState,'attack'>)=>s.attack.verdictDamageCap??200;
+export const verdictCutDamageFor=(s:Pick<CombatState,'attack'>)=>s.attack.verdictCutDamage??12;
 export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===null
-  ?durations.verdict-s.elapsed:feverConfig.durationMs-(s.time-s.feverStartedAt));
+  ?verdictDurationFor(s)-s.elapsed:(s.attack.verdictDurationMs??feverConfig.durationMs)-(s.time-s.feverStartedAt));
 export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:1200, verdictReady:650, verdict:3000, settle:1000 };
 
 /** Difficulty follows successful play, never time spent failing. */
 export function tempoFor(bossKind:BossKind,successfulParries:number):CombatTempo {
-  const warmup=bossKind==='jelly'?5:6, final=bossKind==='jelly'?11:14;
-  if(successfulParries<warmup)return {durationMs:1800,maxRadiusPx:90,telegraphMs:400,label:'热身'};
-  if(successfulParries<final)return {durationMs:1650,maxRadiusPx:82,telegraphMs:340,label:'熟练'};
-  return {durationMs:1500,maxRadiusPx:76,telegraphMs:280,label:'疾风'};
+  const profiles:Record<BossKind,{warmup:number;final:number;warm:[number,number,number];mid:[number,number,number];fast:[number,number,number]}>= {
+    corn:{warmup:6,final:14,warm:[1800,90,400],mid:[1650,82,340],fast:[1500,76,280]},
+    carrot:{warmup:5,final:12,warm:[1700,86,380],mid:[1540,78,320],fast:[1400,70,250]},
+    cabbage:{warmup:5,final:11,warm:[1600,82,350],mid:[1440,74,290],fast:[1300,66,230]},
+    tomato:{warmup:4,final:10,warm:[1500,78,320],mid:[1340,70,260],fast:[1200,62,205]},
+    jelly:{warmup:5,final:11,warm:[1800,90,400],mid:[1650,82,340],fast:[1500,76,280]},
+  };
+  const profile=profiles[bossKind],values=successfulParries<profile.warmup?profile.warm:successfulParries<profile.final?profile.mid:profile.fast;
+  return {durationMs:values[0],maxRadiusPx:values[1],telegraphMs:values[2],label:successfulParries<profile.warmup?'热身':successfulParries<profile.final?'熟练':'疾风'};
 }
 
 export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0):CombatState=>({
-  battle:newBattle(),bossKind,attack:bossKind==='jelly'?jellyAttack:cornAttack,
+  battle:newBattle(bossKind),bossKind,attack:attackForBoss(bossKind),
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
   hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
@@ -51,9 +59,13 @@ function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState 
 }
 export function prepareRound(s:CombatState):CombatState {
   const tempo=tempoFor(s.bossKind,s.successfulParries);
-  const double=tempo.durationMs<1800&&(s.bossKind==='jelly'?s.round%2===0:s.round%3===2);
+  const double=tempo.durationMs<1800&&(
+    s.bossKind==='jelly'?s.round%2===0:
+      s.bossKind==='carrot'?s.round%3===1:
+        s.bossKind==='cabbage'?s.round%3!==0:
+          s.bossKind==='tomato'?true:s.round%3===2);
   const count=double?2:1;
-  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,fever:false,targets:Array.from({length:count},(_,i)=>({
+  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,fever:false,feverStartedAt:null,targets:Array.from({length:count},(_,i)=>({
     targetIndex:i,anchorId:deterministicBodyAnchor(s.seed,s.round,i,count,s.bossKind),
     position:deterministicTarget(s.seed,s.round,i,count,s.bossKind),
     // The second ring has no running clock until the first has resolved.
@@ -87,7 +99,7 @@ export function tapTarget(s:CombatState,index:number):CombatState {
   if(s.paused||s.phase!=='targetActive')return s;
   const target=s.targets[index];
   if(!target||target.resolved||s.elapsed<target.startDelayMs)return s;
-  return resolveContact(s,index,resolveRingParry(s.elapsed-target.startDelayMs,target.ringDurationMs));
+  return resolveContact(s,index,resolveRingParry(s.elapsed-target.startDelayMs,target.ringDurationMs,s.attack));
 }
 export function startVerdict(s:CombatState):CombatState {
   if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
@@ -101,8 +113,9 @@ function finishVerdict(s:CombatState):CombatState {
   return {...transition({...s,battle},'stagger'),pointerId:null,stroke:null};
 }
 export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65,path?:Array<{x:number;y:number;time:number}>,speed:'normal'|'fast'|'ferocious'='normal'):CombatState {
-  if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=200)return s;
-  const damage=Math.min(12,200-s.verdictDamageDealt,s.battle.bossHp);
+  const damageCap=verdictDamageCapFor(s);
+  if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=damageCap)return s;
+  const damage=Math.min(verdictCutDamageFor(s),damageCap-s.verdictDamageDealt,s.battle.bossHp);
   if(damage<=0)return s;
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage)};
   const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
@@ -112,7 +125,7 @@ export function applyContinuousCut(s:CombatState,position:{x:number;y:number},in
   const next=emit({...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt},
     {kind:'Cut',amount:damage,energyGain:0,position,angle,path,speed,finisher:finalHit,
       hitStopMs:finalHit?80:25});
-  return battle.bossHp<=0||verdictDamageDealt>=200?finishVerdict(next):next;
+  return battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):next;
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
   if(s.paused||delta<=0||!Number.isFinite(delta))return s;
@@ -125,7 +138,7 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
       next.targets=next.targets.map(t=>{
         if(t.resolved)return t;
         const age=Math.max(0,next.elapsed-t.startDelayMs);
-        return {...t,ringElapsedMs:age,telegraphProgress:Math.min(1,age/t.ringDurationMs),phase:ringPhaseAt(age,t.ringDurationMs)};
+        return {...t,ringElapsedMs:age,telegraphProgress:Math.min(1,age/t.ringDurationMs),phase:ringPhaseAt(age,t.ringDurationMs,next.attack)};
       });
       const expired=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>=t.ringDurationMs);
       return expired>=0?resolveContact(next,expired,'Miss'):next;

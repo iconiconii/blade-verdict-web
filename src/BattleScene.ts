@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
+import { CarrotGuardian, CabbageGuardian, TomatoGuardian, type VegetableGuardian } from './scene/VegetableGuardian';
 import { SliceEffects } from './scene/SliceEffects';
 import { makeBattleCamera, projectBodyAnchor } from './scene/layout';
 import { MonsterHitArea } from './scene/MonsterHitArea';
@@ -10,6 +11,7 @@ import { ImpactPresentation } from './scene/ImpactPresentation';
 import { ringRadiusAt, type BodyAnchorId, type BossKind } from './domain/v2';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
+type BattleGuardian=CornGuardian|JellyGuardian|VegetableGuardian;
 const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,toneMapped:false});
 export interface ParryTargetLayout { round:number; x:number; y:number; diameter:number; visible:boolean }
 
@@ -20,7 +22,7 @@ export class BattleScene {
   private overlay=new THREE.Scene();
   private camera=makeBattleCamera(1,1);
   private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
-  private guardian:CornGuardian|JellyGuardian;
+  private guardian:BattleGuardian;
   private hitArea:MonsterHitArea;
   private bossKind:BossKind;
   private targetRings:THREE.Group[]=[];
@@ -32,7 +34,12 @@ export class BattleScene {
   private impactPresentation=new ImpactPresentation();
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
-    this.bossKind=bossKind;this.guardian=bossKind==='jelly'?new JellyGuardian():new CornGuardian();
+    this.bossKind=bossKind;
+    this.guardian=bossKind==='jelly'?new JellyGuardian()
+      :bossKind==='carrot'?new CarrotGuardian()
+        :bossKind==='cabbage'?new CabbageGuardian()
+          :bossKind==='tomato'?new TomatoGuardian()
+            :new CornGuardian();
     this.hitArea=new MonsterHitArea(this.guardian.root);
     this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -109,7 +116,11 @@ export class BattleScene {
     this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.guardian.update(presentation.actor,reducedMotion);this.guardian.root.updateMatrixWorld(true);
     this.hitArea.update(this.camera);
-    const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:this.bossKind==='jelly'?0xa98cff:0xffc66b;
+    const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:
+      this.bossKind==='jelly'?0xa98cff:
+        this.bossKind==='carrot'?0xff8745:
+          this.bossKind==='cabbage'?0x9ed86c:
+            this.bossKind==='tomato'?0xff6b4e:0xffc66b;
     this.arenaPulse.material.color.setHex(arenaColor);
     this.arenaPulse.material.opacity=(verdict?.18:phase==='telegraph'?.13:.08)+(Math.sin(t*3.4)*.018);
     this.arenaPulse.scale.setScalar(1+(verdict?.045:.018)*Math.sin(t*(verdict?5.2:2.4)));

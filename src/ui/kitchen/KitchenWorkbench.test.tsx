@@ -13,7 +13,9 @@ describe('reference kitchen UI', () => {
     expect(html).not.toContain('ws-recipe-layout');
     expect(html.match(/data-testid="kitchen-slot-/g)).toHaveLength(3);
     expect(html.match(/data-testid="pantry-/g)).toHaveLength(10);
-    expect(html).toContain('胡萝卜，尚未开放');
+    expect(html).toContain('胡萝卜，库存 0，选择品质');
+    expect(html).toContain('白菜，库存 0，选择品质');
+    expect(html).toContain('西红柿，库存 0，选择品质');
     expect(html).toContain('aria-current="page" data-testid="nav-kitchen"');
   });
   it('disables submit while saving or the save is unavailable', () => {

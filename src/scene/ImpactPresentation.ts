@@ -15,9 +15,9 @@ export class ImpactPresentation {
       this.seen=event.id;
       if(event.kind==='Miss'||state.time-event.time>100)continue;
       if(event.finisher||state.time>=this.nextPulse){
-        this.nextPulse=state.time+140;
+        this.nextPulse=state.time+(event.kind==='Cut'?65:140);
         this.pulseAt=state.time;
-        this.amplitude=event.finisher?.035:event.kind==='Perfect'?.018:.008;
+        this.amplitude=event.finisher?.05:event.kind==='Cut'?event.speed==='ferocious'?.022:.014:event.kind==='Perfect'?.018:.008;
         this.until=state.time+(reducedMotion?0:event.hitStopMs??25);
         this.held=state;
       }

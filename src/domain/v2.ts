@@ -2,22 +2,49 @@ export type Quality = 'Broken' | 'Normal' | 'High' | 'Top';
 export type ParryResult = 'Perfect' | 'Nice' | 'Miss';
 export type ParryPhase = 'EarlyMiss' | 'Nice' | 'Perfect' | 'LateMiss';
 export type BattlePhase = 'intro' | 'telegraph' | 'targetActive' | 'impact' | 'stagger' | 'verdictReady' | 'verdictSlash' | 'settle';
-export type BossKind = 'corn' | 'jelly';
+/** All selectable guardians. Jelly remains available for the legacy second chapter. */
+export type BossKind = 'corn' | 'carrot' | 'cabbage' | 'tomato' | 'jelly';
 /** Presentation-only burst count; inventory and battle meter remain domain-owned. */
-export const battleIngredients:Record<BossKind,{id:'ing_corn'|'ing_jelly';icon:'corn'|'jelly';counts:Record<ParryResult,number>}>= {
+export const battleIngredients:Record<BossKind,{id:'ing_corn'|'ing_jelly';icon:'corn'|'carrot'|'cabbage'|'tomato'|'jelly';counts:Record<ParryResult,number>}>= {
   corn:{id:'ing_corn',icon:'corn',counts:{Miss:0,Nice:3,Perfect:8}},
+  carrot:{id:'ing_corn',icon:'carrot',counts:{Miss:0,Nice:3,Perfect:8}},
+  cabbage:{id:'ing_corn',icon:'cabbage',counts:{Miss:0,Nice:3,Perfect:8}},
+  tomato:{id:'ing_corn',icon:'tomato',counts:{Miss:0,Nice:3,Perfect:8}},
   jelly:{id:'ing_jelly',icon:'jelly',counts:{Miss:0,Nice:3,Perfect:8}},
 };
 export const ingredientBurstFor=(bossKind:BossKind,result:ParryResult):number=>battleIngredients[bossKind].counts[result];
+export const bossDisplayNames:Record<BossKind,string>={corn:'玉米怪',carrot:'胡萝卜怪',cabbage:'白菜怪',tomato:'西红柿怪',jelly:'果冻怪'};
+export const bossIngredientNames:Record<BossKind,string>={corn:'玉米粒',carrot:'胡萝卜',cabbage:'白菜',tomato:'西红柿',jelly:'果冻核'};
+export const bossKindLabel=(bossKind:BossKind)=>bossDisplayNames[bossKind];
+export const bossIngredientIcon=(bossKind:BossKind):'corn'|'carrot'|'cabbage'|'tomato'|'gem'=>battleIngredients[bossKind].icon==='jelly'?'gem':battleIngredients[bossKind].icon;
 /** Named points on the 3D guardian used to attach a parry ring to the actor. */
 export type BodyAnchorId = 'head'|'belly'|'leftHand'|'rightHand'|'leftKnee'|'rightKnee'|'leftShoulder'|'rightShoulder'|'leftFin'|'rightFin'|'leftJoint'|'rightJoint'|'lowerJoint';
 export interface AttackPresentation { targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; ringElapsedMs:number; ringDurationMs:number; maxRadiusPx:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
 export interface VerdictPoint { x:number; y:number; time:number }
 export interface VerdictWeakPoint { id:string; x:number; y:number; radius:number }
 export interface VerdictStroke { points:VerdictPoint[]; hitWeakPointIds:string[]; score:number; valid:boolean }
-export interface AttackConfig { telegraphMs:number; missDamage:number; perfectCounterDamage:number; niceCounterDamage:number; perfectMeterGain:number; niceMeterGain:number }
-export const cornAttack: AttackConfig = { telegraphMs:900, missDamage:12, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:18 };
-export const jellyAttack: AttackConfig = { telegraphMs:700, missDamage:8, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:34, niceMeterGain:22 };
+export interface AttackConfig {
+  telegraphMs:number;
+  missDamage:number;
+  perfectCounterDamage:number;
+  niceCounterDamage:number;
+  perfectMeterGain:number;
+  niceMeterGain:number;
+  /** Normalised ring interval where a tap earns Perfect. */
+  perfectWindowStart?:number;
+  perfectWindowEnd?:number;
+  /** Per-guardian verdict tuning; omitted values retain the corn baseline. */
+  verdictDurationMs?:number;
+  verdictDamageCap?:number;
+  verdictCutDamage?:number;
+}
+export const cornAttack: AttackConfig = { telegraphMs:900, missDamage:12, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:30, niceMeterGain:18, perfectWindowStart:700/1800, perfectWindowEnd:1400/1800, verdictDurationMs:3000, verdictDamageCap:200, verdictCutDamage:12 };
+export const carrotAttack: AttackConfig = { telegraphMs:840, missDamage:14, perfectCounterDamage:13, niceCounterDamage:8, perfectMeterGain:28, niceMeterGain:17, perfectWindowStart:.405, perfectWindowEnd:.75, verdictDurationMs:2900, verdictDamageCap:190, verdictCutDamage:11 };
+export const cabbageAttack: AttackConfig = { telegraphMs:780, missDamage:16, perfectCounterDamage:13, niceCounterDamage:7, perfectMeterGain:26, niceMeterGain:16, perfectWindowStart:.425, perfectWindowEnd:.735, verdictDurationMs:2700, verdictDamageCap:180, verdictCutDamage:10 };
+export const tomatoAttack: AttackConfig = { telegraphMs:720, missDamage:18, perfectCounterDamage:14, niceCounterDamage:7, perfectMeterGain:24, niceMeterGain:15, perfectWindowStart:.445, perfectWindowEnd:.72, verdictDurationMs:2500, verdictDamageCap:170, verdictCutDamage:10 };
+export const jellyAttack: AttackConfig = { telegraphMs:700, missDamage:8, perfectCounterDamage:12, niceCounterDamage:8, perfectMeterGain:34, niceMeterGain:22, perfectWindowStart:700/1800, perfectWindowEnd:1400/1800, verdictDurationMs:3000, verdictDamageCap:200, verdictCutDamage:12 };
+export const attackForBoss=(bossKind:BossKind):AttackConfig=>bossKind==='carrot'?carrotAttack:bossKind==='cabbage'?cabbageAttack:bossKind==='tomato'?tomatoAttack:bossKind==='jelly'?jellyAttack:cornAttack;
+export const bossMaxHp=(bossKind:BossKind):number=>bossKind==='carrot'?860:bossKind==='cabbage'?920:bossKind==='tomato'?1000:800;
 export const parryPhase = (progress:number):ParryPhase => progress < .35 ? 'EarlyMiss' : progress < .7 ? 'Nice' : progress <= .9 ? 'Perfect' : 'LateMiss';
 export const ringRatio = (p:number) => { p=Math.max(0,Math.min(1,p)); const lerp=(a:number,b:number,t:number)=>a+(b-a)*t; return p<.35?lerp(3,2.2,p/.35):p<.7?lerp(2.2,1.2,(p-.35)/.35):p<=.9?lerp(1.2,.8,(p-.7)/.2):lerp(.8,.25,(p-.9)/.1) };
 export function resolveParry(elapsedMs:number, attack= cornAttack, lateGraceMs=0):ParryResult { if(elapsedMs>attack.telegraphMs+lateGraceMs) return 'Miss'; if(elapsedMs>attack.telegraphMs)return lateGraceMs>0?'Perfect':'Miss'; const phase=parryPhase(Math.max(0,elapsedMs/attack.telegraphMs)); return phase==='Perfect'?'Perfect':phase==='Nice'?'Nice':'Miss' }
@@ -38,21 +65,27 @@ export function ringRadiusAt(elapsedMs:number,durationMs=ringLifecycleMs,maxRadi
   if(t<=1400)return (75-5*Math.sin((t-700)/700*Math.PI*4))*scale;
   return 75*(1-smooth((t-1400)/400))*scale;
 }
-export function resolveRingParry(elapsedMs:number,durationMs=ringLifecycleMs):ParryResult {
+export function resolveRingParry(elapsedMs:number,durationMs=ringLifecycleMs,attack?:AttackConfig):ParryResult {
   if(elapsedMs<0||elapsedMs>=durationMs)return 'Miss';
   const t=elapsedMs/durationMs*1800;
-  return t>=700&&t<1400?'Perfect':'Nice';
+  const start=(attack?.perfectWindowStart??700/1800)*1800;
+  const end=(attack?.perfectWindowEnd??1400/1800)*1800;
+  return t>=start&&t<end?'Perfect':'Nice';
 }
-export function ringPhaseAt(elapsedMs:number,durationMs=ringLifecycleMs):AttackPresentation['phase'] {
+export function ringPhaseAt(elapsedMs:number,durationMs=ringLifecycleMs,attack?:AttackConfig):AttackPresentation['phase'] {
   if(elapsedMs<0||elapsedMs>=durationMs)return 'late';
   const t=elapsedMs/durationMs*1800;
   if(t<600)return 'early';
-  if(t<1400)return resolveRingParry(elapsedMs,durationMs)==='Perfect'?'perfect':'nice';
+  const end=(attack?.perfectWindowEnd??1400/1800)*1800;
+  if(t<end)return resolveRingParry(elapsedMs,durationMs,attack)==='Perfect'?'perfect':'nice';
   return 'late';
 }
 export const bodyAnchorIds:Record<BossKind,readonly BodyAnchorId[]>={
   // The order is intentionally stable: it is part of the deterministic replay seed.
   corn:['head','leftHand','rightHand','belly','leftKnee','rightKnee','leftShoulder','rightShoulder'],
+  carrot:['head','leftHand','rightHand','belly','leftKnee','rightKnee','leftShoulder','rightShoulder'],
+  cabbage:['head','leftHand','rightHand','belly','leftKnee','rightKnee','leftShoulder','rightShoulder'],
+  tomato:['head','leftHand','rightHand','belly','leftKnee','rightKnee','leftShoulder','rightShoulder'],
   jelly:['head','leftFin','rightFin','belly','leftJoint','rightJoint','lowerJoint'],
 };
 // Widely separated combinations keep two touch targets readable on small screens.
@@ -96,6 +129,6 @@ export const scoreForHitCount=(valid:boolean,hits:number)=>!valid?0:[10,35,67,90
 export const damageForScore=(score:number)=>Math.round(160+Math.max(0,Math.min(100,score))*4.8);
 export const qualityForScore=(score:number):Quality=>score>=95?'Top':score>=85?'High':score>=50?'Normal':'Broken';
 export interface BattleState { playerHp:number; bossHp:number; meter:number; remainingParts:number; verdictCount:number; loot:{quality:Quality;count:number}[] }
-export const newBattle=():BattleState=>({playerHp:100,bossHp:800,meter:0,remainingParts:3,verdictCount:0,loot:[]});
+export const newBattle=(bossKind:BossKind='corn'):BattleState=>({playerHp:100,bossHp:bossMaxHp(bossKind),meter:0,remainingParts:3,verdictCount:0,loot:[]});
 export function applyParry(state:BattleState,result:ParryResult,attack=cornAttack):BattleState { const s={...state}; if(result==='Miss'){s.playerHp=Math.max(0,s.playerHp-attack.missDamage)} else {s.bossHp=Math.max(0,s.bossHp-(result==='Perfect'?attack.perfectCounterDamage:attack.niceCounterDamage));s.meter=Math.min(100,s.meter+(result==='Perfect'?attack.perfectMeterGain:attack.niceMeterGain))} return s }
 export function applyVerdict(state:BattleState,score:number):BattleState { if(state.meter<100) throw Error('Verdict requires a full meter'); if(state.playerHp<=0||state.bossHp<=0)throw Error('Battle has ended');score=Math.max(0,Math.min(100,score)); const s={...state,loot:[...state.loot],meter:0,verdictCount:state.verdictCount+1}; const amount=Math.min(score>=95?2:score>=20?1:0,s.remainingParts); if(amount){s.loot.push({quality:qualityForScore(score),count:amount});s.remainingParts-=amount} s.bossHp=Math.max(0,s.bossHp-damageForScore(score)); if(!s.bossHp&&s.remainingParts){s.loot.push({quality:'Broken',count:s.remainingParts});s.remainingParts=0} return s }
