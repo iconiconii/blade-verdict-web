@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
-import { goodParryDurationMs, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
+import { goodParryDurationMs, goodStaggerWeight, guardianHitExpression, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 import { verdictMotion } from './verdictMotion';
+import { GuardianExpressions } from './GuardianExpressions';
 
 export type VegetableKind = 'carrot' | 'cabbage' | 'tomato';
 type XYZ = [number, number, number];
@@ -151,8 +152,11 @@ export class VegetableGuardian {
   private brows:THREE.Mesh[]=[];
   private mouth!:THREE.Group;
   private painMouth!:THREE.Mesh;
+  private expressions!:GuardianExpressions;
   private leafGeo:THREE.BufferGeometry;
   private restPose=new Map<THREE.Object3D,{position:THREE.Vector3;rotation:THREE.Euler;scale:THREE.Vector3}>();
+  private goodSupportPoint=new THREE.Vector3();
+  private goodSupportChain:THREE.Object3D[]=[];
 
   constructor(kind:VegetableKind){
     this.kind=kind;
@@ -188,6 +192,7 @@ export class VegetableGuardian {
     if(kind==='tomato')this.buildTomatoCalyx(leafMaterial,leafLight);
     this.buildFace(eyeWhite,eyeDark,mouthMaterial,tongue,style);
     this.buildLimbs(kind==='cabbage'?leafMaterial:darkMaterial,bodyMaterial,accent);
+    this.goodSupportChain=[this.legs[0][2],this.legs[0][1],this.legs[0][0],this.leftLeg,this.actor];
     if(kind==='carrot')this.buildFork(accent,lightMaterial);
     if(kind==='cabbage')this.buildRollingPin(accent,lightMaterial);
     if(kind==='tomato')this.buildVineWhip(leafMaterial);
@@ -325,6 +330,7 @@ export class VegetableGuardian {
     }
     this.painMouth=this.mesh(new THREE.TorusGeometry(1,.12,8,24),mouth,this.face,`${this.kind}-pain-mouth`,[0,-.21,.078],[.13,.09,.03]);
     this.painMouth.visible=false;
+    this.expressions=new GuardianExpressions(this.face,[...this.eyes,...this.brows,this.mouth,this.painMouth],this.kind);
   }
 
   private buildLimbs(sleeve:THREE.Material,bodyMaterial:THREE.Material,accent:THREE.Material){
@@ -406,9 +412,12 @@ export class VegetableGuardian {
     this.resetRestPose();
     const {phase,elapsed,feedback}=state;
     const pain=verdictMotion(state,reducedMotion),breakWeight=pain.weight;
+    const hit=guardianHitExpression(state),taunt=hit.kind==='Miss'&&!reducedMotion?hit.weight:0;
+    const good=goodStaggerWeight(state,reducedMotion);
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
-    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<parryDuration(feedback.kind);
-    const perfect=success&&feedback?.kind==='Perfect';
+    const parryResult=feedback?.contactResult??feedback?.kind;
+    const success=(parryResult==='Nice'||parryResult==='Perfect')&&feedbackAge<parryDuration(parryResult);
+    const perfect=success&&parryResult==='Perfect';
     const parryMs=perfect?perfectParryDurationMs:goodParryDurationMs;
     const recoil=success?parryImpulse(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
     const squash=success?parrySquash(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
@@ -421,28 +430,59 @@ export class VegetableGuardian {
     this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     this.actor.position.set(tremor+pain.x*.1,-death*.08-verticalSquash*.03,-recoil*(perfect?.16:.09)+death*.18);
     this.actor.rotation.set(-charge*.05+recoil*(perfect?.21:.105)-breakWeight*.032-pain.y*.28+death*.88,
-      tremor*.5+pain.x*.14,death*.15-pain.x*.22-pain.followX*.04);
+      tremor*.5+pain.x*.14-good*.045,death*.15-pain.x*.22-pain.followX*.04-good*.18);
     this.actor.scale.set(1+death*.08+squash*(perfect?.055:.025)+verdictSquash*.035,
       1-death*.16-squash*(perfect?.09:.045)-verdictSquash*.08,
       1+squash*(perfect?.028:.012)+verdictSquash*.02);
     this.body.position.y=styles[this.kind].bodyY-squash*(perfect?.03:.016)-death*.13;
     this.body.rotation.set(-breakWeight*.035+pain.energy*.05+death*.2,0,-pain.x*.028);
+    this.face.rotation.set(death*.35-good*.025,0,-taunt*.08+good*.045);
     this.body.scale.set(1+squash*(perfect?.045:.02)+verdictSquash*.08+death*.1,
       1-squash*(perfect?.11:.055)-verdictSquash*.16-death*.2,
       1+squash*(perfect?.03:.012)+verdictSquash*.05);
-    this.crown.rotation.set(death*.35-pain.followY*.04,0,-pain.followX*.1);
+    this.crown.rotation.set(death*.35-pain.followY*.04+good*.045,0,-pain.followX*.1-good*.035);
     this.crown.scale.setScalar(1+verdictSquash*.04+death*.1);
-    this.leftArm.rotation.set(-charge*.28+recoil*(perfect?.25:.14)+breakWeight*.12+death*.65,0,-.1-pain.followX*.12-death*.15);
-    this.rightArm.rotation.set(-charge*.2-breakWeight*.1+death*.58,0,.1+recoil*(perfect?.22:.11)+pain.followX*.13+death*.15);
-    this.arms.forEach((segments,index)=>{const side=index===0?-1:1;segments[0].rotation.set(pain.followY*.08+death*.16,0,side*breakWeight*.04);segments[1].rotation.set(pain.followX*.04+death*.24,0,0);segments[2].rotation.set(pain.followY*.04+death*.35,0,side*death*.08)});
-    this.leftLeg.rotation.set(breakWeight*.1-death*.84,0,-charge*.04-death*.08);
-    this.rightLeg.rotation.set(breakWeight*.08-death*.92,0,charge*.04+death*.08);
-    this.legs.forEach((segments,index)=>{segments[0].rotation.x=-death*(.12+index*.03);segments[1].rotation.x=-death*(.34+index*.06);segments[2].rotation.x=-death*.2});
+    // The surprise reads from its silhouette too: hands fly apart while one
+    // knee rises, rather than only swapping the eyes on the standing pose.
+    this.leftArm.rotation.set(-charge*.28+recoil*(perfect?.25:.14)+breakWeight*.12+death*.65-good*.18,0,-.1-pain.followX*.12-death*.15-good*1.12);
+    this.rightArm.rotation.set(-charge*.2-breakWeight*.1+death*.58-good*.12,0,.1+recoil*(perfect?.22:.11)+pain.followX*.13+death*.15+taunt*.18+good*1.05);
+    this.arms.forEach((segments,index)=>{
+      const side=index===0?-1:1;
+      segments[0].rotation.set(pain.followY*.08+death*.16-good*.08,0,side*(breakWeight*.04+good*.08));
+      segments[1].rotation.set(pain.followX*.04+death*.24-good*.2,0,side*good*.28);
+      segments[2].rotation.set(pain.followY*.04+death*.35-good*.16,side*good*.3,side*(death*.08+good*.12));
+    });
+    this.leftLeg.rotation.set(breakWeight*.1-death*.84-good*.075,0,-charge*.04-death*.08+good*.18);
+    this.rightLeg.rotation.set(breakWeight*.08-death*.92-good*.62,0,charge*.04+death*.08-good*.2);
+    this.rightLeg.position.x+=good*.04;
+    this.rightLeg.position.y+=good*.16;
+    this.rightLeg.position.z+=good*.1;
+    this.legs.forEach((segments,index)=>{
+      const raised=index===1?good:0;
+      segments[0].rotation.x=-death*(.12+index*.03)-raised*.25;
+      segments[1].rotation.x=-death*(.34+index*.06)+raised*.95;
+      segments[2].rotation.set(-death*.2-raised*.32,0,raised*.08);
+    });
+    if(good>0){
+      // Keep the planted foot's sole near its rest location. Only the five
+      // matrices in this chain need evaluating; no per-frame world traversal.
+      this.goodSupportPoint.set(0,-.15,.16);
+      for(const part of this.goodSupportChain){part.updateMatrix();this.goodSupportPoint.applyMatrix4(part.matrix)}
+      this.actor.position.x+=(-.27-this.goodSupportPoint.x)*good;
+      this.actor.position.y+=(-.04-this.goodSupportPoint.y)*good;
+      this.actor.position.z+=(.35-this.goodSupportPoint.z)*good;
+    }
     const expression=defeated?1:pain.pain;
-    this.eyes.forEach((eye,index)=>{eye.scale.y=1-expression*.55;eye.rotation.z=(index===0?-1:1)*expression*.14});
-    this.brows.forEach((brow,index)=>{brow.rotation.z=(index===0?-.3:.3)+(index===0?-1:1)*expression*.36});
+    this.eyes.forEach((eye,index)=>{
+      eye.visible=true;eye.scale.set(1,1-expression*.55,1);
+      eye.rotation.z=(index===0?-1:1)*expression*.14;
+    });
+    this.brows.forEach((brow,index)=>{
+      brow.visible=true;brow.rotation.z=(index===0?-.3:.3)+(index===0?-1:1)*expression*.36;
+    });
     this.mouth.visible=!defeated&&pain.pain<.1;this.painMouth.visible=!defeated&&pain.pain>=.1;
-    const flash=Math.max(pain.flash,success?Math.max(0,(perfect?.95:.34)-feedbackAge/220):0);
+    this.expressions.update(state,reducedMotion,pain.pain>=.1);
+    const flash=Math.max(pain.flash,success?Math.max(0,1-feedbackAge/90)*(perfect?.32:.12):0);
     for(const material of this.materials){material.emissive.setHex(0xffffff);material.emissiveIntensity=flash}
   }
 }

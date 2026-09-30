@@ -70,6 +70,17 @@ describe('accessible web combat',()=>{
     expect(s.battle).toMatchObject({bossHp:792,meter:18});
     expect(s.combo).toBe(1);
   });
+  it('keeps the latest circle result alongside the aggregate relay result',()=>{
+    let goodThenPerfect=active('corn',true);
+    goodThenPerfect=tapTarget(tickCombat(goodThenPerfect,200),0);
+    goodThenPerfect=tapTarget(tickCombat(goodThenPerfect,relayDelayMs+800),1);
+    expect(goodThenPerfect.feedback).toMatchObject({kind:'Nice',contactResult:'Perfect'});
+
+    let missThenPerfect=active('corn',true);
+    missThenPerfect=tickCombat(missThenPerfect,missThenPerfect.targets[0].ringDurationMs);
+    missThenPerfect=tapTarget(tickCombat(missThenPerfect,relayDelayMs+800),1);
+    expect(missThenPerfect.feedback).toMatchObject({kind:'Miss',contactResult:'Perfect'});
+  });
   it('aggregates a relay miss once after the second ring expires',()=>{
     let s=tapTarget(active('corn',true),0);
     s=tickCombat(s,relayDelayMs+s.targets[1].ringDurationMs);

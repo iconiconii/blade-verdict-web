@@ -3,8 +3,9 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
-import { goodParryDurationMs, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
+import { goodParryDurationMs, goodStaggerWeight, guardianHitExpression, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
+import { GuardianExpressions } from './GuardianExpressions';
 
 type XYZ = [number, number, number];
 const smooth = (t:number) => THREE.MathUtils.smoothstep(t,0,1);
@@ -66,6 +67,7 @@ export class JellyGuardian {
   private pearl:THREE.Mesh;
   private mouth:THREE.Mesh;
   private painMouth:THREE.Mesh;
+  private expressions:GuardianExpressions;
 
   constructor(){
     this.rig=createGuardianRig('jelly-guardian-rig');
@@ -106,6 +108,8 @@ export class JellyGuardian {
     this.mouth=this.mesh(new THREE.TubeGeometry(smile,16,.012,6,false),edge,this.face,'jelly-smile');
     this.painMouth=this.mesh(new THREE.TorusGeometry(1,.14,6,24),edge,this.face,'jelly-pain-mouth',[0,-.14,.326],[.08,.06,.04]);
     this.painMouth.visible=false;
+    this.expressions=new GuardianExpressions(this.face,[...this.eyes,this.mouth,this.painMouth],'jelly',.38,.7,0xcec2ff);
+    this.expressions.root.position.y=-.04;
 
     // A small pear-shaped mantle and a rippled hem, well below the face.
     const mantle=jellySurface([[0,-.36],[.23,-.35],[.40,-.26],[.35,-.08],[.285,.2],[.22,.33],[0,.37]],.82,.027);
@@ -189,10 +193,13 @@ export class JellyGuardian {
   update(state:CombatState,reducedMotion=false){
     const {phase,elapsed,feedback}=state;
     const pain=verdictMotion(state,reducedMotion),w=pain.weight;
+    const hit=guardianHitExpression(state),taunt=hit.kind==='Miss'&&!reducedMotion?hit.weight:0;
+    const good=goodStaggerWeight(state,reducedMotion);
     this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
-    const success=(feedback?.kind==='Nice'||feedback?.kind==='Perfect')&&feedbackAge<parryDuration(feedback.kind);
-    const perfect=success&&feedback?.kind==='Perfect';
+    const parryResult=feedback?.contactResult??feedback?.kind;
+    const success=(parryResult==='Nice'||parryResult==='Perfect')&&feedbackAge<parryDuration(parryResult);
+    const perfect=success&&parryResult==='Perfect';
     const t=state.time/1000;
     const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/360):0;
     const parryMs=perfect?perfectParryDurationMs:goodParryDurationMs;
@@ -212,33 +219,35 @@ export class JellyGuardian {
     // Match the cut direction with a fast whole-body response. The actor
     // pivots at the feet: horizontal strokes sway sideways while vertical
     // strokes buckle and squash; diagonals naturally combine both.
-    this.actor.position.set(tremor+pain.x*.11,.035+bob-down*.08-Math.max(0,verdictSquash)*.035,
+    this.actor.position.set(tremor+pain.x*.11-good*.025,.035+bob-down*.08-Math.max(0,verdictSquash)*.035,
       -recoil*(perfect?.18:.1)+deathFall*.18);
     this.actor.rotation.set(-charge*.055+recoil*(perfect?.21:.105)-slump*.04-pain.y*.29+deathFall*.62,
-      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.15,deathFall*.12-pain.x*.24-pain.followX*.05);
+      (-.06+Math.sin(t*1.5)*.025+tremor)*motion*(1-w)+pain.x*.15-good*.035,deathFall*.12-pain.x*.24-pain.followX*.05-good*.14);
     this.actor.scale.set(1+down*.25+slump*.035+squash*(perfect?.06:.028)+verdictSquash*.04,
       1-down*.65-slump*.05-squash*(perfect?.1:.05)-verdictSquash*.08,
       1+down*.15+squash*(perfect?.035:.016)+verdictSquash*.025);
     // Attached anchors share each part's motion, including the breathing squash.
-    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14+squash*(perfect?.05:.022),
-      1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22-squash*(perfect?.09:.045),1+charge*.025+pain.compression*.07+squash*(perfect?.025:.01));
+    this.hood.scale.set(1+charge*.055+recoil*(perfect?.14:.04)+pain.compression*.14+squash*(perfect?.05:.022)+good*.035,
+      1-charge*.065-recoil*(perfect?.2:.06)-pain.compression*.22-squash*(perfect?.09:.045)+good*.035,1+charge*.025+pain.compression*.07+squash*(perfect?.025:.01));
     this.hood.position.y=1.78-slump*.035+Math.sin(t*2-.3)*.012*motion*(1-w)+pain.breath*.012-deathFall*.22;
-    this.hood.rotation.set(deathFall*.3,-deathFall*.08,-pain.x*.06);
+    this.hood.rotation.set(deathFall*.3+good*.055,-deathFall*.08,-pain.x*.06+good*.045);
     this.hood.scale.y*=1-deathFall*.12;
-    this.body.scale.set(1+charge*.055+verdictSquash*.18+squash*(perfect?.06:.028)+deathFall*.15,
-      1-charge*.04-verdictSquash*.24-squash*(perfect?.12:.06)-deathFall*.32,
+    this.body.scale.set(1+charge*.055+verdictSquash*.18+squash*(perfect?.06:.028)+deathFall*.15+good*.065,
+      1-charge*.04-verdictSquash*.24-squash*(perfect?.12:.06)-deathFall*.32-good*.06,
       1+verdictSquash*.09+squash*(perfect?.035:.016));
-    this.body.rotation.set(deathFall*.24,-deathFall*.06,-pain.followX*.085);
+    this.body.rotation.set(deathFall*.24,-deathFall*.06,-pain.followX*.085+good*.055);
     this.face.position.y=1.48-slump*.03-pain.compression*.012+pain.breath*.005-deathFall*.16;
-    this.face.rotation.set(deathFall*.4,0,-pain.followX*.04);
+    this.face.rotation.set(deathFall*.4-good*.025,0,-pain.followX*.04-taunt*.08+good*.04);
     this.fins.forEach((fin,i)=>{
       const side=i===0?-1:1;
-      fin.rotation.set(-charge*.06-pain.followY*.17,side*charge*.04,
-        side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07-deathFall*.22)-pain.followX*.22+side*pain.breath*.016);
+      // Flowing fins play the same startled, open-armed gesture without
+      // grafting the vegetable guardian's raised-knee pose onto the jelly.
+      fin.rotation.set(-charge*.06-pain.followY*.17-good*.12,side*(charge*.04+good*.12),
+        side*(charge*.14+Math.sin(t*2.2+i)*.045*motion*(1-w)-slump*.07-deathFall*.22+good*.72)-pain.followX*.22+side*pain.breath*.016);
       this.finSegments[i].forEach((segment,segmentIndex)=>{
         const delay=segmentIndex*.08;
-        segment.rotation.x=side*(pain.followY*.2+deathFall*(.18+segmentIndex*.14))+Math.sin(t*2.5+segmentIndex)*.025*(1-w);
-        segment.rotation.z=-pain.followX*.18+side*deathFall*(.08+segmentIndex*.07);
+        segment.rotation.x=side*(pain.followY*.2+deathFall*(.18+segmentIndex*.14))+Math.sin(t*2.5+segmentIndex)*.025*(1-w)-good*.08;
+        segment.rotation.z=-pain.followX*.18+side*(deathFall*(.08+segmentIndex*.07)+good*(.08+segmentIndex*.045));
         segment.scale.setScalar(1+pain.compression*.06*(segmentIndex+1)-deathFall*.04*segmentIndex);
       });
     });
@@ -246,14 +255,16 @@ export class JellyGuardian {
     const blink=reducedMotion||phase!=='telegraph'?1:1-.55*Math.sin(charge*Math.PI);
     const expression=defeated?1:pain.pain;
     this.eyes.forEach((eye,i)=>{
-      eye.scale.y=.115*blink*(1-Math.sqrt(expression)*.82);
+      eye.visible=true;
+      eye.scale.set(.069,.115*blink*(1-Math.sqrt(expression)*.82),.038);
       eye.rotation.z=(i===0?-1:1)*(-.12+expression*.55);
     });
     this.mouth.visible=!defeated&&pain.pain<.1;this.painMouth.visible=!defeated&&pain.pain>=.1;
     this.painMouth.scale.set(.08,.035+.04*pain.pain,.04);
+    this.expressions.update(state,reducedMotion,pain.pain>=.1);
     const heartPulse=phase==='telegraph'?1+.14*Math.sin(charge*Math.PI):success?1+.12*Math.sin(Math.min(feedbackAge/280,1)*Math.PI):1+pain.energy*.16;
     this.pearl.scale.set(.09*heartPulse,.125*heartPulse,.045*heartPulse);
-    const flash=Math.max(pain.flash,success?Math.max(0,(perfect?.9:.35)-feedbackAge/220)*(reducedMotion?.3:1):0);
+    const flash=Math.max(pain.flash,success?Math.max(0,1-feedbackAge/90)*(perfect?.3:.12)*(reducedMotion?.3:1):0);
     for(const {material,emissive,intensity} of this.materials){
       material.emissive.copy(emissive).lerp(new THREE.Color(0xe5d9ff),flash);
       material.emissiveIntensity=intensity+flash;

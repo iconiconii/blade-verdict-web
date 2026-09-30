@@ -7,6 +7,8 @@ import {
 
 export interface CombatFeedback {
   pendingRound?:boolean;
+  /** Latest ring result for the actor; kind still settles the whole relay. */
+  contactResult?:ParryResult;
   id:number; kind:ParryResult|'Verdict'|'Cut'; amount:number; score?:number;
   position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number;
   energyGain:number; angle:number; path?:Array<{x:number;y:number;time:number}>; speed?:'normal'|'fast'|'ferocious'; hitStopMs?:number; finisher?:boolean;
@@ -81,6 +83,7 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
     return emit({...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
       hitStopRemainingMs:0},
       {kind:result,amount:0,energyGain:0,pendingRound:true,position:target.position,
+        contactResult:result,
         anchorId:target.anchorId,angle:index%2?-.65:.65,hitStopMs:result==='Miss'?0:result==='Perfect'?45:25});
   }
   const aggregate=targets.length>1?(targets.some(t=>t.result==='Miss')?'Miss':targets.every(t=>t.result==='Perfect')?'Perfect':'Nice'):result;
@@ -89,6 +92,7 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   const next=emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
     successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:0,
   },{kind:aggregate,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+    contactResult:result,
     energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
     finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:aggregate==='Miss'?0:aggregate==='Perfect'?45:25});
   // Damage and energy settle once after the relay, separately from tap feedback.

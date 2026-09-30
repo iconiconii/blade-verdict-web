@@ -4,8 +4,9 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
-import { goodParryDurationMs, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
+import { goodParryDurationMs, goodStaggerWeight, guardianHitExpression, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
+import { GuardianExpressions } from './GuardianExpressions';
 
 const smooth = (value:number) => THREE.MathUtils.smoothstep(Math.max(0, Math.min(1, value)), 0, 1);
 type XYZ = [number, number, number];
@@ -39,9 +40,13 @@ export class CornGuardian {
   private brows:THREE.Mesh[] = [];
   private mouth!:THREE.Group;
   private painMouth!:THREE.Mesh;
+  private expressions!:GuardianExpressions;
   private tongue!:THREE.Mesh;
   private shield!:THREE.Group;
   private spatula!:THREE.Group;
+  private supportTarget = new THREE.Vector3();
+  private supportActual = new THREE.Vector3();
+  private supportActorMatrix = new THREE.Matrix4();
 
   constructor() {
     this.rig = createGuardianRig('corn-guardian-rig');
@@ -200,6 +205,7 @@ export class CornGuardian {
     this.mesh(new RoundedBoxGeometry(.17, .035, .025, 2, .01), eyeWhite, this.mouth, 'corn-upper-teeth', [0, -.16, .108]);
     this.painMouth = this.mesh(new THREE.SphereGeometry(1, 16, 10), mouth, this.face, 'corn-pain-mouth', [0, -.22, .082], [.16, .1, .035]);
     this.painMouth.visible = false;
+    this.expressions = new GuardianExpressions(this.face, [...this.eyes, ...this.brows, this.mouth, this.painMouth], 'corn');
   }
 
   private buildBelt(bronze:THREE.Material, dark:THREE.Material, jewel:THREE.Material) {
@@ -326,19 +332,92 @@ export class CornGuardian {
     return this.anchors[id] ?? this.body;
   }
 
+  /** Position of the supporting boot sole in actor-local coordinates. */
+  private supportPoint(target:THREE.Vector3) {
+    target.set(0, -.155, .2);
+    for (let part:THREE.Object3D|null = this.legSegments[0][2]; part && part !== this.actor; part = part.parent) {
+      part.updateMatrix();
+      target.applyMatrix4(part.matrix);
+    }
+    return target;
+  }
+
+  private applyGoodStagger(weight:number, recoil:number) {
+    if (weight <= 0) return;
+    this.supportActorMatrix.compose(this.actor.position, this.actor.quaternion, this.actor.scale);
+    this.supportPoint(this.supportTarget).applyMatrix4(this.supportActorMatrix);
+    this.supportTarget.set(
+      THREE.MathUtils.lerp(this.supportTarget.x, -.31, weight),
+      THREE.MathUtils.lerp(this.supportTarget.y, -.345, weight),
+      THREE.MathUtils.lerp(this.supportTarget.z, .34, weight),
+    );
+
+    // The reference is an off-balance startle, not a stronger PERFECT recoil:
+    // roll toward the planted left boot while the other knee comes forward.
+    this.actor.rotation.z += weight * .14;
+    this.leftLeg.rotation.x -= recoil * .105 * weight;
+    this.leftLeg.rotation.z -= weight * .14;
+    this.rightLeg.position.y += weight * .12;
+    this.rightLeg.position.z += weight * .09;
+    this.rightLeg.rotation.x -= weight * 1.05;
+    this.rightLeg.rotation.z += weight * .22;
+    this.legSegments[1][0].rotation.x -= weight * .1;
+    this.legSegments[1][1].rotation.x += weight * .85;
+    this.legSegments[1][2].rotation.x += weight * .18;
+
+    // Spread the whole silhouette. Bent forearms and turned wrists reveal
+    // the palms, while the props remain children of their original hands.
+    this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, -.1, weight);
+    this.leftArm.rotation.y = THREE.MathUtils.lerp(this.leftArm.rotation.y, -.12, weight);
+    this.leftArm.rotation.z = THREE.MathUtils.lerp(this.leftArm.rotation.z, -.95, weight);
+    this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, -.02, weight);
+    this.rightArm.rotation.y = THREE.MathUtils.lerp(this.rightArm.rotation.y, .1, weight);
+    this.rightArm.rotation.z = THREE.MathUtils.lerp(this.rightArm.rotation.z, 1.05, weight);
+    this.armSegments.forEach((segments, index) => {
+      const side = index === 0 ? -1 : 1;
+      segments[0].rotation.x *= 1 - weight;
+      segments[1].rotation.x = THREE.MathUtils.lerp(segments[1].rotation.x, -.1, weight);
+      segments[1].rotation.z += side * weight * (index === 0 ? 1.37 : 1.15);
+      segments[2].rotation.x = THREE.MathUtils.lerp(segments[2].rotation.x, -.06, weight);
+      segments[2].rotation.z -= side * weight * (index === 0 ? .62 : .5);
+    });
+
+    // Counter the lifted wrist so the long blade points up/outside the face.
+    this.spatula.position.set(
+      THREE.MathUtils.lerp(this.spatula.position.x, -.04, weight),
+      THREE.MathUtils.lerp(this.spatula.position.y, -.025, weight),
+      THREE.MathUtils.lerp(this.spatula.position.z, .36, weight),
+    );
+    this.spatula.rotation.x = THREE.MathUtils.lerp(this.spatula.rotation.x, -.06, weight);
+    this.spatula.rotation.y = THREE.MathUtils.lerp(this.spatula.rotation.y, -.12, weight);
+    this.spatula.rotation.z = THREE.MathUtils.lerp(this.spatula.rotation.z, 1.66, weight);
+    this.shield.position.set(.01 + weight * .08, -.01 - weight * .26, .2 - weight * .11);
+    this.shield.rotation.set(Math.PI / 2 + weight * .16, weight * .82, -weight * .22);
+
+    // Compensate the actor in its parent's coordinates: leaning and squash
+    // must not make the supporting sole slide or float on the ground.
+    this.actor.updateMatrix();
+    this.supportPoint(this.supportActual).applyMatrix4(this.actor.matrix);
+    this.actor.position.add(this.supportTarget.sub(this.supportActual));
+  }
+
   update(state:CombatState, reducedMotion = false) {
     const { phase, elapsed, feedback } = state;
     const pain = verdictMotion(state, reducedMotion);
+    const hit = guardianHitExpression(state);
+    const goodStagger = goodStaggerWeight(state, reducedMotion);
+    const taunt = hit.kind === 'Miss' && !reducedMotion ? hit.weight : 0;
     const breakWeight = pain.weight;
     const feedbackAge = feedback ? Math.max(0, state.time - feedback.time) : Infinity;
-    const success = (feedback?.kind === 'Nice' || feedback?.kind === 'Perfect') && feedbackAge < parryDuration(feedback.kind);
-    const perfect = success && feedback?.kind === 'Perfect';
+    const parryResult = feedback?.contactResult ?? feedback?.kind;
+    const success = (parryResult === 'Nice' || parryResult === 'Perfect') && feedbackAge < parryDuration(parryResult);
+    const perfect = success && parryResult === 'Perfect';
     const defeated = state.battle.bossHp <= 0;
     const t = state.time / 1000;
     const charge = phase === 'telegraph' ? smooth(elapsed / state.tempo.telegraphMs) : phase === 'targetActive' ? 1 - smooth(elapsed / 360) : 0;
     const parryMs = perfect ? perfectParryDurationMs : goodParryDurationMs;
-    const recoil = success ? parryImpulse(feedbackAge, parryMs) : 0;
-    const squash = success ? parrySquash(feedbackAge, parryMs) : 0;
+    const recoil = success ? parryImpulse(feedbackAge, parryMs) * (reducedMotion ? .15 : 1) : 0;
+    const squash = success ? parrySquash(feedbackAge, parryMs) * (reducedMotion ? .15 : 1) : 0;
     const verdictSquash = pain.compression * (.2 + Math.abs(pain.y) * .8);
     const tremor = perfect && !reducedMotion ? Math.sin(t * 72) * .032 * Math.max(0, 1 - feedbackAge / parryMs) : 0;
     const death = defeated ? smooth(feedbackAge / deathFallDurationMs) : 0;
@@ -364,7 +443,7 @@ export class CornGuardian {
     this.body.scale.set(1 - charge * .02 + pain.compression * .10 + death * .12,
       1 + charge * .04 - verdictSquash * .08 - squash * (perfect ? .12 : .06) - death * .22,
       1 - charge * .01 + squash * (perfect ? .04 : .02) + verdictSquash * .025);
-    this.face.rotation.set(death * .38, 0, -pain.followX * .04);
+    this.face.rotation.set(death * .38, 0, -pain.followX * .04 - taunt * .08);
     this.face.position.y = .05 - death * .13;
     this.topCap.rotation.set(death * .28 + pain.followY * .06, 0, -pain.followX * .08);
     this.huskCloak.rotation.set(-charge * .03 + death * .32, 0, pain.followX * .05);
@@ -372,7 +451,7 @@ export class CornGuardian {
 
     // Parent-child rotations keep the spatula and shield attached to the hands.
     this.leftArm.rotation.set(-charge * .5 + recoil * (perfect ? .3 : .17) + breakWeight * .16 + death * .7,
-      0, -.1 - charge * .14 - pain.followX * .16 - death * .18);
+      0, -.1 - charge * .14 - pain.followX * .16 - death * .18 - taunt * .22);
     this.rightArm.rotation.set(-charge * .35 - breakWeight * .12 + death * .62,
       0, .1 + recoil * (perfect ? .28 : .14) + breakWeight * .08 + pain.followX * .15 + death * .18);
     this.armSegments.forEach((segments, index) => {
@@ -396,32 +475,40 @@ export class CornGuardian {
     this.spatula.rotation.set(
       -.04 + weaponWindup * .08 + weaponHit * (perfect ? .12 : .06) + death * .42,
       weaponWindup * .08 + pain.followX * .04,
-      .28 - weaponWindup * .72 - weaponHit * (perfect ? .82 : .42) + weaponDrop + death * 1.08,
+      .28 - weaponWindup * .72 + weaponHit * (perfect ? .45 : .22) + weaponDrop + death * 1.08,
     );
     this.spatula.scale.set(1 + weaponHit * .035, 1 + weaponHit * .025, 1);
+    this.shield.position.set(.01, -.01, .2);
+    this.shield.rotation.set(Math.PI / 2, 0, 0);
 
+    this.leftLeg.position.set(-.31, .47, .02);
+    this.rightLeg.position.set(.31, .47, .02);
     this.leftLeg.rotation.set(breakWeight * .12 - death * .92, 0, -charge * .05 - death * .08);
     this.rightLeg.rotation.set(breakWeight * .1 - death * 1.02, 0, charge * .05 + death * .08);
     this.legSegments.forEach((segments, index) => {
-      segments[0].rotation.x = -death * (.16 + index * .03);
-      segments[1].rotation.x = -death * (.46 + index * .08);
-      segments[2].rotation.x = -death * .24;
+      segments[0].rotation.set(-death * (.16 + index * .03), 0, 0);
+      segments[1].rotation.set(-death * (.46 + index * .08), 0, 0);
+      segments[2].rotation.set(-death * .24, 0, 0);
     });
+    this.applyGoodStagger(goodStagger, recoil);
 
     const expression = defeated ? 1 : pain.pain;
     this.eyes.forEach((eye, index) => {
-      eye.scale.y = 1 - expression * .55;
+      eye.visible = true;
+      eye.scale.set(1, 1 - expression * .55, 1);
       eye.rotation.z = (index === 0 ? -1 : 1) * expression * .16;
     });
     this.brows.forEach((brow, index) => {
+      brow.visible = true;
       brow.rotation.z = (index === 0 ? -.25 : .25) + (index === 0 ? -1 : 1) * expression * .42;
     });
     this.mouth.visible = !defeated && pain.pain < .1;
     this.painMouth.visible = !defeated && pain.pain >= .1;
     this.tongue.visible = this.mouth.visible;
     this.painMouth.scale.set(.16, .08 + .06 * pain.pain, .035);
+    this.expressions.update(state, reducedMotion, pain.pain >= .1);
 
-    const flash = Math.max(pain.flash, success ? Math.max(0, (perfect ? .95 : .35) - feedbackAge / 220) : 0);
+    const flash = Math.max(pain.flash, success ? Math.max(0, 1 - feedbackAge / 90) * (perfect ? .32 : .12) : 0);
     for (const material of this.materials) {
       material.emissive.setHex(0xffffff);
       material.emissiveIntensity = flash;
