@@ -12,6 +12,17 @@ const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perf
 const battleIcon=(bossKind:BossKind):ItemIconName=>bossIngredientIcon(bossKind);
 
 let combatAudio:AudioContext|null=null;
+function playVerdictReadyTone(){
+  if(typeof window==='undefined'||!window.AudioContext)return;
+  try{
+    const context=combatAudio??=new AudioContext();
+    if(context.state==='suspended')void context.resume();
+    const oscillator=context.createOscillator(),gain=context.createGain();
+    oscillator.type='triangle';oscillator.frequency.setValueAtTime(640,context.currentTime);oscillator.frequency.exponentialRampToValueAtTime(1040,context.currentTime+.12);
+    gain.gain.setValueAtTime(.0001,context.currentTime);gain.gain.exponentialRampToValueAtTime(.075,context.currentTime+.012);gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+.18);
+    oscillator.connect(gain).connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+.2);
+  }catch{/* Audio is optional and may be blocked by the browser. */}
+}
 function playCombatTone(feedback:CombatFeedback){
   if(typeof window==='undefined'||!window.AudioContext)return;
   try{
@@ -48,6 +59,9 @@ export function Battle(){
   const [visualMeter,setVisualMeter]=useState(0),meterTimers=useRef<number[]>([]);
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
   const {battle,bossKind,phase,targets,feedback,paused}=combat;
+  const energyReadyRef=useRef(false),[energyReadyAt,setEnergyReadyAt]=useState<number|null>(null),[energyPulse,setEnergyPulse]=useState(0);
+  const verdictReadyState=battle.meter>=100&&phase!=='verdictSlash'&&phase!=='settle'&&battle.bossHp>0&&battle.playerHp>0;
+  const showReadyCallout=verdictReadyState&&energyReadyAt!==null&&combat.time-energyReadyAt<1200;
   const resolvedTargets=targets.filter(target=>target.resolved).length;
   const nextTarget=targets.find(target=>!target.resolved);
   const ingredientOrigin=feedback?.anchorId?scene.current?.getBodyAnchorLayout(feedback.anchorId)??null:feedback?{x:feedback.position.x*size.width,y:feedback.position.y*size.height}:null;
@@ -82,6 +96,15 @@ export function Battle(){
 
   useEffect(()=>{if(!feedback||!('vibrate' in navigator))return;const pattern=feedback.kind==='Perfect'?[18]:feedback.kind==='Miss'?[18,28,18]:feedback.kind==='Cut'?(feedback.speed==='ferocious'?[12,18]:[8]):[8];navigator.vibrate(pattern)},[feedback?.id]);
   useEffect(()=>{if(feedback)playCombatTone(feedback)},[feedback?.id]);
+  useEffect(()=>{
+    const full=battle.meter>=100;
+    if(full&&!energyReadyRef.current){
+      energyReadyRef.current=true;setEnergyReadyAt(combat.time);setEnergyPulse(value=>value+1);playVerdictReadyTone();
+      if('vibrate' in navigator)navigator.vibrate([18,24,42]);
+    }else if(!full){
+      energyReadyRef.current=false;setEnergyReadyAt(null);
+    }
+  },[battle.meter]);
   useEffect(()=>{
     meterTimers.current.forEach(window.clearTimeout);meterTimers.current=[];
     if(!feedback||feedback.pendingRound||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')){
@@ -118,11 +141,13 @@ export function Battle(){
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
+  const phaseHint=inVerdict?'储蓄已满 · 连续划过怪物':targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'';
   const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
   return <section className={`battle battle--storybook battle--${phase} ${feedback?.kind==='Miss'&&showFeedback?'battle--hurt':''} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
     <div className="battle-stage" ref={stage} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>useGame.getState().cancelStroke()} onLostPointerCapture={()=>{if(useGame.getState().combat.pointerId!==null)useGame.getState().cancelStroke()}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
+      {showReadyCallout&&<div className="verdict-ready-callout" role="status" aria-live="polite"><strong>裁决就绪</strong><span>释放裁决</span></div>}
       {feedback?.finisher&&showFeedback&&<div className="finisher-impact" aria-hidden="true"><i className="finisher-impact__ring"/><i className="finisher-impact__slash finisher-impact__slash--one"/><i className="finisher-impact__slash finisher-impact__slash--two"/><strong>FINISH</strong><span>FINAL CUT · 击杀确认</span></div>}
       <IngredientBurst feedback={feedback} bossKind={bossKind} origin={ingredientOrigin}/>
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
@@ -140,8 +165,8 @@ export function Battle(){
         </button>
       })}
     </div>
-    <BattleHud combat={combat} visualMeter={visualMeter} onPause={()=>useGame.getState().pause(true)}/>
-    <div className="phase-ribbon"><span className="phase-dot"/>{inVerdict?'储蓄已满 · 连续划过怪物':targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'点击身体光环 · 青色时 Perfect'}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>
+    <BattleHud combat={combat} visualMeter={visualMeter} readyPulse={energyPulse} onPause={()=>useGame.getState().pause(true)}/>
+    {phaseHint&&<div className="phase-ribbon"><span className="phase-dot"/>{phaseHint}{phase==='targetActive'&&resolvedTargets>0&&nextTarget&&!nextTarget.resolved&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>}
     {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}
     {showFeedback&&feedback&&<div className={`hit-feedback hit-feedback--${feedback.kind} ${feedback.finisher?'hit-feedback--finisher':''}`} key={`${feedback.id}-${feedback.kind}`} role="status" aria-live={feedback.kind==='Miss'?'assertive':'polite'}><strong>{feedback.finisher?'FINISH':feedback.kind==='Cut'?'CUT':feedback.kind==='Verdict'?(feedback.score===100?'PERFECT VERDICT':'VERDICT'):feedback.kind==='Nice'?'GOOD':feedback.kind.toUpperCase()}</strong><span>{feedback.pendingRound?'已判定 · 继续下一环':feedback.kind==='Miss'?'受到攻击':feedback.kind==='Cut'?(feedback.finisher?'击杀确认 · 怪物崩解':`主体切割 · Combo ×${combat.verdictCombo}`):feedback.kind==='Verdict'?`${feedback.score} 分 · 切割完成`:'招架反击'} {!feedback.pendingRound&&<b>−{feedback.amount}</b>}</span></div>}
     {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'破防！':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/verdictDurationFor(combat)*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}

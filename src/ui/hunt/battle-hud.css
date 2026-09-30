@@ -18,12 +18,16 @@
 .hunt-boss-hud > strong { display: block; margin-top: .5cqw; color: #fff9e3; font-weight: 950; font-size: 3.6cqw; font-variant-numeric: tabular-nums; text-shadow: 0 2px 2px #1b140d; }
 .hunt-charge { position: absolute; z-index: 5; top: 34%; bottom: max(5%, env(safe-area-inset-bottom)); left: .5%; width: 24%; pointer-events: none; }
 .hunt-charge-shaft { position: absolute; left: 14%; right: 49%; top: 0; bottom: 14%; }
-.hunt-charge-shaft > img { position: absolute; inset: 0; object-fit: fill; }
-.hunt-charge-well { position: absolute; top: 6.7%; bottom: 4%; left: 27%; right: 22%; background: #36231b url('/assets/ui-kit/hunt/meter-track.webp') center / 100% 100%; overflow: hidden; border-radius: 6px; display: flex; align-items: flex-end; }
+.hunt-charge-shaft > img { position: absolute; inset: 0; z-index: 2; object-fit: fill; pointer-events: none; }
+.hunt-charge-well { position: absolute; z-index: 1; top: 6.7%; bottom: 4%; left: 27%; right: 22%; background: #36231b url('/assets/ui-kit/hunt/meter-track.webp') center / 100% 100%; overflow: hidden; border-radius: 6px; display: flex; align-items: flex-end; }
 .hunt-charge-well i { width: 100%; background: #ffe835 url('/assets/ui-kit/hunt/meter-fill.webp') center / 100% 100%; transition: height .4s ease-out; border-radius: 4px; }
 .hunt-charge-medallion { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; }
 .hunt-charge-medallion span { position: absolute; bottom: 12%; width: 100%; text-align: center; color: #fff8b8; text-shadow: 0 2px #6c2405; font-size: 3.3cqw; font-weight: 900; }
 .hunt-charge.is-verdict .hunt-charge-medallion { filter: drop-shadow(0 0 12px #ffc53d); }
+.hunt-charge.is-ready { filter: drop-shadow(0 0 8px #ffe76a) drop-shadow(0 0 18px #ff9f2d); animation: verdict-ready-breathe 1.25s ease-in-out infinite; }
+.hunt-charge.is-ready .hunt-charge-well { box-shadow: 0 0 8px #fff3a6, inset 0 0 8px #ffe94b; }
+.hunt-charge.is-ready .hunt-charge-medallion { filter: drop-shadow(0 0 6px #fff1a1) drop-shadow(0 0 18px #ff9d24); animation: verdict-ready-medallion 1.25s ease-in-out infinite; }
+.hunt-charge-ready-burst { position: absolute; left: -18%; top: 52%; width: 92%; aspect-ratio: 1; border: 2px solid #fff4a5; border-radius: 50%; pointer-events: none; animation: verdict-ready-burst .8s cubic-bezier(.15,.8,.25,1) both; }
 .hunt-charge-caption { position: absolute; bottom: -4%; left: 0; width: 100%; font-size: 2.5cqw; font-weight: 900; text-align: center; color: #ffeaac; text-shadow: 0 2px #311c15; }
 .hunt-item-slots { position: absolute; z-index: 5; bottom: max(5%, env(safe-area-inset-bottom)); right: 2%; width: 36%; display: flex; gap: 4%; pointer-events: none; }
 .hunt-item-slot { position: relative; width: 48%; }
@@ -55,3 +59,7 @@
 .battle--storybook .battle-modal small { color: #e6c18d; }
 .battle--storybook .ingredient-burst img { width: 22px; height: 22px; }
 @media (prefers-reduced-motion: reduce) { .hunt-health-well i, .hunt-charge-well i, .hunt-player-health i { transition: none; } }
+@keyframes verdict-ready-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes verdict-ready-medallion { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes verdict-ready-burst { 0% { opacity: .95; transform: scale(.35); } 100% { opacity: 0; transform: scale(1.55); } }
+@media (prefers-reduced-motion: reduce) { .hunt-charge.is-ready, .hunt-charge.is-ready .hunt-charge-medallion { animation: none; } .hunt-charge-ready-burst { animation: none; opacity: .55; } }

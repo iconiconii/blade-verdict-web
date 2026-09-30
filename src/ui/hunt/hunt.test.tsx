@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createCombat } from '../../domain/combat';
-import { BattleHud, battleClock } from './BattleHud';
+import { BattleHud, battleClock, battleCountdownClock } from './BattleHud';
 import { HuntScreens } from './HuntScreens';
 
 const assetFiles = import.meta.glob('/public/assets/**/*.{png,webp}');
@@ -9,6 +9,10 @@ const assetFiles = import.meta.glob('/public/assets/**/*.{png,webp}');
 describe('reference hunt UI', () => {
   it.each([[0, '00:00'], [28000, '00:28'], [61000, '01:01'], [-1, '00:00'], [Infinity, '00:00']])('formats the simulation clock %s', (ms, expected) => {
     expect(battleClock(ms as number)).toBe(expected);
+  });
+
+  it.each([[0, '00:30'], [1000, '00:29'], [28500, '00:01'], [30000, '00:00'], [60000, '00:00']])('formats the battle countdown %s', (ms, expected) => {
+    expect(battleCountdownClock(ms)).toBe(expected);
   });
 
   it('starts in chapter browsing, not directly in a fight', () => {
@@ -28,15 +32,29 @@ describe('reference hunt UI', () => {
     state.battle.meter = 65;
     state.combo = 4;
     const html = renderToStaticMarkup(<BattleHud combat={state} visualMeter={60} onPause={() => {}} />);
-    expect(html).toContain('00:28');
+    expect(html).toContain('00:01');
     expect(html).toContain('果冻怪');
     expect(html).toContain('320 / 800');
-    expect(html).toContain('76/100');
+    expect(html).not.toContain('76/100');
     expect(html).toContain('width:40%');
     expect(html).toContain('height:60%');
     expect(html).toContain('aria-valuenow="65"');
     expect(html.match(/<button/g)).toHaveLength(1); // Pause only; meter is automatic.
     expect(html).not.toContain('5000');
+  });
+
+  it('marks a full verdict meter as ready and clears it once released', () => {
+    const state = createCombat(1, 'corn');
+    state.phase = 'verdictReady';
+    state.battle.meter = 100;
+    const ready = renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} readyPulse={1} onPause={() => {}} />);
+    expect(ready).toContain('data-ready="true"');
+    expect(ready).toContain('hunt-charge is-verdict is-ready');
+    state.phase = 'verdictSlash';
+    state.battle.meter = 0;
+    const released = renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} readyPulse={1} onPause={() => {}} />);
+    expect(released).toContain('data-ready="false"');
+    expect(released).not.toContain('is-ready');
   });
 
   it('keeps ordinary battle assets local and complete', () => {

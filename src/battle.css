@@ -112,3 +112,8 @@
 
 .battle[data-paused=true] *{animation-play-state:paused!important}
 @media(max-height:500px){.resource-meter__track{height:85px}.resource-meter__name{display:none}.resource-meter__cap span{display:none}.target-caption{font-size:8px}.combat-instruction{display:none}}
+.battle--storybook .verdict-ready-callout{position:absolute;z-index:7;top:38%;left:22%;width:30%;text-align:center;pointer-events:none;color:#fff4a4;text-shadow:0 2px 4px #3b1809,0 0 16px #ffab2c;animation:verdict-ready-callout 1.2s ease-out both}
+.battle--storybook .verdict-ready-callout strong{display:block;font-size:5.5cqw;line-height:1.1;letter-spacing:.06em}
+.battle--storybook .verdict-ready-callout span{display:block;margin-top:3px;color:#fffbe0;font-size:2.9cqw;letter-spacing:.08em}
+@keyframes verdict-ready-callout{0%{opacity:0;transform:translateY(10px) scale(.85)}16%{opacity:1;transform:translateY(0) scale(1.04)}72%{opacity:1;transform:translateY(-2px) scale(1)}100%{opacity:0;transform:translateY(-12px) scale(.98)}}
+@media(prefers-reduced-motion:reduce){.battle--storybook .verdict-ready-callout{animation:none;opacity:1}}
