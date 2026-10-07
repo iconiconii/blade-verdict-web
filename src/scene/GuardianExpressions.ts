@@ -144,7 +144,7 @@ export class GuardianExpressions {
     group.position.set(0,reducedMotion?0:expression.weight*.01,0);
     group.rotation.set(0,0,expression.kind==='Miss'?-.075*movement:0);
     if(expression.kind==='Good'){
-      group.position.y+=this.goodFaceLift+Math.sin(age*.018)*movement*.012;
+      group.position.y+=this.goodFaceLift*expression.weight+Math.sin(age*.018)*movement*.012;
       this.goodMouth.scale.y=.119*(.82+.18*expression.weight);
       const pop=reducedMotion?1:1+.15*Math.sin(Math.min(age/70,1)*Math.PI)*expression.weight;
       this.goodSymbols.scale.setScalar(pop);

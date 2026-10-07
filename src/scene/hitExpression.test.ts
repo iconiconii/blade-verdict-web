@@ -4,7 +4,7 @@ import { createCombat, prepareRound, tapTarget, tickCombat, type CombatFeedback,
 import { CornGuardian } from './CornGuardian';
 import { JellyGuardian } from './JellyGuardian';
 import { CarrotGuardian, CabbageGuardian, TomatoGuardian } from './VegetableGuardian';
-import { goodStaggerWeight, guardianHitExpression, hitExpressionFor, hitExpressionDurations } from './hitMotion';
+import { goodParryDurationMs, goodStaggerDurationMs, goodStaggerWeight, guardianHitExpression, hitExpressionFor, hitExpressionDurations, parryDuration } from './hitMotion';
 
 const guardians:Array<{ root:THREE.Group; update:(state:CombatState)=>void }>=[];
 const feedback=(kind:CombatFeedback['kind']):CombatFeedback=>({
@@ -28,12 +28,25 @@ const dispose=(root:THREE.Group)=>{
 afterEach(()=>{for(const guardian of guardians.splice(0))dispose(guardian.root)});
 
 describe('hit expression timing',()=>{
+  it('keeps the GOOD reaction readable without widening the combat parry window',()=>{
+    expect(goodStaggerDurationMs).toBe(450);
+    expect(hitExpressionDurations.Nice).toBe(goodStaggerDurationMs);
+    expect(parryDuration('Nice')).toBe(goodParryDurationMs);
+    expect(goodStaggerWeight(stateFor('Nice',100))).toBe(1);
+    expect(goodStaggerWeight(stateFor('Nice',260))).toBe(1);
+    expect(goodStaggerWeight(stateFor('Nice',400))).toBeGreaterThan(0);
+    expect(goodStaggerWeight(stateFor('Nice',450))).toBe(0);
+    expect(hitExpressionFor('Nice',400).kind).toBe('Good');
+    expect(hitExpressionFor('Nice',450).kind).toBe('Idle');
+  });
+
   it('synchronizes the GOOD reference pose and expression through landing',()=>{
     expect(goodStaggerWeight(stateFor('Nice',0))).toBeGreaterThan(0);
-    expect(goodStaggerWeight(stateFor('Nice',85))).toBe(1);
-    expect(goodStaggerWeight(stateFor('Nice',200))).toBeGreaterThan(0);
-    expect(goodStaggerWeight(stateFor('Nice',250))).toBe(0);
-    expect(guardianHitExpression(stateFor('Nice',250)).kind).toBe('Idle');
+    expect(goodStaggerWeight(stateFor('Nice',100))).toBe(1);
+    expect(goodStaggerWeight(stateFor('Nice',260))).toBe(1);
+    expect(goodStaggerWeight(stateFor('Nice',400))).toBeGreaterThan(0);
+    expect(goodStaggerWeight(stateFor('Nice',450))).toBe(0);
+    expect(guardianHitExpression(stateFor('Nice',450)).kind).toBe('Idle');
     expect(goodStaggerWeight(stateFor('Nice'),true)).toBe(0);
     expect(goodStaggerWeight(stateFor('Perfect'))).toBe(0);
     expect(goodStaggerWeight({...stateFor('Nice'),phase:'verdictSlash'})).toBe(0);
@@ -113,7 +126,10 @@ describe('hit expression timing',()=>{
     expect(point(rightHand).x-point(leftHand).x).toBeGreaterThan(idleRight.x-idleLeft.x+.3);
     expect(point(rightFoot).y).toBeGreaterThan(idleRightFoot.y+.15);
     expect(point(rightFoot).y-point(leftFoot).y).toBeGreaterThan(.15);
-    for(const age of [70,100,145]){
+    // The slower GOOD curve eases into the one-foot support point during the
+    // first 100ms; validate the planted sole once the pose reaches its
+    // peak/hold window instead of requiring the final pose during entry.
+    for(const age of [100,145,260]){
       corn.update(stateFor('Nice',age));corn.root.updateMatrixWorld(true);
       const sole=leftFoot.localToWorld(new THREE.Vector3(0,-.155,.2));
       expect(sole.distanceTo(new THREE.Vector3(-.31,-.345,.34))).toBeLessThan(1e-8);

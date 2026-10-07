@@ -4,7 +4,11 @@ import type { CombatFeedback, CombatState } from '../domain/combat';
 /** Shared recoil timing; GOOD layers its reference startle pose on top. */
 export const goodParryDurationMs = 250;
 export const perfectParryDurationMs = 350;
-export const hitExpressionDurations = { Nice:goodParryDurationMs, Perfect:620, Miss:720 } as const;
+/** Presentation-only GOOD timing; the combat parry window remains 250ms. */
+export const goodStaggerDurationMs = 450;
+export const goodStaggerPeakMs = 100;
+export const goodStaggerHoldMs = 300;
+export const hitExpressionDurations = { Nice:goodStaggerDurationMs, Perfect:620, Miss:720 } as const;
 
 export type HitExpressionKind = 'Idle'|'Good'|'Perfect'|'Miss';
 export interface HitExpression {
@@ -37,9 +41,9 @@ export function guardianHitExpression(state:CombatState):HitExpression{
 export function goodStaggerWeight(state:CombatState,reducedMotion=false){
   if(reducedMotion||guardianHitExpression(state).kind!=='Good')return 0;
   const age=state.time-state.feedback!.time;
-  if(age<70)return .22+.78*THREE.MathUtils.smoothstep(age/70,0,1);
-  if(age<145)return 1;
-  return 1-THREE.MathUtils.smoothstep((age-145)/(goodParryDurationMs-145),0,1);
+  if(age<goodStaggerPeakMs)return .22+.78*THREE.MathUtils.smoothstep(age/goodStaggerPeakMs,0,1);
+  if(age<goodStaggerHoldMs)return 1;
+  return 1-THREE.MathUtils.smoothstep((age-goodStaggerHoldMs)/(goodStaggerDurationMs-goodStaggerHoldMs),0,1);
 }
 
 /**
