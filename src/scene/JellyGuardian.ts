@@ -3,7 +3,7 @@ import type { CombatState } from '../domain/combat';
 import { deathFallDurationMs } from '../domain/combat';
 import type { BodyAnchorId } from '../domain/v2';
 import { verdictMotion } from './verdictMotion';
-import { goodParryDurationMs, goodStaggerWeight, guardianHitExpression, parryDuration, parryImpulse, parrySquash, perfectParryDurationMs } from './hitMotion';
+import { goodStaggerWeight, guardianHitExpression, parryDuration, parryImpulse, parrySquash } from './hitMotion';
 import { createGuardianRig, guardianPoseFor, type GuardianRig } from './GuardianRig';
 import { GuardianExpressions } from './GuardianExpressions';
 
@@ -198,11 +198,11 @@ export class JellyGuardian {
     this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     const feedbackAge=feedback?Math.max(0,state.time-feedback.time):Infinity;
     const parryResult=feedback?.contactResult??feedback?.kind;
-    const success=(parryResult==='Nice'||parryResult==='Perfect')&&feedbackAge<parryDuration(parryResult);
+    const success=(parryResult==='Nice'||parryResult==='Perfect')&&feedbackAge<parryDuration(parryResult,'jelly');
     const perfect=success&&parryResult==='Perfect';
     const t=state.time/1000;
     const charge=phase==='telegraph'?smooth(elapsed/state.tempo.telegraphMs):phase==='targetActive'?1-smooth(elapsed/360):0;
-    const parryMs=perfect?perfectParryDurationMs:goodParryDurationMs;
+    const parryMs=parryDuration(perfect?'Perfect':'Nice','jelly');
     const recoil=success?parryImpulse(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
     const squash=success?parrySquash(feedbackAge,parryMs)*(reducedMotion?.15:1):0;
     const verdictSquash=pain.compression*(.2+Math.abs(pain.y)*.8);

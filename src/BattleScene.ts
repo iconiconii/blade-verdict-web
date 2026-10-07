@@ -5,15 +5,16 @@ import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
 import { CarrotGuardian, CabbageGuardian, TomatoGuardian, type VegetableGuardian } from './scene/VegetableGuardian';
 import { SliceEffects } from './scene/SliceEffects';
-import { makeBattleCamera, projectBodyAnchor } from './scene/layout';
+import { liveParryLayouts, makeBattleCamera, nearestParryTarget, projectBodyAnchor, type ParryTargetLayout } from './scene/layout';
 import { MonsterHitArea } from './scene/MonsterHitArea';
 import { ImpactPresentation } from './scene/ImpactPresentation';
 import { ringRadiusAt, type BodyAnchorId, type BossKind } from './domain/v2';
+import { FeedbackManager } from './feedback/FeedbackManager';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 type BattleGuardian=CornGuardian|JellyGuardian|VegetableGuardian;
 const basic=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,toneMapped:false});
-export interface ParryTargetLayout { round:number; x:number; y:number; diameter:number; visible:boolean }
+export type { ParryTargetLayout } from './scene/layout';
 
 /** Perspective world plus a pixel-space Three.js effects pass. React owns text. */
 export class BattleScene {
@@ -32,6 +33,7 @@ export class BattleScene {
   private jellyEnvironment:THREE.WebGLRenderTarget|null=null;
   private sliceEffects:SliceEffects;
   private impactPresentation=new ImpactPresentation();
+  private feedbackManager=new FeedbackManager();
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     this.bossKind=bossKind;
@@ -99,6 +101,9 @@ export class BattleScene {
   }
   /** React uses the exact layout just rendered, never a second projection/animation clock. */
   getTargetLayout(index:number){return this.targetLayouts[index]}
+  getTargetAt(x:number,y:number,currentState?:CombatState){
+    return nearestParryTarget(currentState?liveParryLayouts(this.targetLayouts,currentState):this.targetLayouts,{x,y});
+  }
   getBodyAnchorLayout(anchorId:BodyAnchorId){
     if(!this.guardian)return null;
     return projectBodyAnchor(this.guardian.getAnchor(anchorId),this.camera,this.width,this.height);
@@ -107,16 +112,16 @@ export class BattleScene {
     return this.hitArea.contains(point);
   }
   render(state:CombatState,reducedMotion=false){
-    if(this.disposed)return;const {phase,feedback,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
+    if(this.disposed)return;const {phase,elapsed}=state,w=this.width,h=this.height,t=state.time/1000;
+    const snapshot=this.feedbackManager.update(state),feedback=snapshot.actorFeedback,hurt=snapshot.hurtFeedback;
     const verdict=phase==='verdictReady'||phase==='verdictSlash';
-    const impact=phase==='impact'||phase==='stagger'||feedback?.kind==='Cut';
-    const age=feedback?Math.max(0,state.time-feedback.time):(phase==='stagger'?elapsed+280:elapsed),strength=Math.max(0,1-age/650);
-    const presentation=this.impactPresentation.update(state,reducedMotion);
-    const shake=presentation.shake+(!reducedMotion&&feedback?.kind==='Miss'&&impact?Math.sin(t*120)*.026*strength:0);
+    const hurtAge=hurt?Math.max(0,state.time-hurt.time):Infinity,strength=Math.max(0,1-hurtAge/650);
+    const presentation=this.impactPresentation.update(state,reducedMotion,feedback);
+    const shake=presentation.shake+(!reducedMotion&&hurt?Math.sin(t*120)*.026*strength:0);
     this.camera.position.x=shake;this.camera.updateMatrixWorld();
     this.guardian.update(presentation.actor,reducedMotion);this.guardian.root.updateMatrixWorld(true);
     this.hitArea.update(this.camera);
-    const arenaColor=verdict?0x76ffe5:feedback?.kind==='Miss'?0xff665e:
+    const arenaColor=verdict?0x76ffe5:hurt?0xff665e:
       this.bossKind==='jelly'?0xa98cff:
         this.bossKind==='carrot'?0xff8745:
           this.bossKind==='cabbage'?0x9ed86c:
@@ -132,7 +137,7 @@ export class BattleScene {
       group.visible=show;if(!target)continue;
       const center=projectBodyAnchor(this.guardian.getAnchor(target.anchorId),this.camera,w,h);
       const radius=ringRadiusAt(Math.max(0,elapsed-target.startDelayMs),target.ringDurationMs,target.maxRadiusPx);
-      this.targetLayouts[i]={round:state.round,...center,diameter:Math.max(44,radius*2),visible:show};
+      this.targetLayouts[i]={index:i,circleId:target.circleId,round:state.round,...center,diameter:Math.max(44,radius*2),visible:show&&!state.paused};
       if(!show)continue;
       group.position.set(center.x,-center.y,24);group.scale.setScalar(radius);
       const color=target.phase==='perfect'
@@ -154,6 +159,7 @@ export class BattleScene {
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;this.renderer.domElement.removeEventListener('webglcontextlost',this.contextLost);
+    this.feedbackManager.dispose();
     const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();
     for(const scene of [this.world,this.overlay])scene.traverse(object=>{
       if(object instanceof THREE.Mesh||object instanceof THREE.Line){geometries.add(object.geometry);const m=object.material;if(Array.isArray(m))m.forEach(item=>materials.add(item));else materials.add(m);}

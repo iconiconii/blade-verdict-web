@@ -6,6 +6,7 @@ import type { BossKind } from '../domain/v2';
 const flat=(color:number,opacity=1)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthTest:false,depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
 type Burst={root:THREE.Group; blade:THREE.Mesh<THREE.ShapeGeometry,THREE.MeshBasicMaterial>; halves:THREE.Group[];
   trail:THREE.Line<THREE.BufferGeometry,THREE.LineBasicMaterial>; dust:THREE.InstancedMesh; materials:THREE.MeshBasicMaterial[]; event:CombatFeedback|null; x:number; y:number; length:number};
+type GoodBurst={root:THREE.Group;rays:THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>[];chunks:THREE.InstancedMesh;event:CombatFeedback|null};
 
 /** Bounded object pool: curved blades, exposed food cross-sections and juice. No pointer polyline. */
 export class SliceEffects {
@@ -13,10 +14,8 @@ export class SliceEffects {
   private seen=0;
   private cursor=0;
   private dummy=new THREE.Object3D();
-  private goodEvent:CombatFeedback|null=null;
-  private goodComic=new THREE.Group();
-  private goodRays:THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>[]=[];
-  private goodChunks:THREE.InstancedMesh;
+  private goodPool:GoodBurst[]=[];
+  private goodCursor=0;
   constructor(private scene:THREE.Scene,kind:BossKind){
     const palette=kind==='corn'
       ?{face:0xffecab,edge:0xdf911e,kernels:0xe8ab23,dust:0xffbf42,detail:1.2}
@@ -27,17 +26,21 @@ export class SliceEffects {
           :kind==='tomato'
             ?{face:0xff9a75,edge:0xb52e38,kernels:0xe95b3d,dust:0xff875f,detail:.82}
             :{face:0xd8bcff,edge:0x8657c8,kernels:0x9d7aea,dust:0xb894ff,detail:.6};
-    this.goodComic.name='good-comic-impact';this.goodComic.visible=false;this.goodComic.position.z=30;scene.add(this.goodComic);
     const rayGeometry=new THREE.BufferGeometry();
     rayGeometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,-.5,0,1,.5,0],3));
-    const rayMaterial=flat(0xfff6d7,.28);
-    for(let i=0;i<16;i++){
-      const ray=new THREE.Mesh(rayGeometry,rayMaterial);ray.name='good-peripheral-speed-line';ray.renderOrder=30;
-      this.goodComic.add(ray);this.goodRays.push(ray);
+    const chunkGeometry=new RoundedBoxGeometry(1,1,.7,2,.15);
+    for(let slot=0;slot<4;slot++){
+      const root=new THREE.Group(),rays:GoodBurst['rays']=[],rayMaterial=flat(0xfff6d7,.28);
+      root.name='good-comic-impact';root.visible=false;root.position.z=30;scene.add(root);
+      for(let i=0;i<16;i++){
+        const ray=new THREE.Mesh(rayGeometry,rayMaterial);ray.name='good-peripheral-speed-line';ray.renderOrder=30;
+        root.add(ray);rays.push(ray);
+      }
+      const chunks=new THREE.InstancedMesh(chunkGeometry,flat(palette.kernels),7);
+      chunks.name='good-food-fragments';chunks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      chunks.frustumCulled=false;chunks.renderOrder=40;root.add(chunks);
+      this.goodPool.push({root,rays,chunks,event:null});
     }
-    this.goodChunks=new THREE.InstancedMesh(new RoundedBoxGeometry(1,1,.7,2,.15),flat(palette.kernels),7);
-    this.goodChunks.name='good-food-fragments';this.goodChunks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.goodChunks.frustumCulled=false;this.goodChunks.renderOrder=40;this.goodComic.add(this.goodChunks);
     const bladeShape=new THREE.Shape();
     bladeShape.moveTo(-110,-20);bladeShape.quadraticCurveTo(-5,64,110,20);
     bladeShape.quadraticCurveTo(12,12,-110,-20);
@@ -70,10 +73,10 @@ export class SliceEffects {
     }
   }
   update(state:CombatState,reducedMotion:boolean,position:(event:CombatFeedback)=>{x:number;y:number},width=1,height=1){
-    for(const event of state.effects){
+    for(const event of [...state.effects].sort((a,b)=>a.id-b.id)){
       if(event.id<=this.seen)continue;
       this.seen=event.id;
-      this.goodEvent=(event.contactResult??event.kind)==='Nice'?event:null;
+      if((event.contactResult??event.kind)==='Nice')this.goodPool[this.goodCursor++%this.goodPool.length].event=event;
       if(event.kind==='Miss')continue;
       const slot=this.pool[this.cursor++%this.pool.length],p=position(event);
       const path=event.path&&event.path.length>1?event.path:null;
@@ -81,7 +84,8 @@ export class SliceEffects {
       slot.event=event;slot.x=end?end.x*width:p.x;slot.y=end?end.y*height:p.y;
       slot.length=start&&end?Math.max(70,Math.min(320,Math.hypot((end.x-start.x)*640,(end.y-start.y)*640))):140;
     }
-    this.updateGoodComic(state,reducedMotion,width,height);
+    const activeGood=this.goodPool.filter(slot=>slot.event&&state.time-slot.event.time<250).length;
+    for(const slot of this.goodPool)this.updateGoodComic(slot,state,reducedMotion,width,height,activeGood);
     for(const slot of this.pool){
       const event=slot.event,age=event?state.time-event.time:Infinity;
       slot.root.visible=age<720;if(!event||age>=720)continue;
@@ -127,15 +131,15 @@ export class SliceEffects {
     }
   }
 
-  private updateGoodComic(state:CombatState,reducedMotion:boolean,width:number,height:number){
-    const event=this.goodEvent,age=event?state.time-event.time:Infinity;
-    this.goodComic.visible=!reducedMotion&&age>=0&&age<250&&state.battle.bossHp>0
+  private updateGoodComic(slot:GoodBurst,state:CombatState,reducedMotion:boolean,width:number,height:number,activeGood:number){
+    const event=slot.event,age=event?state.time-event.time:Infinity;
+    slot.root.visible=!reducedMotion&&age>=0&&age<250&&state.battle.bossHp>0
       &&state.phase!=='settle'&&state.phase!=='verdictReady'&&state.phase!=='verdictSlash';
-    if(!this.goodComic.visible||!event)return;
+    if(!slot.root.visible||!event)return;
     const progress=age/250,fade=1-progress;
     const centerX=width*.5,centerY=height*.55;
-    for(let i=0;i<this.goodRays.length;i++){
-      const ray=this.goodRays[i],angle=(i+.5)/this.goodRays.length*Math.PI*2;
+    for(let i=0;i<slot.rays.length;i++){
+      const ray=slot.rays[i],angle=(i+.5)/slot.rays.length*Math.PI*2;
       const dx=Math.cos(angle),dy=Math.sin(angle);
       const extent=Math.min((dx>0?width-centerX:centerX)/Math.abs(dx),(dy>0?centerY:height-centerY)/Math.abs(dy));
       // The middle remains empty: no lines across the face or the active blade.
@@ -143,15 +147,15 @@ export class SliceEffects {
       ray.position.set(centerX+dx*start,-centerY+dy*start,0);ray.rotation.z=angle;
       ray.scale.set(Math.max(0,extent-start),1.1+(i%3)*.35,1);ray.visible=age<210;
     }
-    this.goodRays[0].material.opacity=Math.max(0,1-age/210)*.28;
-    (this.goodChunks.material as THREE.MeshBasicMaterial).opacity=fade;
+    slot.rays[0].material.opacity=Math.max(0,1-age/210)*.28/Math.max(1,activeGood);
+    (slot.chunks.material as THREE.MeshBasicMaterial).opacity=fade;
     for(let i=0;i<7;i++){
       const angle=i*2.39996+event.id*.4,r=(Math.min(width,height)*.19+progress*48)*(i%2?.92:1.12);
       this.dummy.position.set(centerX+Math.cos(angle)*r,-centerY+Math.sin(angle)*r-progress*progress*30,2);
       this.dummy.rotation.set(progress*2+i*.3,progress*1.8,angle+progress*1.6);
       this.dummy.scale.setScalar((6+i%3)*Math.min(1,fade*3));this.dummy.updateMatrix();
-      this.goodChunks.setMatrixAt(i,this.dummy.matrix);
+      slot.chunks.setMatrixAt(i,this.dummy.matrix);
     }
-    this.goodChunks.instanceMatrix.needsUpdate=true;
+    slot.chunks.instanceMatrix.needsUpdate=true;
   }
 }

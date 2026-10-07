@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { deterministicBodyAnchor, deterministicTarget, type BossKind } from './v2';
 import { applyContinuousCut, createCombat, durations, prepareRound, relayDelayMs,
-  startVerdict, tapTarget, tempoFor, tickCombat, type CombatState } from './combat';
+  startVerdict, tapTarget as tapById, tempoFor, tickCombat, type CombatState } from './combat';
+
+const tapTarget=(state:CombatState,index:number)=>tapById(state,state.targets[index]?.circleId??'missing-circle');
 
 function active(kind:BossKind='corn',relay=false){
-  const prepared=prepareRound({...createCombat(7319,kind),round:relay?5:0,successfulParries:relay?6:0});
+  let prepared=prepareRound({...createCombat(7319,kind),round:relay?4:0,successfulParries:relay?6:0});
+  if(kind!=='jelly'){
+    for(let round=0;prepared.targets.length!==(relay?2:1)&&round<100;round++)prepared=prepareRound({...prepared,round});
+  }
   return tickCombat(prepared,prepared.tempo.telegraphMs);
 }
 const verdict=()=>startVerdict({...createCombat(),phase:'verdictReady',battle:{...createCombat().battle,meter:100}});
@@ -18,20 +23,20 @@ describe('accessible web combat',()=>{
     expect(tapTarget(s,0)).toBe(s);
     s=tickCombat(s,s.tempo.telegraphMs);
     expect(s.phase).toBe('targetActive');
-    expect(s.targets[0].ringDurationMs).toBe(1800);
+    expect(s.targets[0].ringDurationMs).toBe(1440);
   });
-  it.each([0,200,699,1400,1799])('accepts a Good click at %i ms',time=>{
+  it.each([0,200,503,1176,1439])('accepts a Good click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Nice');
     expect(s.battle).toMatchObject({playerHp:100,bossHp:792,meter:18});
   });
-  it.each([700,1000,1399])('accepts a Perfect click at %i ms',time=>{
+  it.each([504,800,1175])('accepts a Perfect click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Perfect');
     expect(s.battle).toMatchObject({playerHp:100,bossHp:788,meter:30});
   });
   it('resolves each target once, including the exact timeout boundary',()=>{
-    const timeout=tickCombat(active(),1800);
+    const timeout=tickCombat(active(),1440);
     expect(timeout.battle.playerHp).toBe(88);
     expect(timeout.targets[0]).toMatchObject({resolved:true,result:'Miss'});
     expect(tapTarget(timeout,0)).toBe(timeout);
@@ -54,7 +59,7 @@ describe('accessible web combat',()=>{
     }
   });
   it('does not show or start the second ring until the first resolves',()=>{
-    let s=active('corn',true);
+    let s=active('jelly',true);
     expect(s.targets).toHaveLength(2);
     expect(s.targets[1].startDelayMs).toBe(Infinity);
     expect(tapTarget(s,1)).toBe(s);
@@ -67,33 +72,33 @@ describe('accessible web combat',()=>{
     expect(tapTarget(s,1)).toBe(s);
     s=tapTarget(tickCombat(s,1),1);
     expect(s.phase).toBe('impact');
-    expect(s.battle).toMatchObject({bossHp:792,meter:18});
+    expect(s.battle).toMatchObject({bossHp:792,meter:22});
     expect(s.combo).toBe(1);
   });
   it('keeps the latest circle result alongside the aggregate relay result',()=>{
-    let goodThenPerfect=active('corn',true);
+    let goodThenPerfect=active('jelly',true);
     goodThenPerfect=tapTarget(tickCombat(goodThenPerfect,200),0);
     goodThenPerfect=tapTarget(tickCombat(goodThenPerfect,relayDelayMs+800),1);
     expect(goodThenPerfect.feedback).toMatchObject({kind:'Nice',contactResult:'Perfect'});
 
-    let missThenPerfect=active('corn',true);
+    let missThenPerfect=active('jelly',true);
     missThenPerfect=tickCombat(missThenPerfect,missThenPerfect.targets[0].ringDurationMs);
     missThenPerfect=tapTarget(tickCombat(missThenPerfect,relayDelayMs+800),1);
     expect(missThenPerfect.feedback).toMatchObject({kind:'Miss',contactResult:'Perfect'});
   });
   it('aggregates a relay miss once after the second ring expires',()=>{
-    let s=tapTarget(active('corn',true),0);
+    let s=tapTarget(active('jelly',true),0);
     s=tickCombat(s,relayDelayMs+s.targets[1].ringDurationMs);
-    expect(s.battle).toMatchObject({playerHp:88,bossHp:800,meter:0});
+    expect(s.battle).toMatchObject({playerHp:92,bossHp:800,meter:0});
     expect(s.feedback?.kind).toBe('Miss');
   });
   it('gives the second ring a full window even after the first times out',()=>{
-    let s=active('corn',true);
+    let s=active('jelly',true);
     s=tickCombat(s,s.targets[0].ringDurationMs);
     expect(s.battle.playerHp).toBe(100);
     expect(s.targets[1].startDelayMs).toBe(s.elapsed+relayDelayMs);
     s=tapTarget(tickCombat(s,relayDelayMs),1);
-    expect(s.battle).toMatchObject({playerHp:88,meter:0});
+    expect(s.battle).toMatchObject({playerHp:92,meter:0});
   });
   it('stops queued rings on full energy and automatically enters verdict once',()=>{
     let s=active('corn');
@@ -112,7 +117,7 @@ describe('accessible web combat',()=>{
   it('keeps simulation running during Perfect visual stop but freezes on pause',()=>{
     const s=tapTarget(tickCombat(active(),800),0);
     const stopped=tickCombat(s,99);
-    expect(s.feedback?.hitStopMs).toBe(45);
+    expect(s.feedback?.hitStopMs).toBe(80);
     expect(stopped.time).toBe(s.time+99);
     expect(stopped.elapsed).toBe(s.elapsed+99);
     expect(tickCombat(stopped,2).elapsed).toBe(101);
@@ -121,7 +126,7 @@ describe('accessible web combat',()=>{
     expect(tapTarget(paused,0)).toBe(paused);
   });
   it('increases three difficulty axes only after successful play',()=>{
-    for(const kind of ['corn','jelly'] as const){
+    for(const kind of ['jelly'] as const){
       const warm=tempoFor(kind,0),mid=tempoFor(kind,6),fast=tempoFor(kind,20);
       expect(warm).toMatchObject({durationMs:1800,maxRadiusPx:90,telegraphMs:400});
       expect(mid.durationMs).toBeLessThan(warm.durationMs);

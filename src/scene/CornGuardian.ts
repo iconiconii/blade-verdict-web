@@ -432,16 +432,16 @@ export class CornGuardian {
     // stable at the planted feet.
     this.actor.position.set(tremor + pain.x * .11, -death * .08 - Math.max(0, verdictSquash) * .035,
       -recoil * (perfect ? .18 : .1) + death * .18);
-    this.actor.rotation.set(-charge * .07 + recoil * (perfect ? .21 : .105) - slump * .035 - pain.y * .29 + death * .92,
+    this.actor.rotation.set(-charge * .07 + recoil * (perfect ? THREE.MathUtils.degToRad(14) : .105) - slump * .035 - pain.y * .29 + death * .92,
       tremor * .5 + pain.x * .15, death * .15 - pain.x * .25 - pain.followX * .05);
-    this.actor.scale.set(1 + death * .08 + squash * (perfect ? .055 : .025) + verdictSquash * .04,
-      1 - death * .16 - squash * (perfect ? .09 : .045) - verdictSquash * .08,
+    this.actor.scale.set(1 + death * .08 + squash * (perfect ? .075 : .025) + verdictSquash * .04,
+      1 - death * .16 - squash * (perfect ? .12 : .045) - verdictSquash * .08,
       1 + squash * (perfect ? .028 : .012) + verdictSquash * .025);
 
     this.body.position.y = 1.13 + Math.sin(t * 2.1) * .018 * idle * (1 - breakWeight) + pain.breath * .008 - squash * (perfect ? .035 : .018) - death * .15;
     this.body.rotation.set(-slump * .04 + pain.energy * .06 + death * .24, 0, -pain.x * .035);
     this.body.scale.set(1 - charge * .02 + pain.compression * .10 + death * .12,
-      1 + charge * .04 - verdictSquash * .08 - squash * (perfect ? .12 : .06) - death * .22,
+      1 + charge * .04 - verdictSquash * .08 - squash * (perfect ? .15 : .06) - death * .22,
       1 - charge * .01 + squash * (perfect ? .04 : .02) + verdictSquash * .025);
     this.face.rotation.set(death * .38, 0, -pain.followX * .04 - taunt * .08);
     this.face.position.y = .05 - death * .13;

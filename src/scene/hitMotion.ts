@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import type { CombatFeedback, CombatState } from '../domain/combat';
+import type { BossKind } from '../domain/v2';
 
 /** Shared recoil timing; GOOD layers its reference startle pose on top. */
 export const goodParryDurationMs = 250;
-export const perfectParryDurationMs = 350;
-/** Presentation-only GOOD timing; the combat parry window remains 250ms. */
+export const perfectParryDurationMs = 550;
+/** Presentation-only GOOD timing; the base recoil remains 250ms. */
 export const goodStaggerDurationMs = 450;
 export const goodStaggerPeakMs = 100;
 export const goodStaggerHoldMs = 300;
-export const hitExpressionDurations = { Nice:goodStaggerDurationMs, Perfect:620, Miss:720 } as const;
+export const hitExpressionDurations = { Nice:goodStaggerDurationMs, Perfect:550, Miss:500 } as const;
+const legacyHitExpressionDurations = { Nice:goodStaggerDurationMs, Perfect:620, Miss:720 } as const;
 
 export type HitExpressionKind = 'Idle'|'Good'|'Perfect'|'Miss';
 export interface HitExpression {
@@ -21,9 +23,9 @@ export interface HitExpression {
  * quickly, holds long enough to read, then returns to the idle face without
  * affecting the combat simulation.
  */
-export function hitExpressionFor(kind:CombatFeedback['kind']|undefined,age:number):HitExpression{
+export function hitExpressionFor(kind:CombatFeedback['kind']|undefined,age:number,bossKind:BossKind='corn'):HitExpression{
   if((kind!=='Nice'&&kind!=='Perfect'&&kind!=='Miss')||!Number.isFinite(age)||age<0)return {kind:'Idle',weight:0};
-  const duration=hitExpressionDurations[kind];
+  const duration=(bossKind==='jelly'?legacyHitExpressionDurations:hitExpressionDurations)[kind];
   if(age>=duration)return {kind:'Idle',weight:0};
   const t=age/duration;
   // The expression is already legible on the first impact frame, including hit-stop.
@@ -34,7 +36,7 @@ export function hitExpressionFor(kind:CombatFeedback['kind']|undefined,age:numbe
 export function guardianHitExpression(state:CombatState):HitExpression{
   if(state.battle.bossHp<=0||state.phase==='settle'||state.phase==='verdictReady'||state.phase==='verdictSlash')return {kind:'Idle',weight:0};
   const feedback=state.feedback;
-  return hitExpressionFor(feedback?.contactResult??feedback?.kind,state.time-(feedback?.time??-Infinity));
+  return hitExpressionFor(feedback?.contactResult??feedback?.kind,state.time-(feedback?.time??-Infinity),state.bossKind);
 }
 
 /** The GOOD reference pose: startle, briefly balance on one foot, then land. */
@@ -69,6 +71,6 @@ export function parrySquash(age:number,duration:number){
   return impulse*.82-rebound*.1;
 }
 
-export function parryDuration(kind:'Nice'|'Perfect'){
-  return kind==='Perfect'?perfectParryDurationMs:goodParryDurationMs;
+export function parryDuration(kind:'Nice'|'Perfect',bossKind:BossKind='corn'){
+  return kind==='Perfect'?(bossKind==='jelly'?350:perfectParryDurationMs):goodParryDurationMs;
 }

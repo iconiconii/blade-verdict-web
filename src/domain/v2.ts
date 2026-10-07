@@ -19,7 +19,7 @@ export const bossKindLabel=(bossKind:BossKind)=>bossDisplayNames[bossKind];
 export const bossIngredientIcon=(bossKind:BossKind):'corn'|'carrot'|'cabbage'|'tomato'|'gem'=>battleIngredients[bossKind].icon==='jelly'?'gem':battleIngredients[bossKind].icon;
 /** Named points on the 3D guardian used to attach a parry ring to the actor. */
 export type BodyAnchorId = 'head'|'belly'|'leftHand'|'rightHand'|'leftKnee'|'rightKnee'|'leftShoulder'|'rightShoulder'|'leftFin'|'rightFin'|'leftJoint'|'rightJoint'|'lowerJoint';
-export interface AttackPresentation { targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; ringElapsedMs:number; ringDurationMs:number; maxRadiusPx:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
+export interface AttackPresentation { circleId:string; targetIndex:number; anchorId:BodyAnchorId; position:{x:number;y:number}; startDelayMs:number; ringElapsedMs:number; ringDurationMs:number; maxRadiusPx:number; telegraphProgress:number; phase:'early'|'nice'|'perfect'|'late'; resolved:boolean; result?:ParryResult }
 export interface VerdictPoint { x:number; y:number; time:number }
 export interface VerdictWeakPoint { id:string; x:number; y:number; radius:number }
 export interface VerdictStroke { points:VerdictPoint[]; hitWeakPointIds:string[]; score:number; valid:boolean }
@@ -67,10 +67,9 @@ export function ringRadiusAt(elapsedMs:number,durationMs=ringLifecycleMs,maxRadi
 }
 export function resolveRingParry(elapsedMs:number,durationMs=ringLifecycleMs,attack?:AttackConfig):ParryResult {
   if(elapsedMs<0||elapsedMs>=durationMs)return 'Miss';
-  const t=elapsedMs/durationMs*1800;
-  const start=(attack?.perfectWindowStart??700/1800)*1800;
-  const end=(attack?.perfectWindowEnd??1400/1800)*1800;
-  return t>=start&&t<end?'Perfect':'Nice';
+  const start=(attack?.perfectWindowStart??700/1800)*durationMs;
+  const end=(attack?.perfectWindowEnd??1400/1800)*durationMs;
+  return elapsedMs>=start&&elapsedMs<end?'Perfect':'Nice';
 }
 export function ringPhaseAt(elapsedMs:number,durationMs=ringLifecycleMs,attack?:AttackConfig):AttackPresentation['phase'] {
   if(elapsedMs<0||elapsedMs>=durationMs)return 'late';

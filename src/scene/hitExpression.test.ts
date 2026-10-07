@@ -28,7 +28,7 @@ const dispose=(root:THREE.Group)=>{
 afterEach(()=>{for(const guardian of guardians.splice(0))dispose(guardian.root)});
 
 describe('hit expression timing',()=>{
-  it('keeps the GOOD reaction readable without widening the combat parry window',()=>{
+  it('keeps the GOOD reaction readable without changing its base recoil duration',()=>{
     expect(goodStaggerDurationMs).toBe(450);
     expect(hitExpressionDurations.Nice).toBe(goodStaggerDurationMs);
     expect(parryDuration('Nice')).toBe(goodParryDurationMs);
@@ -38,6 +38,17 @@ describe('hit expression timing',()=>{
     expect(goodStaggerWeight(stateFor('Nice',450))).toBe(0);
     expect(hitExpressionFor('Nice',400).kind).toBe('Good');
     expect(hitExpressionFor('Nice',450).kind).toBe('Idle');
+  });
+
+  it('uses the V2 expression durations while retaining legacy jelly timing',()=>{
+    expect(hitExpressionDurations.Perfect).toBe(550);
+    expect(hitExpressionDurations.Miss).toBe(500);
+    expect(parryDuration('Perfect')).toBe(550);
+    expect(parryDuration('Perfect','jelly')).toBe(350);
+    expect(hitExpressionFor('Perfect',550).kind).toBe('Idle');
+    expect(hitExpressionFor('Miss',500).kind).toBe('Idle');
+    expect(hitExpressionFor('Perfect',550,'jelly').kind).toBe('Perfect');
+    expect(hitExpressionFor('Miss',500,'jelly').kind).toBe('Miss');
   });
 
   it('synchronizes the GOOD reference pose and expression through landing',()=>{
@@ -103,9 +114,24 @@ describe('hit expression timing',()=>{
   it('uses actual ring input and timeout outcomes',()=>{
     const initial=prepareRound(createCombat());
     const active=tickCombat(initial,initial.tempo.telegraphMs);
-    expect(guardianHitExpression(tapTarget(active,0)).kind).toBe('Good');
-    expect(guardianHitExpression(tapTarget(tickCombat(active,800),0)).kind).toBe('Perfect');
+    expect(guardianHitExpression(tapTarget(active,active.targets[0].circleId)).kind).toBe('Good');
+    expect(guardianHitExpression(tapTarget(tickCombat(active,800),active.targets[0].circleId)).kind).toBe('Perfect');
     expect(guardianHitExpression(tickCombat(active,active.targets[0].ringDurationMs)).kind).toBe('Miss');
+  });
+
+  it.each([
+    ['corn',()=>new CornGuardian()],
+    ['carrot',()=>new CarrotGuardian()],
+    ['cabbage',()=>new CabbageGuardian()],
+    ['tomato',()=>new TomatoGuardian()],
+  ] as const)('gives %s a 14-degree stronger Perfect with a wide-eyed shock face',(_,make)=>{
+    const guardian=make();guardians.push(guardian);
+    guardian.update(stateFor('Perfect',550*.34));
+    expect(guardian.rig.poseRoot.rotation.x).toBeCloseTo(THREE.MathUtils.degToRad(14));
+    expect(guardian.rig.poseRoot.scale.y).toBeLessThan(.91);
+    expect(guardian.root.getObjectByName('perfect-surprise-pupil')).toBeDefined();
+    guardian.update(stateFor('Perfect',550));
+    expect(guardian.rig.poseRoot.rotation.x).toBeCloseTo(0);
   });
 
   it('gives corn an open-armed one-foot GOOD pose and resets it without drift',()=>{

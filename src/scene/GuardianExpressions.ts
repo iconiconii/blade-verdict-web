@@ -31,7 +31,7 @@ export class GuardianExpressions {
     for(const [kind,group] of Object.entries(this.faces)){
       group.name=`${name}-expression-${kind.toLowerCase()}`;group.visible=false;this.root.add(group);
     }
-    this.buildGood();this.buildPerfect();this.buildMiss();
+    this.buildGood();this.buildPerfect(name==='jelly');this.buildMiss();
     // Above/outside the head silhouette, not tiny decorations on the eyebrow.
     this.goodSymbols.position.set(name==='jelly'?.62:name==='corn'?.67:.48,name==='corn'?1.07:name==='carrot'?1.18:name==='jelly'?1.5:.94,.02);
     if(name==='jelly'){
@@ -91,8 +91,22 @@ export class GuardianExpressions {
     this.ball(exclamation,'surprised-exclamation-dot',this.white,[0,-.07,.018],[.033,.033,.015]);
   }
 
-  private buildPerfect(){
+  private buildPerfect(legacy=false){
     const group=this.faces.Perfect;
+    if(!legacy){
+      for(const side of [-1,1]){
+        this.ball(group,'perfect-surprise-eye-outline',this.dark,[side*.195,.095,-.006],[.193,.244,.039]);
+        const eye=this.eye(group,side,[.184,.23,.042]);eye.position.set(side*.195,.095,.011);
+        this.ball(group,'perfect-surprise-pupil',this.dark,[side*.198,.083,.057],[.013,.021,.014]);
+        this.line(group,'perfect-surprise-raised-brow',[[side*.355,.395,0],[side*.24,.446,.012],[side*.1,.405,.014]],.031);
+        this.ball(group,'perfect-surprise-cheek',this.cheek,[side*.285,-.155,-.004],[.094,.05,.017]);
+      }
+      this.ball(group,'perfect-surprise-scream-mouth',this.dark,[0,-.272,0],[.167,.186,.035]);
+      this.ball(group,'perfect-surprise-red-mouth',this.mouthRed,[0,-.282,.027],[.14,.15,.018]);
+      this.ball(group,'perfect-surprise-upper-teeth',this.white,[0,-.133,.03],[.121,.023,.016]);
+      this.ball(group,'perfect-surprise-tongue',this.tongue,[.012,-.365,.049],[.093,.043,.016]);
+      return;
+    }
     for(const side of [-1,1]){
       this.eye(group,side,[.153,.13,.033]);
       this.line(group,'hurt-squeezed-eye',[[side*.28,.115,.04],[side*.13,.075,.047],[side*.27,.025,.04]],.018,this.dark);

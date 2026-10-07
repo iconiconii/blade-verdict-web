@@ -24,6 +24,7 @@
 .phase-dot{width:4px;height:4px;border-radius:50%;background:#f4d18b;box-shadow:0 0 10px #edc788}
 .parry-target{position:absolute;visibility:hidden;transform:translate(-50%,-50%);width:60px;height:60px;min-width:44px;min-height:44px;border:0;background:transparent;border-radius:50%;padding:0;touch-action:none;cursor:pointer;color:#f6dfbd;z-index:3;-webkit-tap-highlight-color:transparent}
 .parry-target:disabled{cursor:default;pointer-events:none}
+.parry-target{clip-path:circle(50%)}
 .parry-target[data-resolved=true]{pointer-events:none;opacity:.3}.parry-target[data-resolved=true]::before,.parry-target[data-resolved=true]::after{opacity:0}
 .target-caption{pointer-events:none;position:absolute;top:calc(100% + 9px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;letter-spacing:.08em;text-shadow:0 1px 6px #000;background:#06151bd9;border:1px solid #d8bb7b35;padding:4px 8px;border-radius:3px;backdrop-filter:blur(4px)}
 .target-caption b{display:inline-grid;place-items:center;width:16px;height:16px;margin-right:5px;border-radius:50%;background:#f1cc7b;color:#17231f;font-size:9px;letter-spacing:0}
@@ -111,6 +112,16 @@
 @media(prefers-reduced-motion:reduce){.battle *{animation:none!important;transition:none!important}.battle-health i{transition:none}.hit-feedback{opacity:1}.battle--hurt:after{box-shadow:none}}
 
 .battle[data-paused=true] *{animation-play-state:paused!important}
+.circle-feedback-list{position:absolute;z-index:6;top:26%;left:17%;right:4%;display:flex;justify-content:center;gap:3%;pointer-events:none}
+.circle-feedback{flex:1;max-width:48%;text-align:center;animation:hit-word .65s both;text-shadow:0 2px 3px #38210e,0 3px 9px #140e10;line-height:1.25}
+.circle-feedback strong{display:block;color:#ffdc80;font-size:6cqw;font-style:italic;font-weight:950}
+.circle-feedback--Perfect strong{color:#9ffff0}
+.circle-feedback--Miss strong{color:#ff9584}
+.circle-feedback span{display:block;color:#fff4db;font-size:2.7cqw;white-space:nowrap;letter-spacing:0}
+.circle-feedback b{display:block;color:#fff6d4;font-size:4.5cqw}
+.circle-feedback--Miss b{color:#ff9584}
+.player-hurt-flash{position:absolute;inset:0;z-index:8;pointer-events:none;box-shadow:inset 0 0 50px #d73a4388;animation:hurt .4s both}
+@media(prefers-reduced-motion:reduce){.circle-feedback{animation:none}.player-hurt-flash{box-shadow:inset 0 0 0 3px #d73a43aa;animation:none}}
 @media(max-height:500px){.resource-meter__track{height:85px}.resource-meter__name{display:none}.resource-meter__cap span{display:none}.target-caption{font-size:8px}.combat-instruction{display:none}}
 .battle--storybook .verdict-ready-callout{position:absolute;z-index:7;top:38%;left:22%;width:30%;text-align:center;pointer-events:none;color:#fff4a4;text-shadow:0 2px 4px #3b1809,0 0 16px #ffab2c;animation:verdict-ready-callout 1.2s ease-out both}
 .battle--storybook .verdict-ready-callout strong{display:block;font-size:5.5cqw;line-height:1.1;letter-spacing:.06em}

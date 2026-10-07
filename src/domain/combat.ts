@@ -1,11 +1,13 @@
 import {
-  applyParry, attackForBoss, deterministicBodyAnchor, deterministicTarget,
-  newBattle, resolveRingParry, ringPhaseAt,
+  applyParry, attackForBoss, bossMaxHp, newBattle, resolveRingParry,
   type AttackConfig, type AttackPresentation, type BattlePhase, type BattleState,
   type BodyAnchorId, type BossKind, type ParryResult, type VerdictStroke,
 } from './v2';
+import { BlockCircleManager } from './BlockCircleManager';
+import { doubleCircleRoll, enrageConfig, levelForBoss, levelTiming, type LevelId } from './levelConfig';
 
 export interface CombatFeedback {
+  circleId?:string;
   pendingRound?:boolean;
   /** Latest ring result for the actor; kind still settles the whole relay. */
   contactResult?:ParryResult;
@@ -13,8 +15,16 @@ export interface CombatFeedback {
   position:{x:number;y:number}; anchorId?:BodyAnchorId; time:number;
   energyGain:number; angle:number; path?:Array<{x:number;y:number;time:number}>; speed?:'normal'|'fast'|'ferocious'; hitStopMs?:number; finisher?:boolean;
 }
-export interface CombatTempo { durationMs:number; maxRadiusPx:number; telegraphMs:number; label:string }
+export interface CombatTempo {
+  durationMs:number; maxRadiusPx:number; telegraphMs:number; label:string;
+  attackIntervalMs:number; staggerMs:number; doubleCircleProbability:number;
+  perfectWindowStart:number; perfectWindowEnd:number;
+}
 export interface CombatState {
+  battleId:string;
+  levelId:LevelId|null; enraged:boolean; enragedAt:number|null;
+  /** Absolute next-group activation deadline; cleared on verdict/death/new activation. */
+  nextAttackAt:number|null;
   battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase;
   elapsed:number; time:number; round:number; seed:number; paused:boolean;
   targets:AttackPresentation[]; combo:number; bestCombo:number; successfulParries:number;
@@ -34,55 +44,62 @@ export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===n
   ?verdictDurationFor(s)-s.elapsed:(s.attack.verdictDurationMs??feverConfig.durationMs)-(s.time-s.feverStartedAt));
 export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:1200, verdictReady:650, verdict:3000, settle:1000 };
 
-/** Difficulty follows successful play, never time spent failing. */
-export function tempoFor(bossKind:BossKind,successfulParries:number):CombatTempo {
-  const profiles:Record<BossKind,{warmup:number;final:number;warm:[number,number,number];mid:[number,number,number];fast:[number,number,number]}>= {
-    corn:{warmup:6,final:14,warm:[1800,90,400],mid:[1650,82,340],fast:[1500,76,280]},
-    carrot:{warmup:5,final:12,warm:[1700,86,380],mid:[1540,78,320],fast:[1400,70,250]},
-    cabbage:{warmup:5,final:11,warm:[1600,82,350],mid:[1440,74,290],fast:[1300,66,230]},
-    tomato:{warmup:4,final:10,warm:[1500,78,320],mid:[1340,70,260],fast:[1200,62,205]},
-    jelly:{warmup:5,final:11,warm:[1800,90,400],mid:[1650,82,340],fast:[1500,76,280]},
-  };
-  const profile=profiles[bossKind],values=successfulParries<profile.warmup?profile.warm:successfulParries<profile.final?profile.mid:profile.fast;
-  return {durationMs:values[0],maxRadiusPx:values[1],telegraphMs:values[2],label:successfulParries<profile.warmup?'热身':successfulParries<profile.final?'熟练':'疾风'};
+/** Vegetables use fixed level snapshots; only the legacy jelly accelerates with success. */
+export function tempoFor(bossKind:BossKind,successfulParries:number,enraged=false):CombatTempo {
+  const levelId=levelForBoss[bossKind];
+  if(levelId!==null){
+    const timing=levelTiming(levelId,enraged&&levelId===3);
+    const initial={corn:[90,400],carrot:[86,380],cabbage:[82,350],tomato:[78,320],jelly:[90,400]}[bossKind];
+    const telegraphMs=Math.min(initial[1],timing.attackIntervalMs-durations.impact-durations.stagger);
+    return {...timing,maxRadiusPx:initial[0],telegraphMs,
+      staggerMs:timing.attackIntervalMs-durations.impact-telegraphMs,label:enraged&&levelId===3?'狂暴':`Level ${levelId}`};
+  }
+  const values=successfulParries<5?[1800,90,400]:successfulParries<11?[1650,82,340]:[1500,76,280];
+  return {durationMs:values[0],maxRadiusPx:values[1],telegraphMs:values[2],
+    label:successfulParries<5?'热身':successfulParries<11?'熟练':'疾风',
+    attackIntervalMs:durations.impact+durations.stagger+values[2],staggerMs:durations.stagger,
+    doubleCircleProbability:0,perfectWindowStart:700/1800,perfectWindowEnd:1400/1800};
 }
 
-export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0):CombatState=>({
-  battle:newBattle(bossKind),bossKind,attack:attackForBoss(bossKind),
+const attackAtTempo=(bossKind:BossKind,tempo:CombatTempo):AttackConfig=>({
+  ...attackForBoss(bossKind),perfectWindowStart:tempo.perfectWindowStart,perfectWindowEnd:tempo.perfectWindowEnd,
+});
+export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0,battleId=`${bossKind}-${seed}`):CombatState=>({
+  battleId,
+  battle:newBattle(bossKind),bossKind,attack:attackAtTempo(bossKind,tempoFor(bossKind,0)),
+  levelId:levelForBoss[bossKind],enraged:false,enragedAt:null,nextAttackAt:null,
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
   hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
   verdictBonusDamage,fever:false,feverStartedAt:null,
 });
-const transition=(s:CombatState,phase:BattlePhase):CombatState=>({...s,phase,elapsed:0});
+const transition=(s:CombatState,phase:BattlePhase,startedAt=s.time):CombatState=>({...s,phase,elapsed:Math.max(0,s.time-startedAt)});
 function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState {
   const feedback={...event,id:s.feedbackSequence+1,time:s.time};
   return {...s,feedback,feedbackSequence:feedback.id,effects:[...s.effects,feedback].slice(-24)};
 }
-export function prepareRound(s:CombatState):CombatState {
-  const tempo=tempoFor(s.bossKind,s.successfulParries);
-  const double=tempo.durationMs<1800&&(
-    s.bossKind==='jelly'?s.round%2===0:
-      s.bossKind==='carrot'?s.round%3===1:
-        s.bossKind==='cabbage'?s.round%3!==0:
-          s.bossKind==='tomato'?true:s.round%3===2);
+export function prepareRound(s:CombatState,startedAt=s.time):CombatState {
+  const tempo=tempoFor(s.bossKind,s.successfulParries,s.enraged);
+  const double=s.levelId===null?tempo.durationMs<1800&&s.round%2===0:doubleCircleRoll(s.seed,s.round)<tempo.doubleCircleProbability;
   const count=double?2:1;
-  return {...transition(s,'telegraph'),tempo,feedback:null,stroke:null,fever:false,feverStartedAt:null,targets:Array.from({length:count},(_,i)=>({
-    targetIndex:i,anchorId:deterministicBodyAnchor(s.seed,s.round,i,count,s.bossKind),
-    position:deterministicTarget(s.seed,s.round,i,count,s.bossKind),
-    // The second ring has no running clock until the first has resolved.
-    startDelayMs:i===0?0:Infinity,ringElapsedMs:0,ringDurationMs:tempo.durationMs,
-    maxRadiusPx:tempo.maxRadiusPx,telegraphProgress:0,phase:'early',resolved:false,
-  }))};
+  return {...transition(s,'telegraph',startedAt),tempo,attack:attackAtTempo(s.bossKind,tempo),
+    feedback:null,stroke:null,fever:false,feverStartedAt:null,
+    targets:BlockCircleManager.create({seed:s.seed,round:s.round,bossKind:s.bossKind,count,
+      simultaneous:s.levelId!==null,durationMs:tempo.durationMs,maxRadiusPx:tempo.maxRadiusPx})};
 }
 
-function resolveContact(s:CombatState,index:number,result:ParryResult):CombatState {
+function checkEnrage(s:CombatState):CombatState {
+  if(s.levelId!==3||s.enraged||s.battle.bossHp<=0||s.battle.bossHp>=bossMaxHp(s.bossKind)*enrageConfig.healthThreshold)return s;
+  return {...s,enraged:true,enragedAt:s.time};
+}
+
+function resolveLegacyContact(s:CombatState,index:number,result:ParryResult):CombatState {
   const target=s.targets[index];
-  const targets=s.targets.map((t,i)=>i===index?{...t,resolved:true,result}:t);
+  const targets=BlockCircleManager.resolve(s.targets,index,result);
   if(targets.length>1&&!targets.every(t=>t.resolved)){
     return emit({...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
       hitStopRemainingMs:0},
-      {kind:result,amount:0,energyGain:0,pendingRound:true,position:target.position,
+      {kind:result,circleId:target.circleId,amount:0,energyGain:0,pendingRound:true,position:target.position,
         contactResult:result,
         anchorId:target.anchorId,angle:index%2?-.65:.65,hitStopMs:result==='Miss'?0:result==='Perfect'?45:25});
   }
@@ -91,7 +108,7 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   const combo=aggregate==='Miss'?0:s.combo+1;
   const next=emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
     successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:0,
-  },{kind:aggregate,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+  },{kind:aggregate,circleId:target.circleId,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
     contactResult:result,
     energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
     finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:aggregate==='Miss'?0:aggregate==='Perfect'?45:25});
@@ -99,22 +116,40 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   if(battle.bossHp<=0||battle.playerHp<=0||battle.meter>=100||targets.every(t=>t.resolved))return transition(next,'impact');
   return {...next,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t)};
 }
-export function tapTarget(s:CombatState,index:number):CombatState {
-  if(s.paused||s.phase!=='targetActive')return s;
+function resolveContact(s:CombatState,index:number,result:ParryResult):CombatState {
+  if(s.levelId===null)return resolveLegacyContact(s,index,result);
   const target=s.targets[index];
-  if(!target||target.resolved||s.elapsed<target.startDelayMs)return s;
+  const targets=BlockCircleManager.resolve(s.targets,index,result);
+  const battle=applyParry(s.battle,result,s.attack);
+  const combo=result==='Miss'?0:s.combo+1;
+  const next=checkEnrage(emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
+    successfulParries:s.successfulParries+(result==='Miss'?0:1),hitStopRemainingMs:0,
+  },{kind:result,circleId:target.circleId,
+    amount:result==='Miss'?s.attack.missDamage:result==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+    energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
+    finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:result==='Miss'?0:result==='Perfect'?80:25}));
+  if(battle.bossHp<=0||battle.playerHp<=0)return {...transition(next,'impact'),nextAttackAt:null};
+  if(!targets.every(t=>t.resolved))return next;
+  const nextTempo=tempoFor(s.bossKind,next.successfulParries,next.enraged);
+  return {...transition(next,'impact'),nextAttackAt:battle.meter>=100?null:s.time+nextTempo.attackIntervalMs};
+}
+export function tapTarget(s:CombatState,circleId:string):CombatState {
+  if(s.paused||s.phase!=='targetActive'||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
+  const index=BlockCircleManager.interactiveIndex(s.targets,circleId,s.elapsed);
+  if(index<0)return s;
+  const target=s.targets[index];
   return resolveContact(s,index,resolveRingParry(s.elapsed-target.startDelayMs,target.ringDurationMs,s.attack));
 }
 export function startVerdict(s:CombatState):CombatState {
   if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
   const battle={...s.battle,meter:0,verdictCount:s.battle.verdictCount+1};
-  return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,
+  return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,nextAttackAt:null,
     verdictDamageDealt:0,verdictCombo:0,fever:false,feverStartedAt:null};
 }
 function finishVerdict(s:CombatState):CombatState {
   // Apply the equipped weapon once, including on a no-input timeout.
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-s.verdictBonusDamage)};
-  return {...transition({...s,battle},'stagger'),pointerId:null,stroke:null};
+  return {...transition(checkEnrage({...s,battle}),'stagger'),pointerId:null,stroke:null,nextAttackAt:null};
 }
 export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65,path?:Array<{x:number;y:number;time:number}>,speed:'normal'|'fast'|'ferocious'='normal'):CombatState {
   const damageCap=verdictDamageCapFor(s);
@@ -129,21 +164,20 @@ export function applyContinuousCut(s:CombatState,position:{x:number;y:number},in
   const next=emit({...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt},
     {kind:'Cut',amount:damage,energyGain:0,position,angle,path,speed,finisher:finalHit,
       hitStopMs:finalHit?80:25});
-  return battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):next;
+  // At the damage cap, the equipped bonus belongs to this same resolution.
+  // Check enrage only after that bonus, so a directly lethal completion cannot enrage first.
+  return battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):checkEnrage(next);
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
   if(s.paused||delta<=0||!Number.isFinite(delta))return s;
   // Visual hit-stop belongs to the renderer; simulation and input never wait for it.
   const next={...s,elapsed:s.elapsed+delta,time:s.time+delta,effects:s.effects.filter(e=>s.time+delta-e.time<850)};
+  if(next.levelId!==null)return tickVegetableCombat(next);
   switch(next.phase){
     case 'intro':return next.elapsed>=durations.intro?prepareRound(next):next;
     case 'telegraph':return next.elapsed>=next.tempo.telegraphMs?transition(next,'targetActive'):next;
     case 'targetActive':{
-      next.targets=next.targets.map(t=>{
-        if(t.resolved)return t;
-        const age=Math.max(0,next.elapsed-t.startDelayMs);
-        return {...t,ringElapsedMs:age,telegraphProgress:Math.min(1,age/t.ringDurationMs),phase:ringPhaseAt(age,t.ringDurationMs,next.attack)};
-      });
+      next.targets=BlockCircleManager.update(next.targets,next.elapsed,next.attack);
       const expired=next.targets.findIndex(t=>!t.resolved&&next.elapsed-t.startDelayMs>=t.ringDurationMs);
       return expired>=0?resolveContact(next,expired,'Miss'):next;
     }
@@ -159,6 +193,53 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
     case 'verdictSlash':return verdictRemainingMs(next)<=0?finishVerdict(next):next;
     default:return next;
   }
+}
+
+/** Walk presentation deadlines, but never replay an unseen attack after a slow frame. */
+function tickVegetableCombat(initial:CombatState):CombatState {
+  let next=initial;
+  for(let transitions=0;transitions<5;transitions++){
+    const phaseStartedAt=next.time-next.elapsed;
+    switch(next.phase){
+      case 'intro':return next.elapsed>=durations.intro?prepareRound(next):next;
+      case 'telegraph':
+        // A newly visible group always gets a full input window, even after background suspension.
+        return next.elapsed>=next.tempo.telegraphMs?{...transition(next,'targetActive'),nextAttackAt:null}:next;
+      case 'targetActive':{
+        next={...next,targets:BlockCircleManager.update(next.targets,next.elapsed,next.attack)};
+        const expired=BlockCircleManager.expiredIds(next.targets,next.elapsed);
+        for(const circleId of expired){
+          if(next.phase!=='targetActive'||next.battle.playerHp<=0||next.battle.bossHp<=0)break;
+          const index=next.targets.findIndex(target=>target.circleId===circleId);
+          next=resolveContact(next,index,'Miss');
+        }
+        return next;
+      }
+      case 'impact':
+        if(next.elapsed<durations.impact)return next;
+        next=transition(next,'stagger',phaseStartedAt+durations.impact);
+        break;
+      case 'stagger':{
+        const ended=next.battle.bossHp<=0||next.battle.playerHp<=0;
+        const hold=next.battle.bossHp<=0?durations.deathStagger:durations.stagger;
+        if(ended)return next.elapsed>=hold?{...transition(next,'settle'),nextAttackAt:null}:next;
+        if(next.battle.meter>=100){
+          if(next.elapsed<hold)return next;
+          next={...transition(next,'verdictReady',phaseStartedAt+hold),nextAttackAt:null};
+          break;
+        }
+        const tempo=tempoFor(next.bossKind,next.successfulParries,next.enraged);
+        const telegraphAt=next.nextAttackAt===null?phaseStartedAt+hold:next.nextAttackAt-tempo.telegraphMs;
+        if(next.time<telegraphAt)return next;
+        next=prepareRound({...next,round:next.round+1},telegraphAt);
+        break;
+      }
+      case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
+      case 'verdictSlash':return verdictRemainingMs(next)<=0?finishVerdict(next):next;
+      default:return next;
+    }
+  }
+  return next;
 }
 
 export function weakPointsFor(verdictCount:number,width:number,height:number,bossKind:BossKind='corn'){

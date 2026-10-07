@@ -5,11 +5,13 @@ import { bossMaxHp, type BossKind } from './v2';
 const vegetables:['corn','carrot','cabbage','tomato']=['corn','carrot','cabbage','tomato'];
 
 describe('vegetable guardian difficulty ladder',()=>{
-  it('tightens ring time, radius and telegraph in UI order',()=>{
+  it('uses the three configured levels and preserves each initial radius',()=>{
     const warm=vegetables.map(kind=>tempoFor(kind,0));
-    expect(warm.map(value=>value.durationMs)).toEqual([1800,1700,1600,1500]);
+    expect(warm.map(value=>value.durationMs)).toEqual([1440,1200,1800/1.75,1800/1.75]);
     expect(warm.map(value=>value.maxRadiusPx)).toEqual([90,86,82,78]);
-    expect(warm.map(value=>value.telegraphMs)).toEqual([400,380,350,320]);
+    expect(warm.map(value=>value.telegraphMs)).toEqual([400,380,270,270]);
+    expect(warm.map(value=>value.attackIntervalMs)).toEqual([1400,1100,850,850]);
+    expect(vegetables.map(kind=>tempoFor(kind,99))).toEqual(warm);
   });
 
   it('gives later vegetables tougher health without changing the save shape',()=>{

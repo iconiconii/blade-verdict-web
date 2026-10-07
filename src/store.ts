@@ -20,12 +20,13 @@ function appendStrokePoint(points:Array<{x:number;y:number;time:number}>, point:
 
 export type Screen='restaurant'|'stages'|'battle'|'result'|'kitchen'|'inventory'|'cookbook'|'sales'|'shop';
 export interface Notice { kind:'success'|'error'; message:string }
+export interface CircleInput { battleId:string; circleId:string }
 interface PendingBattle { id:string; bossKind:BossKind; won:boolean }
 interface GameStore {
   screen:Screen; combat:CombatState; meta:MetaState; save:SavedWorkshop; tutorialSeen:boolean;
   notice:Notice|null; saving:boolean; saveIssue:string|null; battleId:string|null; pendingBattle:PendingBattle|null;
   go:(screen:Screen)=>void; start:(bossKind?:BossKind)=>void; advance:(delta:number)=>void;
-  tap:(index:number)=>void; pause:(paused:boolean)=>void;
+  tap:(input:CircleInput)=>void; pause:(paused:boolean)=>void;
   beginStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void; moveStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void;
   cut:(pointerId:number,point:{x:number;y:number},insideMonster:boolean,angle?:number)=>void; endStroke:(pointerId:number)=>void; cancelStroke:()=>void; dismissTutorial:()=>void;
   cook:(selected:IngredientSelection[])=>Promise<boolean>; sellDish:(instanceId:string)=>Promise<boolean>; sellAllDishes:()=>Promise<boolean>;
@@ -92,7 +93,8 @@ export const useGame=create<GameStore>((set,get)=>{
       if(get().saving||get().pendingBattle)return;
       get().refreshSave();if(get().saveIssue)return;
       const seed=crypto.getRandomValues(new Uint32Array(1))[0];
-      set({screen:'battle',battleId:randomId('hunt'),combat:createCombat(seed,bossKind,equippedVerdictDamageBonus(get().meta)),notice:null});
+      const battleId=randomId('hunt');
+      set({screen:'battle',battleId,combat:createCombat(seed,bossKind,equippedVerdictDamageBonus(get().meta),battleId),notice:null});
     },
     advance:delta=>{
       const current=get();if(current.screen!=='battle')return;
@@ -109,7 +111,8 @@ export const useGame=create<GameStore>((set,get)=>{
       if(success)set(s=>({pendingBattle:null,combat:{...s.combat,battle:{...s.combat.battle,loot:pending.won?[{quality:'Top',count:3}]:[]}}}));
       return success;
     },
-    tap:index=>set(s=>({combat:tapTarget(s.combat,index)})),
+    tap:input=>set(s=>s.screen==='battle'&&input.battleId===s.battleId&&input.battleId===s.combat.battleId
+      ?{combat:tapTarget(s.combat,input.circleId)}:s),
     pause:paused=>set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}})),
     beginStroke:(pointerId,point)=>set(s=>({combat:s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.pointerId===null?{...s.combat,pointerId,stroke:{points:[point],hitWeakPointIds:[],score:0,valid:true}}:s.combat})),
     moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:appendStrokePoint(s.combat.stroke.points,point)}}:s.combat})),

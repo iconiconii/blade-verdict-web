@@ -13,8 +13,9 @@ import './ui/game-frame.css';
 
 export function App(){
   const screen=useGame(s=>s.screen);
+  const battleId=useGame(s=>s.battleId);
   useEffect(()=>{const refresh=()=>useGame.getState().refreshSave();window.addEventListener('storage',refresh);window.addEventListener('focus',refresh);return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('focus',refresh)}},[]);
-  return <main className="game-stage"><GameTheme className="game-frame">{screen==='stages'?<HuntScreens/>:screen==='battle'?<Battle/>:screen==='result'?<Result/>:<Workshop/>}</GameTheme></main>;
+  return <main className="game-stage"><GameTheme className="game-frame">{screen==='stages'?<HuntScreens/>:screen==='battle'?<Battle key={battleId}/>:screen==='result'?<Result/>:<Workshop/>}</GameTheme></main>;
 }
 
 const qualityLabels:Record<Quality,string>={Broken:'破损',Normal:'普通',High:'优质',Top:'极品'};

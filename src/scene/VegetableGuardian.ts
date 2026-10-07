@@ -429,16 +429,16 @@ export class VegetableGuardian {
     const verticalSquash=Math.max(0,verdictSquash);
     this.rig.root.userData.guardianPose=guardianPoseFor(state,pain.x,pain.y,pain.compression);
     this.actor.position.set(tremor+pain.x*.1,-death*.08-verticalSquash*.03,-recoil*(perfect?.16:.09)+death*.18);
-    this.actor.rotation.set(-charge*.05+recoil*(perfect?.21:.105)-breakWeight*.032-pain.y*.28+death*.88,
+    this.actor.rotation.set(-charge*.05+recoil*(perfect?THREE.MathUtils.degToRad(14):.105)-breakWeight*.032-pain.y*.28+death*.88,
       tremor*.5+pain.x*.14-good*.045,death*.15-pain.x*.22-pain.followX*.04-good*.18);
-    this.actor.scale.set(1+death*.08+squash*(perfect?.055:.025)+verdictSquash*.035,
-      1-death*.16-squash*(perfect?.09:.045)-verdictSquash*.08,
+    this.actor.scale.set(1+death*.08+squash*(perfect?.075:.025)+verdictSquash*.035,
+      1-death*.16-squash*(perfect?.12:.045)-verdictSquash*.08,
       1+squash*(perfect?.028:.012)+verdictSquash*.02);
     this.body.position.y=styles[this.kind].bodyY-squash*(perfect?.03:.016)-death*.13;
     this.body.rotation.set(-breakWeight*.035+pain.energy*.05+death*.2,0,-pain.x*.028);
     this.face.rotation.set(death*.35-good*.025,0,-taunt*.08+good*.045);
     this.body.scale.set(1+squash*(perfect?.045:.02)+verdictSquash*.08+death*.1,
-      1-squash*(perfect?.11:.055)-verdictSquash*.16-death*.2,
+      1-squash*(perfect?.15:.055)-verdictSquash*.16-death*.2,
       1+squash*(perfect?.03:.012)+verdictSquash*.05);
     this.crown.rotation.set(death*.35-pain.followY*.04+good*.045,0,-pain.followX*.1-good*.035);
     this.crown.scale.setScalar(1+verdictSquash*.04+death*.1);

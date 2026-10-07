@@ -73,7 +73,7 @@ export function HuntScreens() {
       </>}
     </div>
     <GameDialog open={settings} onClose={() => setSettings(false)} title="探险指南" actions={<><GameButton variant="wood" onClick={() => useGame.getState().go('restaurant')}>返回餐厅</GameButton><GameButton onClick={() => setSettings(false)}>继续探险</GameButton></>}>
-      <p>先选择章节，再选择本章的讨伐目标。蔬菜园的四只怪物按顺序逐渐提高招架、裁决与时间压力。</p>
+      <p>先选择章节，再选择本章的讨伐目标。玉米为第一档，胡萝卜为第二档；白菜和西红柿为第三档，低血量时会狂暴。</p>
       <p>点击怪物身上的光环完成招架，储蓄条满后自动进入裁决。按住并连续划过怪物，收集料理食材。</p>
     </GameDialog>
   </section>;

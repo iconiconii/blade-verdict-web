@@ -50,11 +50,24 @@ describe('reference hunt UI', () => {
     const ready = renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} readyPulse={1} onPause={() => {}} />);
     expect(ready).toContain('data-ready="true"');
     expect(ready).toContain('hunt-charge is-verdict is-ready');
+    expect(ready).toContain('就绪');
+    expect(ready).toContain('本组结束自动裁决');
     state.phase = 'verdictSlash';
     state.battle.meter = 0;
     const released = renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} readyPulse={1} onPause={() => {}} />);
     expect(released).toContain('data-ready="false"');
     expect(released).not.toContain('is-ready');
+  });
+
+  it('keeps ready visible while the second circle remains and shows one enrage state',()=>{
+    const state=createCombat(1,'cabbage');
+    state.phase='targetActive';state.battle.meter=100;state.enraged=true;
+    const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} readyPulse={1} onPause={()=>{}}/>);
+    expect(html).toContain('data-ready="true"');
+    expect(html).toContain('本组结束自动裁决');
+    expect(html.match(/data-testid="enrage-state"/g)).toHaveLength(1);
+    state.battle.playerHp=0;
+    expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('data-ready="false"');
   });
 
   it('keeps ordinary battle assets local and complete', () => {

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createCombat, type CombatFeedback, type CombatState } from '../domain/combat';
 import { SliceEffects } from './SliceEffects';
 
-it('keeps the GOOD comic burst peripheral, bounded and specific to the latest contact',()=>{
+it('keeps independent GOOD comic bursts peripheral and bounded across later contacts',()=>{
   const scene=new THREE.Scene(),effects=new SliceEffects(scene,'corn');
   const event:CombatFeedback={id:1,kind:'Nice',amount:0,position:{x:.5,y:.5},energyGain:0,angle:0,time:0};
   const state:CombatState={...createCombat(),phase:'impact',time:85,feedback:event,effects:[event]};
@@ -22,9 +22,13 @@ it('keeps the GOOD comic burst peripheral, bounded and specific to the latest co
   render({...state,battle:{...state.battle,bossHp:0}});expect(comic.visible).toBe(false);
   render({...state,phase:'verdictSlash'});expect(comic.visible).toBe(false);
   const perfect={...event,id:2,kind:'Perfect' as const};
-  render({...state,feedback:perfect,effects:[perfect]});expect(comic.visible).toBe(false);
+  render({...state,feedback:perfect,effects:[perfect]});expect(comic.visible).toBe(true);
   const relay={...event,id:3,kind:'Miss' as const,contactResult:'Nice' as const};
   render({...state,feedback:relay,effects:[relay]});expect(comic.visible).toBe(true);
+  expect(scene.children.filter(child=>child.name==='good-comic-impact'&&child.visible)).toHaveLength(2);
+  render({...state,feedback:{...event,id:4,kind:'Miss'},effects:[{...event,id:4,kind:'Miss'}]});
+  expect(scene.children.filter(child=>child.name==='good-comic-impact'&&child.visible)).toHaveLength(2);
+  expect(scene.children.filter(child=>child.name==='good-comic-impact')).toHaveLength(4);
   const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();
   scene.traverse(object=>{
     if(object instanceof THREE.Mesh||object instanceof THREE.Line){

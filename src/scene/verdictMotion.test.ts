@@ -113,7 +113,7 @@ describe.each(['corn','jelly'] as const)('%s verdict animation',kind=>{
     s=tickCombat(s,durations.verdict);g.update(s);
     s=tickCombat(s,durations.stagger);s=tickCombat(s,s.tempo.telegraphMs);g.update(s);
     expect(mouth?.visible).toBe(false);
-    expect(tapTarget(s,0).feedback?.kind).toBe('Nice');
+    expect(tapTarget(s,s.targets[0].circleId).feedback?.kind).toBe('Nice');
     const fresh=actor(kind);fresh.update(s);expect(pose(g)).toEqual(pose(fresh));
   });
   it('keeps geometry finite and positive through maximum cuts, recovery and death',()=>{

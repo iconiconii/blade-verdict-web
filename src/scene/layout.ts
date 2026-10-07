@@ -1,5 +1,31 @@
 import * as THREE from 'three';
 import type { BossKind, VerdictWeakPoint } from '../domain/v2';
+import type { CombatState } from '../domain/combat';
+
+export interface ParryTargetLayout {
+  index:number;circleId:string;round:number;x:number;y:number;diameter:number;visible:boolean;
+}
+
+/**
+ * Pick the nearest live circle, not the uppermost HTML rectangle. This keeps
+ * both body anchors reachable when their full-size rings overlap on phones.
+ */
+export function nearestParryTarget(layouts:readonly ParryTargetLayout[],point:{x:number;y:number}){
+  let nearest:ParryTargetLayout|null=null,distance=Infinity;
+  for(const layout of layouts){
+    if(!layout.visible)continue;
+    const next=Math.hypot(point.x-layout.x,point.y-layout.y);
+    if(next<=layout.diameter/2&&next<distance){nearest=layout;distance=next}
+  }
+  return nearest;
+}
+
+/** Fresh input state can be newer than the last rendered frame on multi-touch. */
+export function liveParryLayouts(layouts:readonly ParryTargetLayout[],state:CombatState){
+  if(state.paused||state.phase!=='targetActive')return [];
+  return layouts.filter(layout=>state.targets.some(target=>target.circleId===layout.circleId&&!target.resolved
+    &&state.elapsed>=target.startDelayMs&&state.elapsed-target.startDelayMs<target.ringDurationMs));
+}
 
 export function makeBattleCamera(width:number,height:number){
   const aspect=Math.max(.2,width/height),camera=new THREE.PerspectiveCamera(35,aspect,.1,70);
