@@ -64,3 +64,13 @@
 .hunt-screen--jelly .hunt-roster-card strong { font-size: 3.4cqw; color: #fff0c2; }
 @media (max-height: 650px) and (min-width: 600px) { .hunt-screen { width: 360px; height: 640px; } }
 @media (prefers-reduced-motion: reduce) { .hunt-primary, .hunt-roster-card { transition: none; } }
+.monster-progress { position: absolute; top: 4%; right: 4%; width: 31%; height: 27%; display: grid; place-items: center; color: #fff9da; background: #432512; border: 2px solid #7c582d; border-radius: 28%; box-shadow: 0 1px 3px #2b140b; }
+.monster-progress svg { width: 58%; height: 66%; filter: drop-shadow(0 1px 1px #241407); }
+.monster-progress--available { background: #477d15; border-color: #bada4c; }
+.monster-progress--cleared { background: #398014; border-color: #bada4c; }
+.hunt-preview-card { width: 60%; height: 100%; max-width: 240px; margin: auto; position: relative; }
+.hunt-preview-card > img { object-fit: fill; }
+.hunt-progress-label { display: inline-flex; position: relative; align-items: center; gap: 7px; margin: 0; padding: 4px 12px; border-radius: 9px; background: #3d661a; color: #fff8d0; font-size: 3.5cqw; }
+.hunt-progress-label .monster-progress { position: static; width: 24px; height: 24px; border: 0; box-shadow: none; }
+.hunt-progress-label--locked { background: #503019; }
+.hunt-monster-status > small { display: block; font-size: 2.6cqw; margin-top: 3px; }

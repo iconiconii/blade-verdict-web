@@ -44,10 +44,10 @@ describe('battle input lifecycle',()=>{
   });
 
   it('creates a unique shared battle identity on each restart',()=>{
-    useGame.getState().start('cabbage');
+    useGame.getState().start('corn');
     const first=useGame.getState();
     expect(first.combat.battleId).toBe(first.battleId);
-    useGame.getState().start('cabbage');
+    useGame.getState().start('corn');
     const second=useGame.getState();
     expect(second.battleId).not.toBe(first.battleId);
     expect(second.combat.battleId).toBe(second.battleId);

@@ -5,6 +5,8 @@ import { GameButton, GameDialog } from '../index';
 import './hunt.css';
 import { WorldNavigation } from '../WorldNavigation';
 import { assetUrl } from '../assets';
+import { monsterProgress } from '../../domain/progression';
+import { MonsterProgressBadge, monsterProgressLabel } from './MonsterProgress';
 
 const asset = (name: string) => assetUrl(`assets/ui-kit/hunt/${name}.webp`);
 const chapters = [
@@ -36,9 +38,11 @@ export function HuntScreens() {
   const [chapter, setChapter] = useState(0);
   const [settings, setSettings] = useState(false);
   const data = chapters[chapter];
+  const save = useGame(state => state.save);
   const [selection, setSelection] = useState<BossKind>('corn');
   const roster: readonly BossKind[] = data.boss === 'corn' ? vegetableMonsters : ['jelly'];
-  const playable = roster.includes(selection);
+  const progress = monsterProgress(save, selection);
+  const playable = roster.includes(selection) && progress !== 'locked';
   const name = bossDisplayNames[selection];
   const browseChapter = (offset: number) => setChapter(index => (index + offset + chapters.length) % chapters.length);
   const browseMonster = (offset: number) => setSelection(id => roster[(roster.indexOf(id) + offset + roster.length) % roster.length]);
@@ -61,19 +65,23 @@ export function HuntScreens() {
         <button type="button" className="hunt-back" aria-label="返回章节选择" onClick={() => setView('chapters')}><HuntArt name="back" /></button>
         <div className="hunt-monster-title"><h1><HuntArt name="select-title" alt="怪兽选择" /></h1><p>— {data.number} · {data.name} —</p></div>
         <div className={`hunt-monster-display ${selection !== 'corn' && selection !== 'jelly' ? 'is-preview' : ''}`}>
-          <HuntArt name={selection === 'corn' ? 'corn-portrait' : selection === 'jelly' ? 'jelly-portrait' : `card-${selection}`} className="hunt-monster-portrait" alt={name} />
+          {selection === 'corn' || selection === 'jelly'
+            ? <HuntArt name={selection === 'corn' ? 'corn-portrait' : 'jelly-portrait'} className="hunt-monster-portrait" alt={name} />
+            : <div className="hunt-preview-card"><HuntArt name={`card-${selection}`} alt={name} /><MonsterProgressBadge progress={progress} /></div>}
           <Arrows onPrevious={() => browseMonster(-1)} onNext={() => browseMonster(1)} />
         </div>
-        <div className="hunt-monster-status"><h2>{name}</h2>{playable ? <HuntArt name="unlocked" alt="已解锁" /> : <p className="hunt-coming-soon">即将开放 · 暂不可挑战</p>}</div>
+        <div className="hunt-monster-status"><h2>{name}</h2><p className={`hunt-progress-label hunt-progress-label--${progress}`}><MonsterProgressBadge progress={progress} />{monsterProgressLabel[progress]}</p>{!playable && <small>通关前一只怪物后解锁</small>}</div>
         <p className="hunt-roster-hint">— 左右切换讨伐目标 —</p>
-        <div className="hunt-roster" aria-label="选择讨伐怪物">{roster.map(id => <button type="button" key={id} aria-label={bossDisplayNames[id]} aria-pressed={selection === id} className={`hunt-roster-card ${selection === id ? 'is-selected' : ''}`} onClick={() => setSelection(id)}>
+        <div className="hunt-roster" aria-label="选择讨伐怪物">{roster.map(id => <button type="button" key={id} aria-label={`${bossDisplayNames[id]} · ${monsterProgressLabel[monsterProgress(save, id)]}`} aria-pressed={selection === id} className={`hunt-roster-card ${selection === id ? 'is-selected' : ''}`} onClick={() => setSelection(id)}>
           {id === 'jelly' ? <><HuntArt name="jelly-portrait" /><strong>果冻怪</strong></> : <HuntArt name={`card-${id}`} />}
+          <MonsterProgressBadge progress={monsterProgress(save, id)} />
         </button>)}</div>
-        <button type="button" className="hunt-primary hunt-primary--monster" aria-label={`开始讨伐${name}`} data-testid={selection === 'jelly' ? 'start-jelly' : 'start'} onClick={start}><HuntArt name="cta-start" /></button>
+        <button type="button" className="hunt-primary hunt-primary--monster" disabled={!playable} aria-label={`开始讨伐${name}`} data-testid={selection === 'jelly' ? 'start-jelly' : 'start'} onClick={start}><HuntArt name="cta-start" /></button>
       </>}
     </div>
     <GameDialog open={settings} onClose={() => setSettings(false)} title="探险指南" actions={<><GameButton variant="wood" onClick={() => useGame.getState().go('restaurant')}>返回餐厅</GameButton><GameButton onClick={() => setSettings(false)}>继续探险</GameButton></>}>
-      <p>先选择章节，再选择本章的讨伐目标。玉米为第一档，胡萝卜为第二档；白菜和西红柿为第三档，低血量时会狂暴。</p>
+      <p>通关玉米、胡萝卜、白菜后，依次解锁下一只蔬菜怪物。开锁表示可以挑战，勾表示已通关。果冻秘境保持开放。</p>
+      <p>玉米为第一档，胡萝卜为第二档；白菜和西红柿为第三档，低血量时会狂暴。</p>
       <p>点击怪物身上的光环完成招架，储蓄条满后自动进入裁决。按住并连续划过怪物，收集料理食材。</p>
     </GameDialog>
   </section>;

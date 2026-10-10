@@ -15,6 +15,7 @@ import { WorldNavigation } from './ui/WorldNavigation';
 import { KitchenWorkbench } from './ui/kitchen/KitchenWorkbench';
 import { assetUrl } from './ui/assets';
 import './ui/migration.css';
+import { dishPresentation } from './ui/dishes';
 
 export type WorkshopScreen = Screen;
 type GameState = ReturnType<typeof useGame.getState>;
@@ -52,14 +53,6 @@ function iconForIngredient(id: string): 'corn' | 'carrot' | 'cabbage' | 'tomato'
   if (id.includes('tomato')) return 'tomato';
   return 'corn';
 }
-const DISH_INFO: Record<string, { name: string; icon: 'toast' | 'pudding' | 'combo' }> = {
-  dish_corn_toast: { name: '烤玉米片', icon: 'toast' },
-  dish_jelly_pudding: { name: '果冻布丁', icon: 'pudding' },
-  dish_corn_jelly: { name: '玉米果冻盅', icon: 'combo' },
-  dish_carrot_roast: { name: '烤胡萝卜根', icon: 'toast' },
-  dish_cabbage_roll: { name: '白菜卷', icon: 'combo' },
-  dish_tomato_salsa: { name: '西红柿莎莎', icon: 'pudding' },
-};
 
 function Icon({ name, size = 18 }: { name: 'arrow' | 'back' | 'pan' | 'bag' | 'book' | 'shop' | 'sword' | 'coin' | 'spark'; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -163,7 +156,7 @@ function Cookbook({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) 
 }
 
 function CatalogDishCard({ recipe, unlocked, record }: { recipe: typeof RECIPES[number]; unlocked: boolean; record?: MetaState['dishRecords'][number] }) {
-  const dish = DISH_INFO[recipe.outputDishId];
+  const dish = dishPresentation(recipe.outputDishId);
   return <GamePanel material="wood" className={`ui-dish-card ${unlocked ? '' : 'is-locked'}`}><div className="ui-dish-card__art"><Sprite name={unlocked ? (dish?.icon ?? 'toast') : 'locked'} label={unlocked ? recipe.name : '未解锁'} /></div><div className="ui-dish-card__body"><span className="ws-panel-kicker">{unlocked ? 'DISCOVERED' : 'UNKNOWN RECIPE'}</span><h2>{unlocked ? recipe.name : '???'}</h2>{unlocked ? <><p>{Object.entries(recipe.requirements).map(([id, count]) => `${INGREDIENTS.find(item => item.id === id)?.name ?? id} ×${count}`).join(' · ')}</p><div className="ui-dish-card__meta">{qualityBadge(record?.bestQuality ?? 'Normal')}<span>制作 {record?.cookCount ?? 0} 次</span></div></> : <p>制作一次后解锁详细记录</p>}</div></GamePanel>;
 }
 
@@ -173,7 +166,7 @@ function Sales({ meta, go, sellDish, sellAllDishes }: { meta: MetaState; go: (sc
 }
 
 function SaleDishCard({ dish, onSell }: { dish: MetaState['pendingDishes'][number]; onSell: () => void }) {
-  const info = DISH_INFO[dish.dishId];
+  const info = dishPresentation(dish.dishId);
   return <GamePanel material="wood" className="ui-sale-card"><Sprite name={info?.icon ?? 'toast'} label={info?.name ?? dish.dishId} /><div><span className="ws-panel-kicker">FRESHLY COOKED</span><h2>{info?.name ?? dish.dishId}</h2><div>{qualityBadge(dish.quality)} <span className="ws-price">{formatPrice(dish.sellPrice)} ◈</span></div></div><ActionButton mutates variant="quiet" testId={`sell-${dish.instanceId}`} onClick={onSell}>出售</ActionButton></GamePanel>;
 }
 
@@ -181,6 +174,7 @@ function Shop({ meta, go, buyItem, equipItem }: { meta: MetaState; go: (screen: 
   const run = (task: () => Promise<boolean> | boolean) => { const state = getWorkshopState(); if (state.saving || state.saveIssue) return; void Promise.resolve(task()).catch(() => undefined); };
   const featured = SHOP_ITEMS.find(item => item.implemented) ?? SHOP_ITEMS[0];
   const previews = SHOP_ITEMS.filter(item => !item.implemented);
+  const upgrades = SHOP_ITEMS.filter(item => item.implemented && item.id !== featured.id);
   const featuredOwned = meta.purchasedShopItemIds.includes(featured.id);
   const featuredEquipped = meta.equippedWeaponId === featured.id;
   const canBuyFeatured = meta.coins >= featured.cost && !featuredOwned;
@@ -188,13 +182,29 @@ function Shop({ meta, go, buyItem, equipItem }: { meta: MetaState; go: (screen: 
     <div className="ws-shop-balance"><div><span className="ws-panel-kicker">WALLET</span><strong>本次远征预算</strong></div><CoinPill coins={meta.coins} /><small>装备购买后可在战斗中使用；未开放物品不会影响当前规则。</small></div>
     <div className="ws-shop-showcase"><div className="ws-showcase-copy"><span className="ws-panel-kicker">RECOMMENDED LOADOUT</span><h2>一把更懂裁决的刀。</h2><p>把赚来的金币投入下一次关键切割。斩骨刀会在每次裁决结算时追加伤害。</p><div className="ws-showcase-points"><span><b>+{featured.verdictDamageBonus}</b>裁决伤害</span><span><b>{formatPrice(featured.cost)}</b>金币入手</span></div></div><ShopCard coins={meta.coins} featured item={featured} owned={featuredOwned} equipped={featuredEquipped} disabled={featuredOwned ? featuredEquipped : !canBuyFeatured} onAction={() => run(() => featuredOwned ? equipItem(featured.id) : buyItem(featured.id))} actionLabel={featuredEquipped ? '已装备' : featuredOwned ? '装备' : `购买 · ${featured.cost}`} /></div>
     <div className="ws-loadout-strip"><div className="ws-loadout-icon"><Icon name="sword" size={23} /></div><div><span className="ws-panel-kicker">BASE LOADOUT</span><strong>基础厨刀</strong><small>可靠的起点 · 不提供额外裁决加成</small></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => run(() => equipItem(null))}>{meta.equippedWeaponId ? '切回基础厨刀' : '当前已装备'}</ActionButton></div>
+    <div className="ws-shop-grid" aria-label="永久升级">{upgrades.map(item => {
+      const owned = meta.purchasedShopItemIds.includes(item.id);
+      return <ShopCard key={item.id} coins={meta.coins} item={item} owned={owned} equipped={owned}
+        disabled={owned || meta.coins < item.cost} onAction={() => run(() => buyItem(item.id))}
+        actionLabel={owned ? '已生效' : `购买 · ${item.cost}`} />;
+    })}</div>
     <details className="ws-preview-shelf"><summary><span><b>未开放物品</b><small>{previews.length} 项未来目录 · 仅供预览</small></span><i>展开目录</i></summary><div className="ws-shop-grid">{previews.map(item => { const owned = meta.purchasedShopItemIds.includes(item.id); const equipped = item.category === 'weapon' && meta.equippedWeaponId === item.id; return <ShopCard key={item.id} coins={meta.coins} item={item} owned={owned} equipped={equipped} disabled onAction={() => undefined} actionLabel="即将开放" />; })}</div></details>
     </div><WorkshopNav active="shop" /></section>;
 }
 
 function ShopCard({ item, owned, equipped, disabled, onAction, actionLabel, featured = false, coins }: { item: ShopItemDefinition; owned: boolean; equipped: boolean; disabled?: boolean; onAction: () => void; actionLabel: string; featured?: boolean; coins: number }) {
   const shortfall = Math.max(0, item.cost - coins);
-  return <GamePanel material="wood" className={`ui-shop-card ${item.implemented ? '' : 'is-preview'} ${equipped ? 'is-equipped' : ''} ${featured ? 'is-featured' : ''}`}><div className="ui-shop-card__art"><Icon name={item.category === 'weapon' ? 'sword' : item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} /></div><div className="ui-shop-card__copy"><span className="ws-panel-kicker">{item.category === 'weapon' ? 'WEAPON' : item.category === 'skin' ? 'OUTFIT' : 'SUPPLY'}</span><h2>{item.name}</h2><p>{item.description}</p>{item.verdictDamageBonus > 0 && <strong className="ws-bonus">+{item.verdictDamageBonus} 裁决伤害</strong>}{item.implemented && !owned && shortfall > 0 && <small>还差 {formatPrice(shortfall)} 金币</small>}{item.implemented && owned && <small>已解锁 · 可随时切换</small>}</div><div className="ui-shop-card__action"><strong className="ws-shop-price">{item.cost ? `${formatPrice(item.cost)} ◈` : '免费'}</strong><ActionButton mutates variant={item.implemented ? 'primary' : 'quiet'} disabled={disabled || equipped} onClick={onAction}>{equipped ? <><span className="ws-check">✓</span> 已装备</> : owned ? '装备' : actionLabel}</ActionButton></div></GamePanel>;
+  const upgrade = item.category === 'upgrade';
+  return <GamePanel material="wood" data-testid={`shop-${item.id}`} className={`ui-shop-card ${item.implemented ? '' : 'is-preview'} ${equipped ? 'is-equipped' : ''} ${featured ? 'is-featured' : ''}`}>
+    <div className="ui-shop-card__art">{upgrade
+      ? <ItemIcon name={item.id === 'upgrade_tomato_bomb' ? 'tomato' : 'pot'} size={54} />
+      : <Icon name={item.category === 'weapon' ? 'sword' : item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} />}</div>
+    <div className="ui-shop-card__copy"><span className="ws-panel-kicker">{upgrade ? '永久升级' : item.category === 'weapon' ? 'WEAPON' : item.category === 'skin' ? 'OUTFIT' : 'SUPPLY'}</span><h2>{item.name}</h2><p>{item.description}</p>
+      {item.verdictDamageBonus > 0 && <strong className="ws-bonus">+{item.verdictDamageBonus} 裁决伤害</strong>}
+      {item.implemented && !owned && shortfall > 0 && <small>还差 {formatPrice(shortfall)} 金币</small>}
+      {item.implemented && owned && <small>{upgrade ? '永久生效 · 无需装备' : '已解锁 · 可随时切换'}</small>}
+    </div><div className="ui-shop-card__action"><strong className="ws-shop-price">{item.cost ? `${formatPrice(item.cost)} ◈` : '免费'}</strong><ActionButton mutates variant={item.implemented ? 'primary' : 'quiet'} disabled={disabled || equipped} onClick={onAction}>{equipped ? upgrade ? '已生效' : '已装备' : owned ? '装备' : actionLabel}</ActionButton></div>
+  </GamePanel>;
 }
 
 function EmptyState({ icon, title, text, action, onAction }: { icon?: 'bag' | 'shop' | 'book'; title: string; text: string; action?: string; onAction?: () => void }) {
@@ -208,7 +218,9 @@ export function Workshop() {
   const saving = useWorkshopStore(state => state.saving);
   const saveIssue = useWorkshopStore(state => state.saveIssue);
   const go = useWorkshopStore(state => state.go);
-  const cook = useWorkshopStore(state => state.cook);
+  const cookingJob = useWorkshopStore(state => state.save.cookingJob);
+  const startCooking = useWorkshopStore(state => state.startCooking);
+  const claimCooking = useWorkshopStore(state => state.claimCooking);
   const sellDish = useWorkshopStore(state => state.sellDish);
   const sellAllDishes = useWorkshopStore(state => state.sellAllDishes);
   const buyItem = useWorkshopStore(state => state.buyItem);
@@ -216,7 +228,7 @@ export function Workshop() {
   const clearNotice = useWorkshopStore(state => state.clearNotice);
   const content = useMemo(() => {
     switch (screen) {
-      case 'kitchen': return <KitchenWorkbench meta={meta} go={go} cook={cook} saving={saving} saveIssue={saveIssue} />;
+      case 'kitchen': return <KitchenWorkbench meta={meta} cookingJob={cookingJob} go={go} startCooking={startCooking} claimCooking={claimCooking} saving={saving} saveIssue={saveIssue} />;
       case 'inventory': return <Inventory meta={meta} go={go} />;
       case 'cookbook': return <Cookbook meta={meta} go={go} />;
       case 'sales': return <Sales meta={meta} go={go} sellDish={sellDish} sellAllDishes={sellAllDishes} />;
@@ -224,6 +236,6 @@ export function Workshop() {
       case 'restaurant':
       default: return <Restaurant meta={meta} go={go} />;
     }
-  }, [screen, meta, go, cook, sellDish, sellAllDishes, buyItem, equipItem, saving, saveIssue]);
+  }, [screen, meta, go, cookingJob, startCooking, claimCooking, sellDish, sellAllDishes, buyItem, equipItem, saving, saveIssue]);
   return <div className="ws-root"><Notice notice={notice} clearNotice={clearNotice} saving={saving} saveIssue={saveIssue} />{content}</div>;
 }

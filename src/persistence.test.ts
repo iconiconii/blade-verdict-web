@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addInventory, cook, sell } from './domain/meta';
+import { beginCooking, claimCooking } from './domain/cookingJobs';
 import { createSave, decodeSave, encodeSave, settleBattle, type SavedWorkshop } from './domain/save';
 import { STORAGE_KEY, createSaveRepository, readWorkshopSave, storageMode, updateWorkshopSave, type SaveLock, type SaveStorage } from './persistence';
 
@@ -134,5 +135,93 @@ describe('workshop persistence write boundary', () => {
     memory.records.set(STORAGE_KEY, encodeSave({ ...createSave(), revision: Number.MAX_SAFE_INTEGER }));
     await expect(repo.update(save => save)).rejects.toThrow(/达到上限/);
     expect(memory.writes()).toBe(2);
+  });
+
+  it('commits the schema-1 migration alongside the next transaction without resetting the pantry', async () => {
+    const memory = memoryStorage();
+    memory.records.set(STORAGE_KEY, JSON.stringify({
+      schema: 1,
+      revision: 7,
+      meta: addInventory(createSave().meta, { ingredientId: 'corn', quality: 'High', count: 2 }),
+      tutorialSeen: true,
+      settledBattleIds: ['old-tomato-win'],
+      discoveredIngredientIds: ['ing_tomato'],
+    }));
+    const repo = createSaveRepository({ storage: memory.storage });
+    expect(repo.read().clearedBossIds).toEqual(['corn', 'carrot', 'cabbage', 'tomato']);
+    expect(memory.writes()).toBe(0);
+    const next = await repo.update(save => ({ ...save, tutorialSeen: true }));
+    expect(next.schema).toBe(2);
+    expect(next.revision).toBe(8);
+    expect(next.meta.inventory).toEqual([{ ingredientId: 'ing_corn', quality: 'High', count: 2 }]);
+    expect(repo.read()).toEqual(next);
+  });
+
+  it('serializes simultaneous start attempts from different clients into exactly one occupied pot', async () => {
+    const initial = createSave();
+    initial.meta = addInventory(initial.meta, { ingredientId: 'corn', quality: 'Top', count: 6 });
+    const memory = memoryStorage(initial);
+    const mutex = sharedLock();
+    const first = createSaveRepository({ storage: memory.storage, withLock: mutex.withLock });
+    const second = createSaveRepository({ storage: memory.storage, withLock: mutex.withLock });
+    const selection = [{ ingredientId: 'corn' as const, quality: 'Top' as const, count: 3 }];
+    const results = await Promise.allSettled([
+      first.update(save => beginCooking(save, 'recipe_corn_pancake', selection, 'first', 1000)),
+      second.update(save => beginCooking(save, 'recipe_corn_pancake', selection, 'second', 1000)),
+    ]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect(first.read().meta.inventory[0].count).toBe(3);
+    expect(first.read().cookingJob?.id).toBe('first');
+    expect(first.read().meta.pendingDishes).toEqual([]);
+    expect(memory.writes()).toBe(1);
+  });
+
+  it('rereads the latest quality inventory before starting and never consumes a stale selection', async () => {
+    const initial = createSave();
+    initial.meta = addInventory(initial.meta, { ingredientId: 'corn', quality: 'Top', count: 1 });
+    const memory = memoryStorage(initial);
+    const repo = createSaveRepository({ storage: memory.storage });
+    // Another durable action consumed the ingredient after the UI selected it.
+    memory.records.set(STORAGE_KEY, encodeSave({ ...initial, revision: 1, meta: { ...initial.meta, inventory: [] } }));
+    await expect(repo.update(save => beginCooking(save, 'recipe_toast', [{ ingredientId: 'corn', quality: 'Top', count: 1 }], 'stale', 0))).rejects.toThrow(/库存不足/);
+    expect(repo.read().cookingJob).toBeNull();
+    expect(memory.writes()).toBe(0);
+  });
+
+  it('claims the same finished pot once across clients and does not duplicate dish records', async () => {
+    const initial = createSave();
+    initial.meta = addInventory(initial.meta, { ingredientId: 'corn', quality: 'Top', count: 1 });
+    const cooking = beginCooking(initial, 'recipe_toast', [{ ingredientId: 'corn', quality: 'Top', count: 1 }], 'shared-pot', 0);
+    const memory = memoryStorage(cooking);
+    const mutex = sharedLock();
+    const first = createSaveRepository({ storage: memory.storage, withLock: mutex.withLock });
+    const second = createSaveRepository({ storage: memory.storage, withLock: mutex.withLock });
+    await Promise.all([
+      first.update(save => claimCooking(save, 'shared-pot', 30_000)),
+      second.update(save => claimCooking(save, 'shared-pot', 30_000)),
+    ]);
+    const durable = first.read();
+    expect(durable.cookingJob).toBeNull();
+    expect(durable.meta.pendingDishes).toHaveLength(1);
+    expect(durable.meta.dishRecords[0].cookCount).toBe(1);
+    expect(durable.meta.unlockedRecipeIds).toEqual(['recipe_toast']);
+  });
+
+  it('keeps inventory and the unclaimed result unchanged when a cooking write fails', async () => {
+    const initial = createSave();
+    initial.meta = addInventory(initial.meta, { ingredientId: 'corn', quality: 'Top', count: 1 });
+    const memory = memoryStorage(initial);
+    const error = new Error('QuotaExceededError');
+    const failing = createSaveRepository({ storage: { ...memory.storage, setItem: () => { throw error; } } });
+    const selection = [{ ingredientId: 'corn' as const, quality: 'Top' as const, count: 1 }];
+    await expect(failing.update(save => beginCooking(save, 'recipe_toast', selection, 'quota', 0))).rejects.toBe(error);
+    expect(failing.read()).toEqual(initial);
+    const cooking = beginCooking(initial, 'recipe_toast', selection, 'quota', 0);
+    memory.records.set(STORAGE_KEY, encodeSave(cooking));
+    await expect(failing.update(save => claimCooking(save, 'quota', 30_000))).rejects.toBe(error);
+    expect(failing.read()).toEqual(cooking);
+    expect(failing.read().meta.pendingDishes).toEqual([]);
+    expect(failing.read().meta.unlockedRecipeIds).toEqual([]);
+    expect(memory.writes()).toBe(0);
   });
 });

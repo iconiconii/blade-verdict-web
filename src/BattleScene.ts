@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { CombatState } from './domain/combat';
+import { createCombat, type CombatState } from './domain/combat';
 import { CornGuardian } from './scene/CornGuardian';
 import { JellyGuardian } from './scene/JellyGuardian';
 import { CarrotGuardian, CabbageGuardian, TomatoGuardian, type VegetableGuardian } from './scene/VegetableGuardian';
@@ -10,6 +10,7 @@ import { MonsterHitArea } from './scene/MonsterHitArea';
 import { ImpactPresentation } from './scene/ImpactPresentation';
 import { ringRadiusAt, type BodyAnchorId, type BossKind } from './domain/v2';
 import { FeedbackManager } from './feedback/FeedbackManager';
+import { GuardianFraming, guardianFramingReference } from './scene/GuardianFraming';
 
 type EffectMesh=THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;
 type BattleGuardian=CornGuardian|JellyGuardian|VegetableGuardian;
@@ -24,6 +25,7 @@ export class BattleScene {
   private camera=makeBattleCamera(1,1);
   private overlayCamera=new THREE.OrthographicCamera(0,1,0,-1,.1,200);
   private guardian:BattleGuardian;
+  private guardianFraming:GuardianFraming;
   private hitArea:MonsterHitArea;
   private bossKind:BossKind;
   private targetRings:THREE.Group[]=[];
@@ -42,7 +44,10 @@ export class BattleScene {
         :bossKind==='cabbage'?new CabbageGuardian()
           :bossKind==='tomato'?new TomatoGuardian()
             :new CornGuardian();
-    this.hitArea=new MonsterHitArea(this.guardian.root);
+    // Measure an actual neutral pose, including jelly's resting hover offset.
+    this.guardian.update(createCombat(0,bossKind),true);
+    this.guardianFraming=new GuardianFraming(this.guardian.root,bossKind);
+    this.hitArea=new MonsterHitArea(this.guardianFraming.root);
     this.renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -53,7 +58,7 @@ export class BattleScene {
     this.host.appendChild(this.renderer.domElement);
     this.renderer.domElement.addEventListener('webglcontextlost',this.contextLost);
     // Transparent renderer composites live geometry over the reference garden art.
-    this.world.add(this.guardian.root);this.setupArena();
+    this.world.add(this.guardianFraming.root);this.setupArena();
     this.overlayCamera.position.z=100;
     this.sliceEffects=new SliceEffects(this.overlay,bossKind);
     for(let i=0;i<2;i++){
@@ -87,14 +92,15 @@ export class BattleScene {
     const rim=new THREE.DirectionalLight(jelly?0x9f80ff:0x80cdb9,2.5);rim.position.set(3,4,-3);this.world.add(rim);
     // Invisible shadow catcher grounds the 3D actor in the painted arena.
     const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.ShadowMaterial({opacity:.23}));
-    floor.rotation.x=-Math.PI/2;floor.position.y=-.14;floor.receiveShadow=true;this.world.add(floor);
+    floor.rotation.x=-Math.PI/2;floor.position.y=guardianFramingReference.groundY-.005;floor.receiveShadow=true;this.world.add(floor);
     this.arenaPulse=new THREE.Mesh(new THREE.RingGeometry(1.16,1.51,72),basic(jelly?0xa88cff:0xffca70,.06));
-    this.arenaPulse.name='battle-arena-pulse';this.arenaPulse.rotation.x=-Math.PI/2;this.arenaPulse.position.y=-.12;this.arenaPulse.renderOrder=3;this.world.add(this.arenaPulse);
+    this.arenaPulse.name='battle-arena-pulse';this.arenaPulse.rotation.x=-Math.PI/2;this.arenaPulse.position.y=guardianFramingReference.groundY+.015;this.arenaPulse.renderOrder=3;this.world.add(this.arenaPulse);
   }
   private contextLost=(event:Event)=>{event.preventDefault();this.onFailure()};
   resize(){
     const {width,height}=this.host.getBoundingClientRect();if(width<=0||height<=0)return;
     this.width=width;this.height=height;this.camera=makeBattleCamera(width,height);
+    this.guardianFraming.resize(this.camera);
     this.hitArea.update(this.camera);
     this.overlayCamera.right=width;this.overlayCamera.bottom=-height;this.overlayCamera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));this.renderer.setSize(width,height,false);

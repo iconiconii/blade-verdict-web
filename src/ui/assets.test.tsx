@@ -11,7 +11,7 @@ afterEach(() => vi.unstubAllEnvs());
 it.each(['/', '/blade-verdict-web/'])('resolves public assets under %s', base => {
   vi.stubEnv('BASE_URL', base);
   expect(assetUrl('/assets/ui-kit/icons/corn.png')).toBe(`${base}assets/ui-kit/icons/corn.png`);
-  const html = renderToStaticMarkup(<><ItemIcon name="corn" /><HuntScreens /><KitchenWorkbench meta={createMetaState()} go={() => {}} cook={() => false} /></>);
+  const html = renderToStaticMarkup(<><ItemIcon name="corn" /><HuntScreens /><KitchenWorkbench meta={createMetaState()} cookingJob={null} go={() => {}} startCooking={async () => false} claimCooking={async () => false} /></>);
   const sources = [...html.matchAll(/src="([^"]+)"/g)].map(match => match[1]);
   expect(sources.length).toBeGreaterThan(15);
   for (const source of sources) expect(source.startsWith(`${base}assets/`), source).toBe(true);

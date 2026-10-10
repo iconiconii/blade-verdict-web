@@ -5,10 +5,13 @@ import {
   addInventory,
   buy,
   cook,
+  cookingDurationMs,
   createMetaState,
   dishPrice,
   dishQuality,
   equippedVerdictDamageBonus,
+  equip,
+  hasTomatoBomb,
   inventoryCount,
   matchesRecipe,
   previewCooking,
@@ -32,7 +35,8 @@ describe('out-of-battle V2 economy', () => {
   });
 
   it('uses the Unity ingredient ids and quality base prices', () => {
-    expect(RECIPES.map(recipe => recipe.outputDishId)).toEqual(['dish_corn_toast', 'dish_jelly_pudding', 'dish_corn_jelly', 'dish_carrot_roast', 'dish_cabbage_roll', 'dish_tomato_salsa']);
+    expect(RECIPES.slice(0, 6).map(recipe => recipe.outputDishId)).toEqual(['dish_corn_toast', 'dish_jelly_pudding', 'dish_corn_jelly', 'dish_carrot_roast', 'dish_cabbage_roll', 'dish_tomato_salsa']);
+    expect(RECIPES).toHaveLength(10);
     expect(dishPrice([corn('Broken')], RECIPES[0])).toBe(6); // 5 * 1.2
     expect(dishPrice([corn('Top')], RECIPES[0])).toBe(120); // 100 * 1.2
   });
@@ -120,6 +124,50 @@ describe('out-of-battle V2 economy', () => {
     expect(() => buy(createMetaState({ coins: preview.cost }), preview.id)).toThrow(/preview/);
     // Keep this assertion explicit: item previews never sneak a combat bonus into rules.
     expect(SHOP_ITEMS.filter(item => !item.implemented).every(item => item.verdictDamageBonus === 0)).toBe(true);
+  });
+
+  it('buys permanent upgrades once without replacing either equipment slot', () => {
+    const armed = buy(createMetaState({ coins: 1000 }), 'weapon_corn_cleaver').state;
+    expect(hasTomatoBomb(armed)).toBe(false);
+    expect(cookingDurationMs(armed)).toBe(30_000);
+    const bomb = buy(armed, 'upgrade_tomato_bomb').state;
+    const complete = buy(bomb, 'upgrade_jelly_cooker').state;
+    expect(complete.coins).toBe(490);
+    expect(complete.equippedWeaponId).toBe('weapon_corn_cleaver');
+    expect(complete.equippedSkinId).toBeNull();
+    expect(complete.ownedItems).toEqual([]);
+    expect(equippedVerdictDamageBonus(complete)).toBe(8);
+    expect(hasTomatoBomb(complete)).toBe(true);
+    expect(cookingDurationMs(complete)).toBe(22_500);
+    expect(armed.purchasedShopItemIds).toEqual(['weapon_corn_cleaver']);
+    expect(() => buy(complete, 'upgrade_jelly_cooker')).toThrow(/already purchased/);
+    expect(() => buy(complete, 'upgrade_tomato_bomb')).toThrow(/already purchased/);
+    expect(() => equip(complete, 'upgrade_tomato_bomb')).toThrow(/Only weapons and skins/);
+    expect(() => equip(complete, 'upgrade_jelly_cooker')).toThrow(/Only weapons and skins/);
+  });
+
+  it.each([
+    ['recipe_vegetable_soup', ['corn', 'carrot', 'tomato'], 540],
+    ['recipe_jelly_salad', ['corn', 'carrot', 'jelly'], 540],
+    ['recipe_vegetable_stew', ['cabbage', 'tomato'], 300],
+    ['recipe_corn_pancake', ['corn', 'corn', 'corn'], 390],
+  ] as const)('prices %s using each selected quality, with exactly one output', (recipeId, ingredients, price) => {
+    const recipe = RECIPES.find(value => value.id === recipeId)!;
+    const selected = ingredients.map(ingredientId => ({ ingredientId, quality: 'Top' as const, count: 1 }));
+    let state = createMetaState();
+    for (const entry of selected) state = addInventory(state, entry);
+    expect(dishPrice(selected, recipe)).toBe(price);
+    expect(cook(state, selected, recipeId).state.pendingDishes).toHaveLength(1);
+  });
+
+  it('keeps mixed-quality pancake quantities exact, preserving lowest quality and rounding', () => {
+    const pancake = RECIPES.find(recipe => recipe.id === 'recipe_corn_pancake')!;
+    const selected = [corn('Top', 2), corn('Broken')];
+    expect(matchesRecipe(selected, pancake)).toBe(true);
+    expect(matchesRecipe([corn('Top', 2)], pancake)).toBe(false);
+    expect(matchesRecipe([corn('Top', 4)], pancake)).toBe(false);
+    expect(dishQuality(selected)).toBe('Broken');
+    expect(dishPrice(selected, pancake)).toBe(267); // 205 * 1.3 = 266.5
   });
 
   it('does not mutate a nested state when cooking', () => {

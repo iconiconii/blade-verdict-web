@@ -4,7 +4,7 @@
 .battle .canvas{inset:0;pointer-events:none}
 .battle-vignette{pointer-events:none;background:linear-gradient(#07151ab8,transparent 34%,transparent 62%,#061118ed),radial-gradient(ellipse,transparent 30%,#03101388 100%);transition:background .3s}
 .ingredient-burst{position:absolute;z-index:4;width:1px;height:1px;pointer-events:none;transform:translate(-50%,-50%)}
-.ingredient-burst i{position:absolute;left:0;top:0;font-style:normal;font-size:18px;filter:drop-shadow(0 2px 5px #0009);animation:ingredient-fly .42s cubic-bezier(.2,.8,.25,1) calc(var(--burst-index)*42ms) both;--tx:calc((var(--burst-index) - (var(--burst-count) - 1)/2)*26px);--ty:calc(-32px - (var(--burst-index) % 3)*16px)}
+.ingredient-burst i{position:absolute;left:0;top:0;font-style:normal;font-size:18px;filter:drop-shadow(0 2px 5px #0009);animation:ingredient-fly .42s cubic-bezier(.2,.8,.25,1) calc(var(--burst-index)*42ms) both;--tx:calc((var(--burst-index) - (var(--burst-count) - 1)/2)*26px);--ty:calc(-32px - var(--burst-row,0)*16px)}
 .ingredient-burst--perfect i{font-size:20px;animation-duration:.52s}
 .ingredient-burst--corn i{color:#ffd36b}.ingredient-burst--jelly i{color:#d8bcff}
 .battle--verdictReady .battle-vignette,.battle--verdictSlash .battle-vignette{background:linear-gradient(#051517ee,transparent 48%,#051517dd),radial-gradient(ellipse,transparent 15%,#071f20bb 90%)}
@@ -128,3 +128,8 @@
 .battle--storybook .verdict-ready-callout span{display:block;margin-top:3px;color:#fffbe0;font-size:2.9cqw;letter-spacing:.08em}
 @keyframes verdict-ready-callout{0%{opacity:0;transform:translateY(10px) scale(.85)}16%{opacity:1;transform:translateY(0) scale(1.04)}72%{opacity:1;transform:translateY(-2px) scale(1)}100%{opacity:0;transform:translateY(-12px) scale(.98)}}
 @media(prefers-reduced-motion:reduce){.battle--storybook .verdict-ready-callout{animation:none;opacity:1}}
+.bomb-feedback { position: absolute; z-index: 6; pointer-events: none; transform: translate(-50%, -50%); }
+.bomb-feedback > strong { position: absolute; left: 0; top: -50px; width: 120px; transform: translateX(-50%); text-align: center; color: #ffdc8c; font-size: 20px; text-shadow: 0 2px 2px #a32b19, 0 0 6px #301100; white-space: nowrap; animation: bomb-callout .65s ease-out both; }
+.bomb-fragments i { animation-duration: .5s; animation-delay: 0s; filter: drop-shadow(0 0 5px #ff9c44); --tx: calc((var(--burst-index) - 3) * 24px); --ty: calc(-35px - var(--burst-row,0) * 18px); }
+@keyframes bomb-callout { from { opacity: 0; margin-top: 8px; } 15%,65% { opacity: 1; } to { opacity: 0; margin-top: -20px; } }
+@media (prefers-reduced-motion: reduce) { .bomb-fragments { display: none; } .bomb-feedback > strong { animation: none; } }

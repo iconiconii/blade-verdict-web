@@ -49,6 +49,17 @@ const deferred=<T>()=>{
 };
 
 describe('battle-scoped audio',()=>{
+  it('plays one bomb cue per event and gives lethal feedback the finisher cue',async()=>{
+    const context=new FakeContext(),manager=new AudioManager({createContext:()=>context.asAudioContext()});
+    await manager.unlock();
+    const blast=feedback(1,'Cut',{bombDamage:10});
+    manager.play(blast);manager.play(blast);
+    manager.play(feedback(2,'Cut',{bombDamage:8,finisher:true}));
+    expect(context.oscillators.map(node=>node.frequency.value)).toEqual([180,110]);
+    expect(context.oscillators[0].frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(45,12.18);
+    manager.dispose();
+  });
+
   it('synthesizes distinct judgments and preserves cut, finisher and ready cues',async()=>{
     const context=new FakeContext(),manager=new AudioManager({createContext:()=>context.asAudioContext()});
     await manager.unlock();

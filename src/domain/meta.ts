@@ -39,7 +39,7 @@ export interface RecipeDefinition {
   multiplier: number;
 }
 
-export type ShopCategory = 'weapon' | 'skin' | 'item';
+export type ShopCategory = 'weapon' | 'skin' | 'item' | 'upgrade';
 
 export interface ShopItemDefinition {
   id: string;
@@ -49,6 +49,8 @@ export interface ShopItemDefinition {
   implemented: boolean;
   /** Applied only while the item is equipped.  Preview entries are always 0. */
   verdictDamageBonus: number;
+  /** Permanent upgrades apply without occupying an equipment slot. */
+  effect?: 'tomato-bomb' | 'jelly-cooker';
   description: string;
 }
 
@@ -164,6 +166,34 @@ export const RECIPES: readonly RecipeDefinition[] = Object.freeze([
     requirements: freezeRecord({ ing_tomato: 1 }),
     multiplier: 1.2,
   },
+  {
+    id: 'recipe_vegetable_soup',
+    outputDishId: 'dish_vegetable_soup',
+    name: '蔬菜汤',
+    requirements: freezeRecord({ ing_corn: 1, ing_carrot: 1, ing_tomato: 1 }),
+    multiplier: 1.8,
+  },
+  {
+    id: 'recipe_jelly_salad',
+    outputDishId: 'dish_jelly_salad',
+    name: '果冻沙拉',
+    requirements: freezeRecord({ ing_corn: 1, ing_carrot: 1, ing_jelly: 1 }),
+    multiplier: 1.8,
+  },
+  {
+    id: 'recipe_vegetable_stew',
+    outputDishId: 'dish_vegetable_stew',
+    name: '素食烩菜',
+    requirements: freezeRecord({ ing_cabbage: 1, ing_tomato: 1 }),
+    multiplier: 1.5,
+  },
+  {
+    id: 'recipe_corn_pancake',
+    outputDishId: 'dish_corn_pancake',
+    name: '玉米饼',
+    requirements: freezeRecord({ ing_corn: 3 }),
+    multiplier: 1.3,
+  },
 ]);
 
 /** The P0 catalog.  Unimplemented entries are previews and cannot be bought. */
@@ -176,6 +206,26 @@ export const SHOP_ITEMS: readonly ShopItemDefinition[] = Object.freeze([
     implemented: true,
     verdictDamageBonus: 8,
     description: '每次裁决结算后追加 8 点伤害',
+  },
+  {
+    id: 'upgrade_tomato_bomb',
+    name: '西红柿炸弹',
+    category: 'upgrade',
+    cost: 150,
+    implemented: true,
+    verdictDamageBonus: 0,
+    effect: 'tomato-bomb',
+    description: '永久辅具：每次裁决首次有效切割追加 10 点爆炸伤害',
+  },
+  {
+    id: 'upgrade_jelly_cooker',
+    name: '果冻快煮器',
+    category: 'upgrade',
+    cost: 240,
+    implemented: true,
+    verdictDamageBonus: 0,
+    effect: 'jelly-cooker',
+    description: '永久厨房升级：新一锅烹饪时间缩短 25%',
   },
   {
     id: 'weapon_jelly_fork',
@@ -475,7 +525,7 @@ export function sellAll(state: MetaState): { state: MetaState; earned: number } 
   return { state: next, earned };
 }
 
-/** Buy and auto-equip the implemented P0 cleaver.  Consumables are not yet active. */
+/** Buy once and auto-equip weapons/skins; permanent upgrades need no slot. */
 export function buy(state: MetaState, itemId: string): BuyResult {
   const item = findShopItem(itemId);
   if (!item.implemented) throw new Error('Shop item is a preview and cannot be purchased');
@@ -502,7 +552,7 @@ export const sellDish = sell;
 /** Equip a previously purchased weapon/skin without mutating the snapshot. */
 export function equip(state: MetaState, itemId: string): MetaState {
   const item = findShopItem(itemId);
-  if (item.category === 'item') throw new Error('Consumable items cannot be equipped');
+  if (item.category !== 'weapon' && item.category !== 'skin') throw new Error('Only weapons and skins can be equipped');
   if (!state.purchasedShopItemIds.includes(item.id)) throw new Error('Shop item is not owned');
   const next = cloneState(state);
   if (item.category === 'weapon') next.equippedWeaponId = item.id;
@@ -514,3 +564,8 @@ export const equippedVerdictDamageBonus = (state: MetaState): number => {
   if (!state.equippedWeaponId) return 0;
   return findShopItem(state.equippedWeaponId).verdictDamageBonus;
 };
+
+export const hasTomatoBomb = (state: MetaState): boolean => state.purchasedShopItemIds.includes('upgrade_tomato_bomb');
+
+/** Snapshot this at cooking start; later purchases do not alter an active pot. */
+export const cookingDurationMs = (state: MetaState): number => state.purchasedShopItemIds.includes('upgrade_jelly_cooker') ? 22_500 : 30_000;

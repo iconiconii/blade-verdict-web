@@ -7,6 +7,8 @@ import { BlockCircleManager } from './BlockCircleManager';
 import { doubleCircleRoll, enrageConfig, levelForBoss, levelTiming, type LevelId } from './levelConfig';
 
 export interface CombatFeedback {
+  /** Actual extra damage from the once-per-verdict tomato bomb. */
+  bombDamage?:number;
   circleId?:string;
   pendingRound?:boolean;
   /** Latest ring result for the actor; kind still settles the whole relay. */
@@ -31,6 +33,7 @@ export interface CombatState {
   tempo:CombatTempo; feedback:CombatFeedback|null; effects:CombatFeedback[]; feedbackSequence:number;
   hitStopRemainingMs:number; stroke:VerdictStroke|null; pointerId:number|null;
   verdictDamageDealt:number; verdictCombo:number; verdictBonusDamage:number;
+  tomatoBombOwned:boolean; tomatoBombTriggered:boolean;
   fever:boolean; feverStartedAt:number|null;
 }
 
@@ -64,14 +67,14 @@ export function tempoFor(bossKind:BossKind,successfulParries:number,enraged=fals
 const attackAtTempo=(bossKind:BossKind,tempo:CombatTempo):AttackConfig=>({
   ...attackForBoss(bossKind),perfectWindowStart:tempo.perfectWindowStart,perfectWindowEnd:tempo.perfectWindowEnd,
 });
-export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0,battleId=`${bossKind}-${seed}`):CombatState=>({
+export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0,battleId=`${bossKind}-${seed}`,tomatoBombOwned=false):CombatState=>({
   battleId,
   battle:newBattle(bossKind),bossKind,attack:attackAtTempo(bossKind,tempoFor(bossKind,0)),
   levelId:levelForBoss[bossKind],enraged:false,enragedAt:null,nextAttackAt:null,
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
   hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
-  verdictBonusDamage,fever:false,feverStartedAt:null,
+  verdictBonusDamage,tomatoBombOwned,tomatoBombTriggered:false,fever:false,feverStartedAt:null,
 });
 const transition=(s:CombatState,phase:BattlePhase,startedAt=s.time):CombatState=>({...s,phase,elapsed:Math.max(0,s.time-startedAt)});
 function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState {
@@ -144,7 +147,7 @@ export function startVerdict(s:CombatState):CombatState {
   if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
   const battle={...s.battle,meter:0,verdictCount:s.battle.verdictCount+1};
   return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,nextAttackAt:null,
-    verdictDamageDealt:0,verdictCombo:0,fever:false,feverStartedAt:null};
+    verdictDamageDealt:0,verdictCombo:0,tomatoBombTriggered:false,fever:false,feverStartedAt:null};
 }
 function finishVerdict(s:CombatState):CombatState {
   // Apply the equipped weapon once, including on a no-input timeout.
@@ -153,20 +156,23 @@ function finishVerdict(s:CombatState):CombatState {
 }
 export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65,path?:Array<{x:number;y:number;time:number}>,speed:'normal'|'fast'|'ferocious'='normal'):CombatState {
   const damageCap=verdictDamageCapFor(s);
-  if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.verdictDamageDealt>=damageCap)return s;
+  if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.battle.playerHp<=0||s.battle.bossHp<=0||s.verdictDamageDealt>=damageCap)return s;
   const damage=Math.min(verdictCutDamageFor(s),damageCap-s.verdictDamageDealt,s.battle.bossHp);
   if(damage<=0)return s;
-  const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage)};
+  const triggersBomb=s.tomatoBombOwned&&!s.tomatoBombTriggered;
+  const bombDamage=triggersBomb?Math.min(10,s.battle.bossHp-damage):0;
+  const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage-bombDamage)};
   const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
-  const finalHit=battle.bossHp<=0;
   const fever=s.fever||verdictCombo>=feverConfig.comboThreshold;
   const feverStartedAt=s.feverStartedAt??(fever?s.time:null);
-  const next=emit({...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt},
-    {kind:'Cut',amount:damage,energyGain:0,position,angle,path,speed,finisher:finalHit,
-      hitStopMs:finalHit?80:25});
+  const next={...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt,tomatoBombTriggered:s.tomatoBombTriggered||triggersBomb};
   // At the damage cap, the equipped bonus belongs to this same resolution.
-  // Check enrage only after that bonus, so a directly lethal completion cannot enrage first.
-  return battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):checkEnrage(next);
+  // Settle it before both the finisher and enrage checks, then emit one actual hit.
+  const resolved=battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):checkEnrage(next);
+  const finalHit=resolved.battle.bossHp<=0;
+  return emit(resolved,
+    {kind:'Cut',amount:s.battle.bossHp-resolved.battle.bossHp,bombDamage:triggersBomb?bombDamage:undefined,energyGain:0,position,angle,path,speed,finisher:finalHit,
+      hitStopMs:finalHit?80:25});
 }
 export function tickCombat(s:CombatState,delta:number):CombatState {
   if(s.paused||delta<=0||!Number.isFinite(delta))return s;

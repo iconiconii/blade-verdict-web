@@ -79,4 +79,16 @@ describe('reference hunt UI', () => {
       expect(`/public/assets/ui-kit/hunt/${name}.webp` in assetFiles, name).toBe(true);
     }
   });
+
+  it('shows the permanent bomb as automatic and distinguishes an already triggered verdict',()=>{
+    const state=createCombat(1,'corn',0,'bomb-hud',true);
+    const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} onPause={()=>{}}/>);
+    expect(html).toContain('首刀爆炸');
+    expect(html).toContain('data-triggered="false"');
+    expect(html.match(/<button/g)).toHaveLength(1);
+    state.tomatoBombTriggered=true;
+    const triggered=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} onPause={()=>{}}/>);
+    expect(triggered).toContain('本次已触发');
+    expect(triggered).toContain('data-triggered="true"');
+  });
 });

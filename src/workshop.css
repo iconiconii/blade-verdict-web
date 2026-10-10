@@ -457,3 +457,5 @@
   .ws-cooking-modal__result, .ws-cooking-modal__confirm, .ws-cooking-modal__phase--done { opacity: 1; animation: none; }
   .ws-cooking-modal__phase--input { display: none; }
 }
+.cooking-status { position: absolute; right: 12px; bottom: 15%; z-index: 30; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 12px; border: 2px solid #d49742; border-radius: 10px; background: #4b240e; color: #fff0c3; font-weight: 800; box-shadow: 0 2px 5px #32130080; }
+.cooking-status:focus-visible { outline: 3px solid #fff5b1; outline-offset: 2px; }

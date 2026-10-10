@@ -5,15 +5,20 @@ import {
   SHOP_ITEMS,
   addInventory,
   createMetaState,
+  dishPrice,
+  dishQuality,
+  matchesRecipe,
   type DishInstance,
   type IngredientId,
   type MetaState,
   type OwnedItemStack,
   type ShopItemDefinition,
 } from './meta';
+import { MAX_COOKING_TIME_MS, type CookingJob } from './cookingJobs';
+import { migrateDiscoveredProgress } from './progression';
 
 /** Increment this only when the persisted shape changes incompatibly. */
-export const SAVE_SCHEMA = 1 as const;
+export const SAVE_SCHEMA = 2 as const;
 
 export interface SavedWorkshop {
   schema: typeof SAVE_SCHEMA;
@@ -22,6 +27,8 @@ export interface SavedWorkshop {
   tutorialSeen: boolean;
   settledBattleIds: string[];
   discoveredIngredientIds: IngredientId[];
+  clearedBossIds: BossKind[];
+  cookingJob: CookingJob | null;
 }
 
 type RecordValue = Record<string, unknown>;
@@ -30,6 +37,9 @@ const INGREDIENT_SET = new Set(INGREDIENTS.map(item => item.id));
 const RECIPE_SET = new Set(RECIPES.map(item => item.id));
 const DISH_SET = new Set(RECIPES.map(item => item.outputDishId));
 const SHOP_MAP = new Map(SHOP_ITEMS.map(item => [item.id, item]));
+const BOSS_VALUES: readonly BossKind[] = ['corn', 'carrot', 'cabbage', 'tomato', 'jelly'];
+const LEGACY_SAVE_KEYS = ['schema', 'revision', 'meta', 'tutorialSeen', 'settledBattleIds', 'discoveredIngredientIds'] as const;
+const SAVE_KEYS = [...LEGACY_SAVE_KEYS, 'clearedBossIds', 'cookingJob'] as const;
 
 const fail = (message: string): never => { throw new Error(`存档无效：${message}`); };
 
@@ -104,23 +114,28 @@ function validateInventory(value: unknown): MetaState['inventory'] {
   });
 }
 
+function validateDish(value: unknown, path: string): DishInstance {
+  const item = objectAt(value, path);
+  exactKeys(item, ['instanceId', 'dishId', 'quality', 'sellPrice'], path);
+  const instanceId = text(item.instanceId, `${path}.instanceId`);
+  const dishId = text(item.dishId, `${path}.dishId`);
+  if (!DISH_SET.has(dishId)) fail(`${path}.dishId 料理无效`);
+  return {
+    instanceId,
+    dishId,
+    quality: quality(item.quality, `${path}.quality`),
+    sellPrice: safeInt(item.sellPrice, `${path}.sellPrice`),
+  };
+}
+
 function validateDishes(value: unknown): DishInstance[] {
   const values = arrayAt(value, 'meta.pendingDishes');
   const seen = new Set<string>();
   return values.map((entry, index) => {
-    const item = objectAt(entry, `meta.pendingDishes[${index}]`);
-    exactKeys(item, ['instanceId', 'dishId', 'quality', 'sellPrice'], `meta.pendingDishes[${index}]`);
-    const instanceId = text(item.instanceId, `meta.pendingDishes[${index}].instanceId`);
-    if (seen.has(instanceId)) fail(`meta.pendingDishes[${index}] 存在重复料理实例`);
-    seen.add(instanceId);
-    const dishId = text(item.dishId, `meta.pendingDishes[${index}].dishId`);
-    if (!DISH_SET.has(dishId)) fail(`meta.pendingDishes[${index}].dishId 料理无效`);
-    return {
-      instanceId,
-      dishId,
-      quality: quality(item.quality, `meta.pendingDishes[${index}].quality`),
-      sellPrice: safeInt(item.sellPrice, `meta.pendingDishes[${index}].sellPrice`),
-    };
+    const dish = validateDish(entry, `meta.pendingDishes[${index}]`);
+    if (seen.has(dish.instanceId)) fail(`meta.pendingDishes[${index}] 存在重复料理实例`);
+    seen.add(dish.instanceId);
+    return dish;
   });
 }
 
@@ -226,21 +241,77 @@ function cloneSave(save: SavedWorkshop): SavedWorkshop {
     tutorialSeen: save.tutorialSeen,
     settledBattleIds: [...save.settledBattleIds],
     discoveredIngredientIds: [...save.discoveredIngredientIds],
+    clearedBossIds: [...save.clearedBossIds],
+    cookingJob: save.cookingJob ? {
+      ...save.cookingJob,
+      ingredients: save.cookingJob.ingredients.map(item => ({ ...item })),
+      dish: { ...save.cookingJob.dish },
+    } : null,
+  };
+}
+
+function validateCookingJob(value: unknown, meta: MetaState): CookingJob | null {
+  if (value === null) return null;
+  const raw = objectAt(value, 'cookingJob');
+  exactKeys(raw, ['id', 'recipeId', 'startedAt', 'finishAt', 'ingredients', 'dish'], 'cookingJob');
+  const id = text(raw.id, 'cookingJob.id');
+  if (!id.trim()) fail('cookingJob.id 必须是非空字符串');
+  const recipeId = text(raw.recipeId, 'cookingJob.recipeId');
+  const recipe = RECIPES.find(item => item.id === recipeId);
+  if (!recipe) fail('cookingJob.recipeId 配方无效');
+  const startedAt = safeInt(raw.startedAt, 'cookingJob.startedAt');
+  const finishAt = safeInt(raw.finishAt, 'cookingJob.finishAt');
+  if (startedAt > MAX_COOKING_TIME_MS || finishAt > MAX_COOKING_TIME_MS) fail('cookingJob 时间超出有效范围');
+  if (![30_000, 22_500].includes(finishAt - startedAt)) fail('cookingJob 烹饪时长无效');
+  const seen = new Set<string>();
+  const ingredients = arrayAt(raw.ingredients, 'cookingJob.ingredients').map((entry, index) => {
+    const path = `cookingJob.ingredients[${index}]`;
+    const selected = objectAt(entry, path);
+    exactKeys(selected, ['ingredientId', 'quality', 'count'], path);
+    const ingredientId = ingredient(selected.ingredientId, `${path}.ingredientId`);
+    const itemQuality = quality(selected.quality, `${path}.quality`);
+    const count = safeInt(selected.count, `${path}.count`, 1);
+    const key = `${ingredientId}|${itemQuality}`;
+    if (seen.has(key)) fail(`${path} 存在重复食材堆叠`);
+    seen.add(key);
+    return { ingredientId, quality: itemQuality, count };
+  });
+  const definition = recipe!;
+  if (!matchesRecipe(ingredients, definition)) fail('cookingJob 食材与配方不匹配');
+  const dish = validateDish(raw.dish, 'cookingJob.dish');
+  if (dish.dishId !== definition.outputDishId || dish.quality !== dishQuality(ingredients) || dish.sellPrice !== dishPrice(ingredients, definition)) fail('cookingJob 料理快照与配方不匹配');
+  if (meta.pendingDishes.some(item => item.instanceId === dish.instanceId)) fail('cookingJob 料理不能同时出现在菜架');
+  return { id, recipeId, startedAt, finishAt, ingredients, dish };
+}
+
+function validateSave(value: unknown, allowLegacy: boolean): SavedWorkshop {
+  const raw = objectAt(value, 'save');
+  const legacy = allowLegacy && raw.schema === 1;
+  if (raw.schema !== SAVE_SCHEMA && !legacy) fail(`不支持的存档版本 ${String(raw.schema)}`);
+  exactKeys(raw, legacy ? LEGACY_SAVE_KEYS : SAVE_KEYS, 'save');
+  const meta = validateMeta(raw.meta);
+  const settledBattleIds = uniqueStrings(raw.settledBattleIds, 'settledBattleIds');
+  const discovered = arrayAt(raw.discoveredIngredientIds, 'discoveredIngredientIds');
+  const discoveredIngredientIds = discovered.map((id, index) => ingredient(id, `discoveredIngredientIds[${index}]`));
+  if (new Set(discoveredIngredientIds).size !== discoveredIngredientIds.length) fail('discoveredIngredientIds 不能包含重复值');
+  const clearedBossIds: BossKind[] = legacy ? migrateDiscoveredProgress(discoveredIngredientIds) : uniqueStrings(raw.clearedBossIds, 'clearedBossIds').map(id => {
+    if (!BOSS_VALUES.includes(id as BossKind)) fail('clearedBossIds Boss 类型无效');
+    return id as BossKind;
+  });
+  return {
+    schema: SAVE_SCHEMA,
+    revision: safeInt(raw.revision, 'revision'),
+    meta,
+    tutorialSeen: bool(raw.tutorialSeen, 'tutorialSeen'),
+    settledBattleIds,
+    discoveredIngredientIds,
+    clearedBossIds,
+    cookingJob: legacy ? null : validateCookingJob(raw.cookingJob, meta),
   };
 }
 
 function assertSave(save: SavedWorkshop): void {
-  const raw = objectAt(save as unknown, 'save');
-  exactKeys(raw, ['schema', 'revision', 'meta', 'tutorialSeen', 'settledBattleIds', 'discoveredIngredientIds'], 'save');
-  if (raw.schema !== SAVE_SCHEMA) fail(`不支持的存档版本 ${String(raw.schema)}`);
-  safeInt(raw.revision, 'revision');
-  validateMeta(raw.meta);
-  bool(raw.tutorialSeen, 'tutorialSeen');
-  const settled = uniqueStrings(raw.settledBattleIds, 'settledBattleIds');
-  void settled;
-  const discovered = arrayAt(raw.discoveredIngredientIds, 'discoveredIngredientIds');
-  const discoveredIds = discovered.map((id, index) => ingredient(id, `discoveredIngredientIds[${index}]`));
-  if (new Set(discoveredIds).size !== discoveredIds.length) fail('discoveredIngredientIds 不能包含重复值');
+  validateSave(save, false);
 }
 
 /** A first-run save is absent (`null`); malformed non-null data is never reset. */
@@ -252,6 +323,8 @@ export function createSave(): SavedWorkshop {
     tutorialSeen: false,
     settledBattleIds: [],
     discoveredIngredientIds: [],
+    clearedBossIds: [],
+    cookingJob: null,
   };
 }
 
@@ -265,22 +338,7 @@ export function decodeSave(raw: string | null): SavedWorkshop {
   } catch {
     fail('存档不是合法 JSON');
   }
-  const object = objectAt(parsed, 'save');
-  exactKeys(object, ['schema', 'revision', 'meta', 'tutorialSeen', 'settledBattleIds', 'discoveredIngredientIds'], 'save');
-  if (object.schema !== SAVE_SCHEMA) fail(`不支持的存档版本 ${String(object.schema)}`);
-  const meta = validateMeta(object.meta);
-  const settledBattleIds = uniqueStrings(object.settledBattleIds, 'settledBattleIds');
-  const discovered = arrayAt(object.discoveredIngredientIds, 'discoveredIngredientIds');
-  const discoveredIngredientIds = discovered.map((id, index) => ingredient(id, `discoveredIngredientIds[${index}]`));
-  if (new Set(discoveredIngredientIds).size !== discoveredIngredientIds.length) fail('discoveredIngredientIds 不能包含重复值');
-  return {
-    schema: SAVE_SCHEMA,
-    revision: safeInt(object.revision, 'revision'),
-    meta,
-    tutorialSeen: bool(object.tutorialSeen, 'tutorialSeen'),
-    settledBattleIds,
-    discoveredIngredientIds,
-  };
+  return validateSave(parsed, true);
 }
 
 export function encodeSave(save: SavedWorkshop): string {
@@ -308,6 +366,7 @@ export function settleBattle(save: SavedWorkshop, battleId: string, bossKind: Bo
     const updatedMeta = addInventory(next.meta, { ingredientId, quality: 'Top', count: 3 });
     next.meta = updatedMeta;
     if (!next.discoveredIngredientIds.includes(ingredientId)) next.discoveredIngredientIds.push(ingredientId);
+    if (!next.clearedBossIds.includes(bossKind)) next.clearedBossIds.push(bossKind);
   }
   next.revision += 1;
   return next;

@@ -1,6 +1,6 @@
 import type { CombatFeedback } from '../domain/combat';
 
-export type AudioCue = CombatFeedback['kind']|'Ready'|'Finisher';
+export type AudioCue = CombatFeedback['kind']|'Ready'|'Finisher'|'Bomb';
 export interface AudioManagerOptions {
   createContext?:()=>AudioContext|null;
   fetchAsset?:(url:string,options?:RequestInit)=>Promise<Pick<Response,'ok'|'arrayBuffer'>>;
@@ -22,6 +22,7 @@ function toneFor(cue:AudioCue,feedback?:CombatFeedback):Tone {
     case 'Miss':return {type:'triangle',frequency:160,endFrequency:90,duration:.14,volume:.055};
     case 'Ready':return {type:'triangle',frequency:640,endFrequency:1040,duration:.18,volume:.075,attack:.012};
     case 'Finisher':return {type:'sawtooth',frequency:110,endFrequency:55,duration:.16,volume:.14};
+    case 'Bomb':return {type:'sawtooth',frequency:180,endFrequency:45,duration:.18,volume:.095};
     case 'Verdict':return {type:'triangle',frequency:620,endFrequency:900,duration:.16,volume:.075};
     case 'Cut':{
       const speed=feedback?.speed??'normal';
@@ -77,7 +78,7 @@ export class AudioManager {
     if(this.disposed||this.seenFeedback.has(feedback.id))return;
     // Also consume silent events: unlocking later must not replay old feedback.
     this.seenFeedback.add(feedback.id);
-    this.playCue(feedback.finisher?'Finisher':feedback.kind,feedback);
+    this.playCue(feedback.finisher?'Finisher':feedback.bombDamage!==undefined?'Bomb':feedback.kind,feedback);
   }
 
   playReady():void { this.playCue('Ready'); }

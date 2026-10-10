@@ -6,6 +6,7 @@ import { liveParryLayouts, makeBattleCamera, nearestParryTarget, projectBodyAnch
 import { createCombat, prepareRound, tapTarget, tickCombat } from '../domain/combat';
 import { deterministicBodyAnchor } from '../domain/v2';
 import * as THREE from 'three';
+import { GuardianFraming } from './GuardianFraming';
 
 describe('portrait garden composition', () => {
   for (const [width, height] of [[320, 568], [390, 693], [390, 844], [432, 768]]) {
@@ -16,6 +17,7 @@ describe('portrait garden composition', () => {
         monster.update(state, true);
         monster.root.updateMatrixWorld(true);
         const camera = makeBattleCamera(width, height);
+        new GuardianFraming(monster.root, kind).resize(camera);
         for (const anchor of Object.values(monster.anchors)) {
           const center = projectBodyAnchor(anchor, camera, width, height);
           expect(center.x).toBeGreaterThan(width * .13);
@@ -34,6 +36,7 @@ describe('simultaneous ring picking',()=>{
     for(const [kind,Guardian] of constructors){
       const guardian=new Guardian(),combat=createCombat(7319,kind),camera=makeBattleCamera(width,height);
       guardian.update(combat,true);guardian.root.updateMatrixWorld(true);
+      new GuardianFraming(guardian.root, kind).resize(camera);
       for(let round=0;round<48;round++){
         const layouts=[0,1].map(index=>({
           ...projectBodyAnchor(guardian.getAnchor(deterministicBodyAnchor(7319,round,index,2,kind)),camera,width,height),

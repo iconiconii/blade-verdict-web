@@ -2,6 +2,7 @@ import type { CombatState } from '../../domain/combat';
 import { bossKindLabel, newBattle } from '../../domain/v2';
 import { HuntArt } from './HuntScreens';
 import './battle-hud.css';
+import { ItemIcon } from '../index';
 
 export const battleCountdownMs=30_000;
 export function battleClock(timeMs: number) {
@@ -37,6 +38,11 @@ export function BattleHud({ combat, visualMeter, readyPulse = 0, onPause }: { co
       {ready&&readyPulse>0&&<i key={readyPulse} className="hunt-charge-ready-burst" aria-hidden="true" />}
       <span className="hunt-charge-caption">{ready ? '本组结束自动裁决' : verdict ? '连续切割' : '蓄满自动裁决'}</span>
     </aside>
-    <div className="hunt-item-slots" aria-label="战斗道具尚未开放">{[1, 2].map(id => <div key={id} aria-label={`道具栏 ${id} 尚未开放`} className="hunt-item-slot"><HuntArt name="item-socket" /><small>未开放</small></div>)}</div>
+    <div className="hunt-item-slots" aria-label="战斗辅具">
+      <div className={`hunt-item-slot ${combat.tomatoBombOwned ? 'has-bomb' : ''}`} data-testid="bomb-status" data-triggered={combat.tomatoBombTriggered} aria-label={combat.tomatoBombOwned ? `西红柿炸弹：${combat.tomatoBombTriggered ? '本次已触发' : '裁决首刀自动爆炸'}` : '西红柿炸弹尚未购买'}>
+        <HuntArt name="item-socket" />{combat.tomatoBombOwned && <ItemIcon name="tomato" size={42} />}
+        <small>{combat.tomatoBombOwned ? combat.tomatoBombTriggered ? '已触发' : '首刀爆炸' : '商店解锁'}</small>
+      </div><div className="hunt-item-slot" aria-label="道具栏 2 尚未开放"><HuntArt name="item-socket" /><small>未开放</small></div>
+    </div>
   </>;
 }

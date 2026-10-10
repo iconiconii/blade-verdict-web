@@ -24,7 +24,7 @@ function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|nul
   const count=ingredientBurstFor(bossKind,feedback.kind);
   const source=origin??{x:0,y:0};
   return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:source.x,top:source.y}} aria-hidden="true">
-    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count} as React.CSSProperties}><ItemIcon name={battleIcon(bossKind)} size={22}/></i>)}
+    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count,'--burst-row':index%3} as React.CSSProperties}><ItemIcon name={battleIcon(bossKind)} size={22}/></i>)}
   </div>;
 }
 
@@ -84,7 +84,7 @@ export function Battle(){
     if(canPlay){
       next.newEvents.forEach(event=>audio.current?.play(event));
       if(next.newEvents.length){
-        vibrate(next.newEvents.some(event=>event.kind==='Miss')?[18,28,18]:next.newEvents.some(event=>event.kind==='Perfect')?[18]:[8]);
+        vibrate(next.newEvents.some(event=>event.bombDamage!==undefined)?[24]:next.newEvents.some(event=>event.kind==='Miss')?[18,28,18]:next.newEvents.some(event=>event.kind==='Perfect')?[18]:[8]);
       }
       if(next.ready&&next.readyPulse!==lastReadyPulse.current){audio.current?.playReady();vibrate([18,24,42])}
     }
@@ -132,6 +132,10 @@ export function Battle(){
       {presentation.hurtFeedback&&<div key={presentation.hurtFeedback.id} className="player-hurt-flash" aria-hidden="true"/>}
       {feedback?.finisher&&showFeedback&&<div className="finisher-impact" aria-hidden="true"><i className="finisher-impact__ring"/><i className="finisher-impact__slash finisher-impact__slash--one"/><i className="finisher-impact__slash finisher-impact__slash--two"/><strong>FINISH</strong><span>FINAL CUT · 击杀确认</span></div>}
       {presentation.events.map(event=><IngredientBurst key={event.id} feedback={event} bossKind={bossKind} origin={feedbackOrigin(event)}/>)}
+      {presentation.events.filter(event=>event.bombDamage!==undefined).map(event=><div key={`bomb-${event.id}`} data-testid="bomb-feedback" className="bomb-feedback" style={{left:`${event.position.x*100}%`,top:`${event.position.y*100}%`}}>
+        <div className="ingredient-burst bomb-fragments" aria-hidden="true">{Array.from({length:7},(_,index)=><i key={index} style={{'--burst-index':index,'--burst-count':7,'--burst-row':index%3} as React.CSSProperties}><ItemIcon name="tomato" size={20}/></i>)}</div>
+        <strong>爆炸 −{event.bombDamage}</strong>
+      </div>)}
       {(phase==='targetActive'||phase==='telegraph')&&targets.map(target=>{
         const active=phase==='targetActive'&&combat.elapsed>=target.startDelayMs&&combat.elapsed-target.startDelayMs<target.ringDurationMs&&!target.resolved&&!paused;
         const waiting=phase==='telegraph'||combat.elapsed<target.startDelayMs;

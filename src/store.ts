@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import {
-  buy as buyWorkshopItem, cook as cookWorkshop, equip as equipWorkshopItem,
+  buy as buyWorkshopItem, equip as equipWorkshopItem, hasTomatoBomb,
   equippedVerdictDamageBonus, sell as sellWorkshopDish, sellAll as sellAllWorkshopDishes,
   type IngredientSelection, type MetaState,
 } from './domain/meta';
 import { createSave, settleBattle, type SavedWorkshop } from './domain/save';
+import { beginCooking, claimCooking as claimCookingJob } from './domain/cookingJobs';
+import { canChallengeBoss } from './domain/progression';
 import { readWorkshopSave, updateWorkshopSave } from './persistence';
 import { applyContinuousCut, createCombat, tapTarget, tickCombat, type CombatState } from './domain/combat';
 import type { BossKind } from './domain/v2';
@@ -29,7 +31,8 @@ interface GameStore {
   tap:(input:CircleInput)=>void; pause:(paused:boolean)=>void;
   beginStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void; moveStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void;
   cut:(pointerId:number,point:{x:number;y:number},insideMonster:boolean,angle?:number)=>void; endStroke:(pointerId:number)=>void; cancelStroke:()=>void; dismissTutorial:()=>void;
-  cook:(selected:IngredientSelection[])=>Promise<boolean>; sellDish:(instanceId:string)=>Promise<boolean>; sellAllDishes:()=>Promise<boolean>;
+  startCooking:(recipeId:string,selected:IngredientSelection[])=>Promise<boolean>; claimCooking:(jobId:string)=>Promise<boolean>;
+  sellDish:(instanceId:string)=>Promise<boolean>; sellAllDishes:()=>Promise<boolean>;
   buyItem:(itemId:string)=>Promise<boolean>; equipItem:(itemId:string|null)=>Promise<boolean>; clearNotice:()=>void;
   retrySettlement:()=>Promise<boolean>; refreshSave:()=>void;
 }
@@ -69,6 +72,9 @@ export const useGame=create<GameStore>((set,get)=>{
     }catch(error){
       const message=friendlyError(error);
       set({saving:false,notice:{kind:'error',message},...(!ruleFailure?{saveIssue:message}: {})});
+      // A second tab may already have consumed/claimed the resource. Keep the
+      // rejected action's message, but replace its stale local snapshot.
+      if(ruleFailure)get().refreshSave();
       return false;
     }
   };
@@ -92,9 +98,10 @@ export const useGame=create<GameStore>((set,get)=>{
     start:(bossKind='corn')=>{
       if(get().saving||get().pendingBattle)return;
       get().refreshSave();if(get().saveIssue)return;
+      if(!canChallengeBoss(get().save,bossKind)){set({notice:{kind:'error',message:'先通关前一只怪物，再来挑战。'}});return;}
       const seed=crypto.getRandomValues(new Uint32Array(1))[0];
       const battleId=randomId('hunt');
-      set({screen:'battle',battleId,combat:createCombat(seed,bossKind,equippedVerdictDamageBonus(get().meta),battleId),notice:null});
+      set({screen:'battle',battleId,combat:createCombat(seed,bossKind,equippedVerdictDamageBonus(get().meta),battleId,hasTomatoBomb(get().meta)),notice:null});
     },
     advance:delta=>{
       const current=get();if(current.screen!=='battle')return;
@@ -130,13 +137,24 @@ export const useGame=create<GameStore>((set,get)=>{
     endStroke:pointerId=>set(s=>({combat:s.combat.pointerId===pointerId?{...s.combat,pointerId:null}:s.combat})),
     cancelStroke:()=>set(s=>({combat:{...s.combat,pointerId:null,stroke:null}})),
     dismissTutorial:()=>{void transact(save=>({...save,tutorialSeen:true}),'')},
-    cook:selected=>{const id=randomId('dish');return transactMeta(meta=>cookWorkshop(meta,selected,id).state,'料理已完成，放入待售菜架。')},
+    startCooking:(recipeId,selected)=>{
+      if(get().pendingBattle)return Promise.resolve(false);
+      const id=randomId('cooking');
+      return transact(save=>beginCooking(save,recipeId,selected,id,Date.now()),'已开始烹饪，可以离开厨房继续探险。');
+    },
+    claimCooking:jobId=>{
+      if(get().pendingBattle)return Promise.resolve(false);
+      return transact(save=>{
+        if(!save.cookingJob)throw new Error('这份料理已领取，请查看最新菜架。');
+        return claimCookingJob(save,jobId,Date.now());
+      },'料理已领取，放入待售菜架。');
+    },
     sellDish:instanceId=>transactMeta(meta=>sellWorkshopDish(meta,instanceId).state,'料理已出售，金币已到账。'),
     sellAllDishes:()=>transactMeta(meta=>{
       if(!meta.pendingDishes.length)throw new Error('菜架上还没有待售料理。');
       return sellAllWorkshopDishes(meta).state;
     },'全部料理已出售，金币已到账。'),
-    buyItem:itemId=>transactMeta(meta=>buyWorkshopItem(meta,itemId).state,'装备已购买并自动装备。'),
+    buyItem:itemId=>transactMeta(meta=>buyWorkshopItem(meta,itemId).state,'购买成功，效果已生效。'),
     equipItem:itemId=>transactMeta(meta=>itemId===null?{...meta,equippedWeaponId:null}:equipWorkshopItem(meta,itemId),itemId?'已切换装备':'已切回基础厨刀'),
     clearNotice:()=>set({notice:null}),
   };
