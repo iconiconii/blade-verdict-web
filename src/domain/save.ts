@@ -37,6 +37,7 @@ const INGREDIENT_SET = new Set(INGREDIENTS.map(item => item.id));
 const RECIPE_SET = new Set(RECIPES.map(item => item.id));
 const DISH_SET = new Set(RECIPES.map(item => item.outputDishId));
 const SHOP_MAP = new Map(SHOP_ITEMS.map(item => [item.id, item]));
+const LEGACY_CONSUMABLE_UPGRADES = new Set(['upgrade_tomato_bomb', 'upgrade_jelly_cooker']);
 const BOSS_VALUES: readonly BossKind[] = ['corn', 'carrot', 'cabbage', 'tomato', 'jelly'];
 const LEGACY_SAVE_KEYS = ['schema', 'revision', 'meta', 'tutorialSeen', 'settledBattleIds', 'discoveredIngredientIds'] as const;
 const SAVE_KEYS = [...LEGACY_SAVE_KEYS, 'clearedBossIds', 'cookingJob'] as const;
@@ -172,7 +173,7 @@ function validateDishRecords(value: unknown): MetaState['dishRecords'] {
   });
 }
 
-function validateMeta(value: unknown): MetaState {
+function validateMeta(value: unknown, migrateLegacyConsumables: boolean): MetaState {
   const raw = objectAt(value, 'meta');
   exactKeys(raw, [
     'coins',
@@ -186,9 +187,16 @@ function validateMeta(value: unknown): MetaState {
     'equippedSkinId',
   ], 'meta');
   const purchased = uniqueStrings(raw.purchasedShopItemIds, 'meta.purchasedShopItemIds');
+  const ownedItems = validateOwnedItems(raw.ownedItems);
   const purchasedDefinitions = purchased.map((id, index) => {
     const definition = shopItem(id, `meta.purchasedShopItemIds[${index}]`);
-    if (definition.category === 'item' || !definition.implemented) fail(`meta.purchasedShopItemIds[${index}] 不能购买预览商品或消耗品`);
+    const legacyConsumable = migrateLegacyConsumables && LEGACY_CONSUMABLE_UPGRADES.has(id);
+    if ((!legacyConsumable && definition.category === 'item') || !definition.implemented) fail(`meta.purchasedShopItemIds[${index}] 不能购买预览商品或消耗品`);
+    if (legacyConsumable) {
+      const owned = ownedItems.find(item => item.itemId === id);
+      if (owned) owned.count = safeInt(owned.count + 1, `meta.ownedItems.${id}.count`, 1);
+      else ownedItems.push({ itemId: id, count: 1 });
+    }
     return definition;
   });
   const unlocked = uniqueStrings(raw.unlockedRecipeIds, 'meta.unlockedRecipeIds');
@@ -210,8 +218,10 @@ function validateMeta(value: unknown): MetaState {
     coins: safeInt(raw.coins, 'meta.coins'),
     inventory: validateInventory(raw.inventory),
     pendingDishes: validateDishes(raw.pendingDishes),
-    ownedItems: validateOwnedItems(raw.ownedItems),
-    purchasedShopItemIds: purchased,
+    ownedItems,
+    // Removing the permanent marker makes this schema-compatible migration
+    // idempotent after its next transaction is durably written.
+    purchasedShopItemIds: purchased.filter(id => !LEGACY_CONSUMABLE_UPGRADES.has(id)),
     unlockedRecipeIds: unlocked,
     dishRecords: validateDishRecords(raw.dishRecords),
     equippedWeaponId,
@@ -289,7 +299,7 @@ function validateSave(value: unknown, allowLegacy: boolean): SavedWorkshop {
   const legacy = allowLegacy && raw.schema === 1;
   if (raw.schema !== SAVE_SCHEMA && !legacy) fail(`不支持的存档版本 ${String(raw.schema)}`);
   exactKeys(raw, legacy ? LEGACY_SAVE_KEYS : SAVE_KEYS, 'save');
-  const meta = validateMeta(raw.meta);
+  const meta = validateMeta(raw.meta, allowLegacy);
   const settledBattleIds = uniqueStrings(raw.settledBattleIds, 'settledBattleIds');
   const discovered = arrayAt(raw.discoveredIngredientIds, 'discoveredIngredientIds');
   const discoveredIngredientIds = discovered.map((id, index) => ingredient(id, `discoveredIngredientIds[${index}]`));

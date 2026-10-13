@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHOP_ITEMS, addInventory, buy, cook, createMetaState } from './meta';
+import { SHOP_ITEMS, addInventory, buy, consumeConsumable, cook, createMetaState } from './meta';
 import { beginCooking } from './cookingJobs';
 import { SAVE_SCHEMA, createSave, decodeSave, encodeSave, settleBattle, type SavedWorkshop } from './save';
 
@@ -130,13 +130,58 @@ describe('workshop save boundary', () => {
     expect(() => decodeSave(JSON.stringify(legacy))).toThrow(/未知字段/);
   });
 
-  it('round-trips upgrades and rejects attempts to equip them as weapons or skins', () => {
+  it('round-trips consumable stock and rejects attempts to equip them as weapons or skins', () => {
     let meta = buy(createMetaState({ coins: 1000 }), 'upgrade_tomato_bomb').state;
     meta = buy(meta, 'upgrade_jelly_cooker').state;
     const save = { ...createSave(), meta };
     expect(decodeSave(encodeSave(save))).toEqual(save);
     expect(() => encodeSave({ ...save, meta: { ...meta, equippedWeaponId: 'upgrade_tomato_bomb' } })).toThrow(/类型不匹配/);
     expect(() => encodeSave({ ...save, meta: { ...meta, equippedSkinId: 'upgrade_jelly_cooker' } })).toThrow(/类型不匹配/);
+  });
+
+  it('migrates each old permanent purchase into one consumable and never grants it again after use', () => {
+    const old = {
+      ...createSave(),
+      revision: 11,
+      meta: { ...createMetaState({ coins: 333 }), purchasedShopItemIds: ['upgrade_tomato_bomb', 'upgrade_jelly_cooker'] },
+    };
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated.revision).toBe(11);
+    expect(migrated.meta.coins).toBe(333);
+    expect(migrated.meta.purchasedShopItemIds).toEqual([]);
+    expect(migrated.meta.ownedItems).toEqual([
+      { itemId: 'upgrade_tomato_bomb', count: 1 },
+      { itemId: 'upgrade_jelly_cooker', count: 1 },
+    ]);
+    expect(decodeSave(encodeSave(migrated))).toEqual(migrated);
+    const consumed = { ...migrated, meta: consumeConsumable(consumeConsumable(migrated.meta, 'upgrade_tomato_bomb'), 'upgrade_jelly_cooker') };
+    expect(decodeSave(encodeSave(consumed)).meta.ownedItems).toEqual([]);
+    expect(() => encodeSave(old)).toThrow(/不能购买预览商品或消耗品/);
+  });
+
+  it('keeps existing consumable stock and an active pot intact when migrating old purchase markers', () => {
+    const supplied = { ...createSave(), meta: buy(addInventory(createMetaState({ coins: 240 }), { ingredientId: 'corn', quality: 'Top', count: 1 }), 'upgrade_jelly_cooker').state };
+    const active = beginCooking(supplied, 'recipe_toast', [{ ingredientId: 'corn', quality: 'Top', count: 1 }], 'legacy-active', 1000);
+    const legacy = { ...active, meta: { ...active.meta, ownedItems: [{ itemId: 'upgrade_tomato_bomb', count: 2 }], purchasedShopItemIds: ['upgrade_tomato_bomb', 'upgrade_jelly_cooker'] } };
+    const migrated = decodeSave(JSON.stringify(legacy));
+    expect(migrated.meta.ownedItems).toEqual([
+      { itemId: 'upgrade_tomato_bomb', count: 3 },
+      { itemId: 'upgrade_jelly_cooker', count: 1 },
+    ]);
+    expect(migrated.cookingJob).toEqual(active.cookingJob);
+    expect(migrated.cookingJob!.finishAt).toBe(23_500);
+    expect(decodeSave(encodeSave(migrated))).toEqual(migrated);
+  });
+
+  it('also migrates legacy schema-1 upgrade ownership without accepting other item purchase markers', () => {
+    const legacy = {
+      schema: 1, revision: 2,
+      meta: createMetaState({ purchasedShopItemIds: ['upgrade_tomato_bomb'] }),
+      tutorialSeen: true, settledBattleIds: [], discoveredIngredientIds: [],
+    };
+    expect(decodeSave(JSON.stringify(legacy)).meta.ownedItems).toEqual([{ itemId: 'upgrade_tomato_bomb', count: 1 }]);
+    legacy.meta.purchasedShopItemIds = ['item_lucky_spice'];
+    expect(() => decodeSave(JSON.stringify(legacy))).toThrow(/预览商品或消耗品/);
   });
 
   it('strictly validates new progress and active cooking snapshots', () => {

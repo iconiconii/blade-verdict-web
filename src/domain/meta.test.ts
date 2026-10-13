@@ -4,6 +4,8 @@ import {
   SHOP_ITEMS,
   addInventory,
   buy,
+  consumableCount,
+  consumeConsumable,
   cook,
   cookingDurationMs,
   createMetaState,
@@ -120,13 +122,13 @@ describe('out-of-battle V2 economy', () => {
   });
 
   it('supports immutable consumable stacks for future active items', () => {
-    const preview = SHOP_ITEMS.find(value => value.category === 'item')!;
+    const preview = SHOP_ITEMS.find(value => value.category === 'item' && !value.implemented)!;
     expect(() => buy(createMetaState({ coins: preview.cost }), preview.id)).toThrow(/preview/);
     // Keep this assertion explicit: item previews never sneak a combat bonus into rules.
     expect(SHOP_ITEMS.filter(item => !item.implemented).every(item => item.verdictDamageBonus === 0)).toBe(true);
   });
 
-  it('buys permanent upgrades once without replacing either equipment slot', () => {
+  it('buys consumables repeatedly without replacing either equipment slot', () => {
     const armed = buy(createMetaState({ coins: 1000 }), 'weapon_corn_cleaver').state;
     expect(hasTomatoBomb(armed)).toBe(false);
     expect(cookingDurationMs(armed)).toBe(30_000);
@@ -135,15 +137,47 @@ describe('out-of-battle V2 economy', () => {
     expect(complete.coins).toBe(490);
     expect(complete.equippedWeaponId).toBe('weapon_corn_cleaver');
     expect(complete.equippedSkinId).toBeNull();
-    expect(complete.ownedItems).toEqual([]);
+    expect(complete.ownedItems).toEqual([
+      { itemId: 'upgrade_tomato_bomb', count: 1 },
+      { itemId: 'upgrade_jelly_cooker', count: 1 },
+    ]);
     expect(equippedVerdictDamageBonus(complete)).toBe(8);
     expect(hasTomatoBomb(complete)).toBe(true);
     expect(cookingDurationMs(complete)).toBe(22_500);
     expect(armed.purchasedShopItemIds).toEqual(['weapon_corn_cleaver']);
-    expect(() => buy(complete, 'upgrade_jelly_cooker')).toThrow(/already purchased/);
-    expect(() => buy(complete, 'upgrade_tomato_bomb')).toThrow(/already purchased/);
+    expect(complete.purchasedShopItemIds).toEqual(['weapon_corn_cleaver']);
+    const restocked = buy(buy(complete, 'upgrade_jelly_cooker').state, 'upgrade_tomato_bomb').state;
+    expect(restocked.coins).toBe(100);
+    expect(consumableCount(restocked, 'upgrade_tomato_bomb')).toBe(2);
+    expect(consumableCount(restocked, 'upgrade_jelly_cooker')).toBe(2);
+    expect(consumableCount(complete, 'upgrade_tomato_bomb')).toBe(1);
     expect(() => equip(complete, 'upgrade_tomato_bomb')).toThrow(/Only weapons and skins/);
     expect(() => equip(complete, 'upgrade_jelly_cooker')).toThrow(/Only weapons and skins/);
+  });
+
+  it('consumes one item at a time and removes exhausted effects without granting permanent ownership', () => {
+    let stocked = buy(createMetaState({ coins: 700 }), 'upgrade_tomato_bomb').state;
+    stocked = buy(buy(stocked, 'upgrade_tomato_bomb').state, 'upgrade_jelly_cooker').state;
+    const before = JSON.stringify(stocked);
+    const firstBomb = consumeConsumable(stocked, 'upgrade_tomato_bomb');
+    expect(consumableCount(firstBomb, 'upgrade_tomato_bomb')).toBe(1);
+    expect(hasTomatoBomb(firstBomb)).toBe(true);
+    const noBomb = consumeConsumable(firstBomb, 'upgrade_tomato_bomb');
+    expect(hasTomatoBomb(noBomb)).toBe(false);
+    expect(noBomb.ownedItems).toEqual([{ itemId: 'upgrade_jelly_cooker', count: 1 }]);
+    const exhausted = consumeConsumable(noBomb, 'upgrade_jelly_cooker');
+    expect(cookingDurationMs(exhausted)).toBe(30_000);
+    expect(exhausted.ownedItems).toEqual([]);
+    expect(exhausted.purchasedShopItemIds).toEqual([]);
+    expect(() => consumeConsumable(exhausted, 'upgrade_tomato_bomb')).toThrow(/Insufficient item/);
+    expect(() => consumeConsumable(exhausted, 'weapon_corn_cleaver')).toThrow(/not an available consumable/);
+    expect(JSON.stringify(stocked)).toBe(before);
+  });
+
+  it('rejects consumable count overflow without taking coins from the original snapshot', () => {
+    const full = createMetaState({ coins: 150, ownedItems: [{ itemId: 'upgrade_tomato_bomb', count: Number.MAX_SAFE_INTEGER }] });
+    expect(() => buy(full, 'upgrade_tomato_bomb')).toThrow(/positive integer/);
+    expect(full.coins).toBe(150);
   });
 
   it.each([

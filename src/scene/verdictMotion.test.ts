@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { applyContinuousCut, createCombat, durations, startVerdict, tapTarget, tickCombat } from '../domain/combat';
+import { applyContinuousCut, createCombat, currentVerdictStage, durations, startVerdict, tapTarget, tickCombat } from '../domain/combat';
 import type { BossKind } from '../domain/v2';
 import { CornGuardian } from './CornGuardian';
 import { JellyGuardian } from './JellyGuardian';
@@ -15,7 +15,9 @@ function actor(kind:BossKind){
 }
 function ready(kind:BossKind){
   const s=createCombat(7319,kind);
-  return {...s,phase:'verdictReady' as const,battle:{...s.battle,meter:100}};
+  const stage=currentVerdictStage(s);
+  return {...s,phase:'verdictReady' as const,stageGroupsResolved:stage?.groupCount??0,
+    stageCirclesResolved:stage?.circleCount??0,battle:{...s.battle,meter:100}};
 }
 function pose(g:CornGuardian|JellyGuardian){
   const values:number[]=[];
@@ -105,12 +107,18 @@ describe.each(['corn','jelly'] as const)('%s verdict animation',kind=>{
     g.root.position.x=0;area.update(makeBattleCamera(height,width));
     expect(grid.map(p=>area.contains(p))).not.toEqual(before);
   });
-  it('changes the face on break and restores it before the next clickable ring',()=>{
+  it('changes the face on break and restores it when corn ends or jelly resumes',()=>{
     const g=actor(kind);let s=startVerdict(ready(kind));
     g.update(s);
     const mouth=g.root.getObjectByName(`${kind}-pain-mouth`);
     expect(mouth).toBeDefined();expect(mouth?.visible).toBe(true);
     s=tickCombat(s,durations.verdict);g.update(s);
+    if(kind==='corn'){
+      expect(s.battle.bossHp).toBe(0);
+      s=tickCombat(s,durations.deathStagger);g.update(s);
+      expect(s.phase).toBe('settle');expect(mouth?.visible).toBe(false);
+      return;
+    }
     s=tickCombat(s,durations.stagger);s=tickCombat(s,s.tempo.telegraphMs);g.update(s);
     expect(mouth?.visible).toBe(false);
     expect(tapTarget(s,s.targets[0].circleId).feedback?.kind).toBe('Nice');

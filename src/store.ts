@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-  buy as buyWorkshopItem, equip as equipWorkshopItem, hasTomatoBomb,
+  buy as buyWorkshopItem, equip as equipWorkshopItem, hasTomatoBomb, consumeConsumable,
   equippedVerdictDamageBonus, sell as sellWorkshopDish, sellAll as sellAllWorkshopDishes,
   type IngredientSelection, type MetaState,
 } from './domain/meta';
@@ -56,6 +56,11 @@ function friendlyError(error:unknown){
 
 const loaded=loadSave();
 export const useGame=create<GameStore>((set,get)=>{
+  // The first eligible cut waits for its one-item debit. Keep the simulation
+  // still during that short write so a slow lock cannot move it to another
+  // verdict. Navigation/pause still work, and cancelled inputs never replay.
+  let pendingBomb:{battleId:string;verdictCount:number;cancelled:boolean}|null=null;
+  let failedBombVerdict:string|null=null;
   // Read, validate, mutate and persist inside one origin-wide Web Lock.
   // Only acknowledge success after durable setItem; a rejected write leaves UI
   // inventory/coins unchanged. Domain rules are rechecked against the latest save.
@@ -93,18 +98,21 @@ export const useGame=create<GameStore>((set,get)=>{
     },
     go:screen=>{
       if(get().pendingBattle){set({notice:{kind:'error',message:'请先重试保存本场战利品，避免遗失。'}});return}
+      if(screen!=='battle'&&pendingBomb)pendingBomb.cancelled=true;
       get().refreshSave();set({screen,notice:null});
     },
     start:(bossKind='corn')=>{
       if(get().saving||get().pendingBattle)return;
       get().refreshSave();if(get().saveIssue)return;
       if(!canChallengeBoss(get().save,bossKind)){set({notice:{kind:'error',message:'先通关前一只怪物，再来挑战。'}});return;}
+      failedBombVerdict=null;
       const seed=crypto.getRandomValues(new Uint32Array(1))[0];
       const battleId=randomId('hunt');
       set({screen:'battle',battleId,combat:createCombat(seed,bossKind,equippedVerdictDamageBonus(get().meta),battleId,hasTomatoBomb(get().meta)),notice:null});
     },
     advance:delta=>{
       const current=get();if(current.screen!=='battle')return;
+      if(pendingBomb&&!pendingBomb.cancelled&&current.battleId===pendingBomb.battleId)return;
       const combat=tickCombat(current.combat,delta);
       if(combat.phase==='settle'&&combat.elapsed>=1000){
         const pendingBattle={id:current.battleId??randomId('hunt'),bossKind:combat.bossKind,won:combat.battle.bossHp<=0};
@@ -120,11 +128,15 @@ export const useGame=create<GameStore>((set,get)=>{
     },
     tap:input=>set(s=>s.screen==='battle'&&input.battleId===s.battleId&&input.battleId===s.combat.battleId
       ?{combat:tapTarget(s.combat,input.circleId)}:s),
-    pause:paused=>set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}})),
+    pause:paused=>{
+      if(paused&&pendingBomb)pendingBomb.cancelled=true;
+      set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}}));
+    },
     beginStroke:(pointerId,point)=>set(s=>({combat:s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.pointerId===null?{...s.combat,pointerId,stroke:{points:[point],hitWeakPointIds:[],score:0,valid:true}}:s.combat})),
     moveStroke:(pointerId,point)=>set(s=>({combat:s.combat.pointerId===pointerId&&s.combat.phase==='verdictSlash'&&!s.combat.paused&&s.combat.stroke?{...s.combat,stroke:{...s.combat.stroke,points:appendStrokePoint(s.combat.stroke.points,point)}}:s.combat})),
-    cut:(pointerId,point,insideMonster,angle)=>set(s=>{
-      if(s.combat.pointerId!==pointerId)return s;
+    cut:(pointerId,point,insideMonster,angle)=>{
+      const s=get();
+      if(s.screen!=='battle'||s.combat.pointerId!==pointerId||pendingBomb)return;
       const points=s.combat.stroke?.points??[];
       const path=points.length>=2?points.slice(-2):points;
       const previous=path[0],current=path.at(-1);
@@ -132,10 +144,54 @@ export const useGame=create<GameStore>((set,get)=>{
       const dt=previous&&current?Math.max(1,current.time-previous.time):16;
       const velocity=distance/dt;
       const speed=velocity>.0028?'ferocious':velocity>.0012?'fast':'normal';
-      return {combat:applyContinuousCut(s.combat,point,insideMonster,angle,path,speed)};
-    }),
+      const key=`${s.combat.battleId}:${s.combat.battle.verdictCount}`;
+      const eligible=hasTomatoBomb(s.meta)&&!s.combat.tomatoBombTriggered&&failedBombVerdict!==key;
+      const candidate=applyContinuousCut({...s.combat,tomatoBombOwned:eligible},point,insideMonster,angle,path,speed);
+      if(!eligible||!candidate.tomatoBombTriggered||candidate.feedbackSequence===s.combat.feedbackSequence){
+        set({combat:candidate});return;
+      }
+      // A different save action may be finishing (for example the tutorial).
+      // Do not accept a bomb hit until it can be durably consumed.
+      if(s.saving)return;
+      const pending={battleId:s.combat.battleId,verdictCount:s.combat.battle.verdictCount,cancelled:false};
+      pendingBomb=pending;
+      let accepted:CombatState|null=null;
+      const sameVerdict=()=>{
+        const current=get();
+        return !pending.cancelled&&current.screen==='battle'&&current.battleId===pending.battleId
+          &&current.combat.battleId===pending.battleId&&current.combat.battle.verdictCount===pending.verdictCount
+          &&current.combat.phase==='verdictSlash';
+      };
+      void transact(latest=>{
+        if(!sameVerdict()||get().combat.paused)return latest;
+        const meta=consumeConsumable(latest.meta,'upgrade_tomato_bomb');
+        const before=get().combat;
+        const hit=applyContinuousCut({...before,tomatoBombOwned:true},point,insideMonster,angle,path,speed);
+        if(!hit.tomatoBombTriggered||hit.feedbackSequence===before.feedbackSequence)return latest;
+        accepted=hit;
+        return {...latest,meta};
+      },'').then(success=>{
+        if(!sameVerdict())return;
+        const current=get().combat;
+        if(success&&accepted){
+          const hit:CombatState=accepted;
+          set({combat:{...hit,paused:current.paused,
+            pointerId:hit.phase==='verdictSlash'?current.pointerId:hit.pointerId,
+            stroke:hit.phase==='verdictSlash'?current.stroke:hit.stroke,
+            tomatoBombOwned:hasTomatoBomb(get().meta)}});
+        }else if(!success){
+          // Failed storage must never grant an unpaid explosion. The ordinary
+          // cut still works; retry the item only in a later verdict.
+          failedBombVerdict=key;
+          set({combat:applyContinuousCut({...current,tomatoBombOwned:false},point,insideMonster,angle,path,speed)});
+        }
+      }).finally(()=>{if(pendingBomb===pending)pendingBomb=null});
+    },
     endStroke:pointerId=>set(s=>({combat:s.combat.pointerId===pointerId?{...s.combat,pointerId:null}:s.combat})),
-    cancelStroke:()=>set(s=>({combat:{...s.combat,pointerId:null,stroke:null}})),
+    cancelStroke:()=>{
+      if(pendingBomb)pendingBomb.cancelled=true;
+      set(s=>({combat:{...s.combat,pointerId:null,stroke:null}}));
+    },
     dismissTutorial:()=>{void transact(save=>({...save,tutorialSeen:true}),'')},
     startCooking:(recipeId,selected)=>{
       if(get().pendingBattle)return Promise.resolve(false);
@@ -154,7 +210,7 @@ export const useGame=create<GameStore>((set,get)=>{
       if(!meta.pendingDishes.length)throw new Error('菜架上还没有待售料理。');
       return sellAllWorkshopDishes(meta).state;
     },'全部料理已出售，金币已到账。'),
-    buyItem:itemId=>transactMeta(meta=>buyWorkshopItem(meta,itemId).state,'购买成功，效果已生效。'),
+    buyItem:itemId=>transactMeta(meta=>buyWorkshopItem(meta,itemId).state,'购买成功，已放入库存。'),
     equipItem:itemId=>transactMeta(meta=>itemId===null?{...meta,equippedWeaponId:null}:equipWorkshopItem(meta,itemId),itemId?'已切换装备':'已切回基础厨刀'),
     clearNotice:()=>set({notice:null}),
   };

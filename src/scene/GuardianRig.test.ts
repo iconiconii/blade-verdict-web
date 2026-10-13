@@ -10,7 +10,7 @@ it('exposes a shared rig contract and state priority',()=>{
   expect(rig.root.children).toContain(rig.hitProxy);
   const base=createCombat();
   expect(guardianStateFor(base)).toBe('Idle');
-  const breakState=startVerdict({...base,phase:'verdictReady',battle:{...base.battle,meter:100}});
+  const breakState=startVerdict({...base,phase:'verdictReady',stageGroupsResolved:5,stageCirclesResolved:5,battle:{...base.battle,meter:100}});
   expect(guardianStateFor(breakState)).toBe('Break');
   const dead=applyContinuousCut({...breakState,battle:{...breakState.battle,bossHp:12}},{x:.5,y:.5},true);
   expect(guardianStateFor(dead)).toBe('Dead');

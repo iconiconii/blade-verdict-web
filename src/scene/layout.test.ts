@@ -66,9 +66,12 @@ describe('simultaneous ring picking',()=>{
 
   it('filters a first-finger result before the next render can update the layouts',()=>{
     let combat=prepareRound(createCombat(7319,'tomato'));
-    // Select a deterministic round that actually contains two circles.
-    while(combat.targets.length!==2)combat=prepareRound({...combat,round:combat.round+1});
     combat=tickCombat(combat,combat.tempo.telegraphMs);
+    // The first stage starts with one single, followed by four double groups.
+    combat=tapTarget(combat,combat.targets[0].circleId);
+    combat=tickCombat(combat,combat.tempo.attackIntervalMs);
+    expect(combat.targets).toHaveLength(2);
+    expect(combat.phase).toBe('targetActive');
     const layouts=combat.targets.map((target,index)=>({index,round:combat.round,circleId:target.circleId,x:100+index*30,y:100,diameter:180,visible:true}));
     const first=tapTarget(combat,combat.targets[0].circleId);
     // In the overlap, the remaining target wins even near the old center.

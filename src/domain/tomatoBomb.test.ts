@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { applyContinuousCut, createCombat, startVerdict, tickCombat, verdictDurationFor } from './combat';
+import { verdictPlanFor } from './levelConfig';
 import type { BossKind } from './v2';
 
-function ready(boss: BossKind = 'corn', bonus = 0) {
+function ready(boss: BossKind = 'jelly', bonus = 0) {
   const state = createCombat(91, boss, bonus, 'bomb-test', true);
-  return startVerdict({ ...state, phase: 'verdictReady', battle: { ...state.battle, meter: 100 } });
+  const plan=verdictPlanFor(boss),stageIndex=plan?plan.length-1:0,stage=plan?.[stageIndex];
+  return startVerdict({ ...state, stageIndex, stageGroupsResolved:stage?stage.singleGroups+stage.doubleGroups:0,
+    stageCirclesResolved:stage?stage.singleGroups+stage.doubleGroups*2:0,
+    phase: 'verdictReady', battle: { ...state.battle, meter: 100,verdictCount:stageIndex } });
 }
 const point = { x: .5, y: .5 };
 
-describe('permanent tomato bomb', () => {
+describe('tomato bomb eligibility supplied by inventory consumption', () => {
   it('adds ten damage to only the first valid cut without energy or an extra combo', () => {
     let state = ready();
     state = applyContinuousCut(state, point, true);
@@ -24,7 +28,7 @@ describe('permanent tomato bomb', () => {
   });
 
   it('does not use the base damage cap and coexists with the cleaver', () => {
-    let state = ready('corn', 8);
+    let state = ready('jelly', 8);
     for (let index = 0; index < 50; index++) state = applyContinuousCut(state, point, true);
     expect(state.verdictDamageDealt).toBe(200);
     expect(state.battle.bossHp).toBe(582); // 200 base + 10 bomb + 8 cleaver.
@@ -32,7 +36,7 @@ describe('permanent tomato bomb', () => {
   });
 
   it('includes the cap-completion cleaver damage in the last cut and its finisher', () => {
-    const initial = ready('corn', 8);
+    const initial = ready('jelly', 8);
     let state = { ...initial, battle: { ...initial.battle, bossHp: 218 } };
     for (let index = 0; index < 17; index++) state = applyContinuousCut(state, point, true);
     expect(state.battle.bossHp).toBe(0);
@@ -84,7 +88,7 @@ describe('permanent tomato bomb', () => {
     expect(applyContinuousCut(timeout, point, true)).toBe(timeout);
   });
 
-  it('rearms once at the start of the next verdict, not per swipe', () => {
+  it('permits one new eligibility token at the next verdict, not per swipe', () => {
     const used = applyContinuousCut(ready(), point, true);
     const next = startVerdict({ ...used, phase: 'verdictReady', battle: { ...used.battle, meter: 100 } });
     expect(next.tomatoBombTriggered).toBe(false);

@@ -12,7 +12,10 @@ function active(kind:BossKind='corn',relay=false){
   }
   return tickCombat(prepared,prepared.tempo.telegraphMs);
 }
-const verdict=()=>startVerdict({...createCombat(),phase:'verdictReady',battle:{...createCombat().battle,meter:100}});
+const verdict=()=>{
+  const state=createCombat(7319,'jelly');
+  return startVerdict({...state,phase:'verdictReady',battle:{...state.battle,meter:100}});
+};
 
 describe('accessible web combat',()=>{
   it('locks input during READY/GO and telegraph',()=>{
@@ -23,20 +26,20 @@ describe('accessible web combat',()=>{
     expect(tapTarget(s,0)).toBe(s);
     s=tickCombat(s,s.tempo.telegraphMs);
     expect(s.phase).toBe('targetActive');
-    expect(s.targets[0].ringDurationMs).toBe(1440);
+    expect(s.targets[0].ringDurationMs).toBe(1500);
   });
-  it.each([0,200,503,1176,1439])('accepts a Good click at %i ms',time=>{
+  it.each([0,200,524,1225,1499])('accepts a Good click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Nice');
-    expect(s.battle).toMatchObject({playerHp:100,bossHp:792,meter:18});
+    expect(s.battle).toMatchObject({playerHp:100,bossHp:792,meter:20});
   });
-  it.each([504,800,1175])('accepts a Perfect click at %i ms',time=>{
+  it.each([525,800,1224])('accepts a Perfect click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Perfect');
-    expect(s.battle).toMatchObject({playerHp:100,bossHp:788,meter:30});
+    expect(s.battle).toMatchObject({playerHp:100,bossHp:788,meter:20});
   });
   it('resolves each target once, including the exact timeout boundary',()=>{
-    const timeout=tickCombat(active(),1440);
+    const timeout=tickCombat(active(),1500);
     expect(timeout.battle.playerHp).toBe(88);
     expect(timeout.targets[0]).toMatchObject({resolved:true,result:'Miss'});
     expect(tapTarget(timeout,0)).toBe(timeout);
@@ -101,7 +104,7 @@ describe('accessible web combat',()=>{
     expect(s.battle).toMatchObject({playerHp:92,meter:0});
   });
   it('stops queued rings on full energy and automatically enters verdict once',()=>{
-    let s=active('corn');
+    let s=active('jelly');
     s=tapTarget({...s,battle:{...s.battle,meter:90}},0);
     expect(s.phase).toBe('impact');
     expect(s.battle.meter).toBe(100);
@@ -139,7 +142,7 @@ describe('accessible web combat',()=>{
     }
   });
   it('prioritizes victory over full-meter transition',()=>{
-    let s=active();s=tapTarget({...s,battle:{...s.battle,bossHp:8,meter:90}},0);
+    let s=active('jelly');s=tapTarget({...s,battle:{...s.battle,bossHp:8,meter:90}},0);
     s=tickCombat(s,durations.impact);s=tickCombat(s,durations.deathStagger);
     expect(s.phase).toBe('settle');
     expect(s.battle.verdictCount).toBe(0);

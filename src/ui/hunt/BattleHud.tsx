@@ -4,24 +4,14 @@ import { HuntArt } from './HuntScreens';
 import './battle-hud.css';
 import { ItemIcon } from '../index';
 
-export const battleCountdownMs=30_000;
-export function battleClock(timeMs: number) {
-  const seconds = Math.floor(Math.max(0, Number.isFinite(timeMs) ? timeMs : 0) / 1000);
-  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-}
-export function battleCountdownClock(elapsedMs:number){
-  return battleClock(Math.max(0,battleCountdownMs-Math.max(0,Number.isFinite(elapsedMs)?elapsedMs:0)));
-}
-
 /** Read-only HUD. The battle simulation remains the only source of time/resources. */
-export function BattleHud({ combat, visualMeter, readyPulse = 0, onPause }: { combat: CombatState; visualMeter: number; readyPulse?: number; onPause: () => void }) {
+export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, onPause }: { combat: CombatState; visualMeter: number; readyPulse?: number; bombCount?: number; onPause: () => void }) {
   const { battle, bossKind, phase } = combat;
   const maximum = newBattle(bossKind);
   const verdict = phase === 'verdictReady' || phase === 'verdictSlash';
   const ready=battle.meter>=100&&phase!=='verdictSlash'&&phase!=='settle'&&battle.bossHp>0&&battle.playerHp>0;
   return <>
     <header className="hunt-battle-toolbar">
-      <div className="hunt-battle-timer" aria-label={`战斗倒计时 ${battleCountdownClock(combat.time)}`}><HuntArt name="timer" /><time data-testid="battle-time">{battleCountdownClock(combat.time)}</time></div>
       <button type="button" className="hunt-battle-pause" aria-label="暂停战斗" onClick={onPause}><HuntArt name="pause" /></button>
     </header>
     <div className="hunt-boss-hud">
@@ -36,12 +26,12 @@ export function BattleHud({ combat, visualMeter, readyPulse = 0, onPause }: { co
       <div className="hunt-charge-shaft"><div className="hunt-charge-well"><i style={{ height: `${Math.max(0, Math.min(100, visualMeter))}%` }} /></div><HuntArt name="meter-shaft" /></div>
       <div className="hunt-charge-medallion"><HuntArt name="cut-medallion" /><span>{ready ? '就绪' : verdict ? '裁决中' : `${Math.round(visualMeter)}%`}</span></div>
       {ready&&readyPulse>0&&<i key={readyPulse} className="hunt-charge-ready-burst" aria-hidden="true" />}
-      <span className="hunt-charge-caption">{ready ? '本组结束自动裁决' : verdict ? '连续切割' : '蓄满自动裁决'}</span>
+      <span className="hunt-charge-caption">{verdict && !ready ? '连续切割' : bossKind === 'jelly' ? ready ? '本组结束自动裁决' : '蓄满自动裁决' : ready ? '即将自动裁决' : '本轮完成自动裁决'}</span>
     </aside>
     <div className="hunt-item-slots" aria-label="战斗辅具">
-      <div className={`hunt-item-slot ${combat.tomatoBombOwned ? 'has-bomb' : ''}`} data-testid="bomb-status" data-triggered={combat.tomatoBombTriggered} aria-label={combat.tomatoBombOwned ? `西红柿炸弹：${combat.tomatoBombTriggered ? '本次已触发' : '裁决首刀自动爆炸'}` : '西红柿炸弹尚未购买'}>
-        <HuntArt name="item-socket" />{combat.tomatoBombOwned && <ItemIcon name="tomato" size={42} />}
-        <small>{combat.tomatoBombOwned ? combat.tomatoBombTriggered ? '已触发' : '首刀爆炸' : '商店解锁'}</small>
+      <div className={`hunt-item-slot ${bombCount > 0 || combat.tomatoBombTriggered ? 'has-bomb' : ''}`} data-testid="bomb-status" data-triggered={combat.tomatoBombTriggered} aria-label={`西红柿炸弹：库存 ${bombCount}，${combat.tomatoBombTriggered ? '本次已消耗1个' : bombCount > 0 ? '裁决首刀自动消耗1个' : '前往商店购买或补充'}`}>
+        <HuntArt name="item-socket" />{(bombCount > 0 || combat.tomatoBombTriggered) && <ItemIcon name="tomato" size={42} />}
+        <small>{combat.tomatoBombTriggered ? `已用 · 余${bombCount}` : bombCount > 0 ? `首刀自动 · ×${bombCount}` : '商店补充'}</small>
       </div><div className="hunt-item-slot" aria-label="道具栏 2 尚未开放"><HuntArt name="item-socket" /><small>未开放</small></div>
     </div>
   </>;

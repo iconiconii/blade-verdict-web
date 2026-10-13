@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createCombat } from '../../domain/combat';
-import { BattleHud, battleClock, battleCountdownClock } from './BattleHud';
+import { BattleHud } from './BattleHud';
 import { HuntScreens } from './HuntScreens';
 
 const assetFiles = import.meta.glob('/public/assets/**/*.{png,webp}');
 
 describe('reference hunt UI', () => {
-  it.each([[0, '00:00'], [28000, '00:28'], [61000, '01:01'], [-1, '00:00'], [Infinity, '00:00']])('formats the simulation clock %s', (ms, expected) => {
-    expect(battleClock(ms as number)).toBe(expected);
-  });
-
-  it.each([[0, '00:30'], [1000, '00:29'], [28500, '00:01'], [30000, '00:00'], [60000, '00:00']])('formats the battle countdown %s', (ms, expected) => {
-    expect(battleCountdownClock(ms)).toBe(expected);
-  });
-
   it('starts in chapter browsing, not directly in a fight', () => {
     const html = renderToStaticMarkup(<HuntScreens />);
     expect(html).toContain('data-testid="chapter-select"');
@@ -32,7 +24,10 @@ describe('reference hunt UI', () => {
     state.battle.meter = 65;
     state.combo = 4;
     const html = renderToStaticMarkup(<BattleHud combat={state} visualMeter={60} onPause={() => {}} />);
-    expect(html).toContain('00:01');
+    expect(html).not.toContain('battle-time');
+    expect(html).not.toContain('hunt-battle-timer');
+    expect(html).not.toContain('timer.webp');
+    expect(html).toContain('aria-label="暂停战斗"');
     expect(html).toContain('果冻怪');
     expect(html).toContain('320 / 800');
     expect(html).not.toContain('76/100');
@@ -51,7 +46,7 @@ describe('reference hunt UI', () => {
     expect(ready).toContain('data-ready="true"');
     expect(ready).toContain('hunt-charge is-verdict is-ready');
     expect(ready).toContain('就绪');
-    expect(ready).toContain('本组结束自动裁决');
+    expect(ready).toContain('即将自动裁决');
     state.phase = 'verdictSlash';
     state.battle.meter = 0;
     const released = renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} readyPulse={1} onPause={() => {}} />);
@@ -59,12 +54,12 @@ describe('reference hunt UI', () => {
     expect(released).not.toContain('is-ready');
   });
 
-  it('keeps ready visible while the second circle remains and shows one enrage state',()=>{
+  it('shows ready and enrage presentation but suppresses ready after player defeat',()=>{
     const state=createCombat(1,'cabbage');
     state.phase='targetActive';state.battle.meter=100;state.enraged=true;
     const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} readyPulse={1} onPause={()=>{}}/>);
     expect(html).toContain('data-ready="true"');
-    expect(html).toContain('本组结束自动裁决');
+    expect(html).toContain('即将自动裁决');
     expect(html.match(/data-testid="enrage-state"/g)).toHaveLength(1);
     state.battle.playerHp=0;
     expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('data-ready="false"');
@@ -80,15 +75,28 @@ describe('reference hunt UI', () => {
     }
   });
 
-  it('shows the permanent bomb as automatic and distinguishes an already triggered verdict',()=>{
+  it('shows one-use bomb stock and the count left after an automatic trigger',()=>{
     const state=createCombat(1,'corn',0,'bomb-hud',true);
-    const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} onPause={()=>{}}/>);
-    expect(html).toContain('首刀爆炸');
+    const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} bombCount={2} onPause={()=>{}}/>);
+    expect(html).toContain('首刀自动 · ×2');
+    expect(html).toContain('裁决首刀自动消耗1个');
     expect(html).toContain('data-triggered="false"');
     expect(html.match(/<button/g)).toHaveLength(1);
     state.tomatoBombTriggered=true;
-    const triggered=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} onPause={()=>{}}/>);
-    expect(triggered).toContain('本次已触发');
+    const triggered=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} bombCount={1} onPause={()=>{}}/>);
+    expect(triggered).toContain('本次已消耗1个');
+    expect(triggered).toContain('已用 · 余1');
     expect(triggered).toContain('data-triggered="true"');
+  });
+
+  it('prompts restocking after the last bomb is spent and keeps jelly meter rules',()=>{
+    const state=createCombat(1,'jelly');
+    const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} bombCount={0} onPause={()=>{}}/>);
+    expect(html).toContain('商店补充');
+    expect(html).not.toContain('商店解锁');
+    expect(html).not.toContain('icons/tomato.png');
+    expect(html).toContain('蓄满自动裁决');
+    state.battle.meter=100;
+    expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('本组结束自动裁决');
   });
 });

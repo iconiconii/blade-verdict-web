@@ -1,6 +1,8 @@
 import {
   QUALITY_ORDER,
   RECIPES,
+  consumableCount,
+  consumeConsumable,
   cookingDurationMs,
   createMetaState,
   dishPrice,
@@ -61,6 +63,7 @@ export function beginCooking(save: SavedWorkshop, recipeId: string, selected: re
   }
   let meta = createMetaState(save.meta);
   for (const selection of ingredients) meta = removeInventory(meta, selection);
+  if (consumableCount(meta, 'upgrade_jelly_cooker') > 0) meta = consumeConsumable(meta, 'upgrade_jelly_cooker');
   return {
     ...save,
     revision: nextRevision(save),

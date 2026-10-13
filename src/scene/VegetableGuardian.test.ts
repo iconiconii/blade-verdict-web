@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { applyContinuousCut, createCombat, startVerdict } from '../domain/combat';
+import { applyContinuousCut, createCombat, currentVerdictStage, startVerdict, type CombatState } from '../domain/combat';
 import { CarrotGuardian, CabbageGuardian, TomatoGuardian, type VegetableGuardian } from './VegetableGuardian';
 
 const guardians:VegetableGuardian[]=[];
+function ready(base:CombatState){
+  const stage=currentVerdictStage(base)!;
+  const state=startVerdict({...base,phase:'verdictReady',stageGroupsResolved:stage.groupCount,
+    stageCirclesResolved:stage.circleCount,battle:{...base.battle,meter:100}});
+  expect(state.phase).toBe('verdictSlash');
+  return state;
+}
 const make=(kind:'carrot'|'cabbage'|'tomato')=>{
   const guardian=kind==='carrot'?new CarrotGuardian():kind==='cabbage'?new CabbageGuardian():new TomatoGuardian();
   guardians.push(guardian);return guardian;
@@ -51,8 +58,7 @@ describe.each(['carrot','cabbage','tomato'] as const)('%s guardian',kind=>{
 
   it('keeps finite articulated poses while receiving verdict cuts',()=>{
     const guardian=make(kind);
-    const base=createCombat(7319,kind),ready={...base,phase:'verdictReady' as const,battle:{...base.battle,meter:100}};
-    let state=startVerdict(ready);
+    let state=ready(createCombat(7319,kind));
     for(const angle of [0,Math.PI/2,-.7])state=applyContinuousCut(state,{x:.5,y:.5},true,angle);
     guardian.update(state);guardian.root.updateMatrixWorld(true);
     const values:number[]=[];
@@ -66,7 +72,7 @@ describe.each(['carrot','cabbage','tomato'] as const)('%s guardian',kind=>{
     const base=createCombat(9911,kind);
     const actor=guardian.root.getObjectByName(`${kind}-reaction-rig`) as THREE.Group;
     const initial={position:actor.position.clone(),rotation:actor.rotation.clone(),scale:actor.scale.clone()};
-    const hit=startVerdict({...base,phase:'verdictReady' as const,battle:{...base.battle,meter:100}});
+    const hit=ready(base);
     guardian.update({...hit,time:hit.time+90});
     guardian.update({...base,time:base.time+120});
     expect(actor.position.distanceTo(initial.position)).toBeLessThan(1e-8);

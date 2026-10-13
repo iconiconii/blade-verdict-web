@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { applyContinuousCut, createCombat, startVerdict, tickCombat, type CombatState } from '../domain/combat';
+import { applyContinuousCut, createCombat, currentVerdictStage, startVerdict, tickCombat, type CombatState } from '../domain/combat';
 import type { BossKind } from '../domain/v2';
 import { CornGuardian } from './CornGuardian';
 import { JellyGuardian } from './JellyGuardian';
@@ -112,7 +112,10 @@ describe('shared guardian framing', () => {
       ...base, phase:'impact', time:100,
       feedback:{id:1, kind:result, amount:0, energyGain:0, position:{x:.5,y:.5}, angle:0, time:0},
     }));
-    const verdict = startVerdict({...base, phase:'verdictReady', battle:{...base.battle, meter:100}});
+    const stage=currentVerdictStage(base);
+    const verdict = startVerdict({...base, phase:'verdictReady',stageGroupsResolved:stage?.groupCount??0,
+      stageCirclesResolved:stage?.circleCount??0,battle:{...base.battle, meter:100}});
+    expect(verdict.phase).toBe('verdictSlash');
     const cut = applyContinuousCut(verdict, {x:.5,y:.5}, true, -.7);
     reactions.push(tickCombat(cut, 90));
     reactions.push({...cut, phase:'settle', time:cut.time + 400, battle:{...cut.battle, bossHp:0}});

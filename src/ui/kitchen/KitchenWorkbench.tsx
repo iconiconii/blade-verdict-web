@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { INGREDIENTS, QUALITY_ORDER, RECIPES, cookingDurationMs, inventoryCount, previewCooking, type DishInstance, type IngredientId, type IngredientSelection, type MetaState, type RecipeDefinition } from '../../domain/meta';
+import { INGREDIENTS, QUALITY_ORDER, RECIPES, consumableCount, cookingDurationMs, inventoryCount, previewCooking, type DishInstance, type IngredientId, type IngredientSelection, type MetaState, type RecipeDefinition } from '../../domain/meta';
 import { cookingRemainingMs, type CookingJob } from '../../domain/cookingJobs';
 import type { Quality } from '../../domain/v2';
 import type { Screen } from '../../store';
@@ -95,6 +95,7 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
   const request = useRef(0);
   useEffect(() => { alive.current = true; return () => { alive.current = false; request.current += 1; }; }, []);
   const busy = submitting || cookingJob !== null;
+  const cookerCount = consumableCount(meta, 'upgrade_jelly_cooker');
   const remaining = cookingJob ? cookingRemainingMs(cookingJob, now) : cookingDurationMs(meta);
   const ready = cookingJob !== null && remaining === 0;
   const recipe = RECIPES.find(item => item.id === (cookingJob?.recipeId ?? recipeId)) ?? null;
@@ -183,6 +184,7 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
         {submitting ? '正在保存' : ready ? '领取料理' : cookingJob ? '烹饪中…' : '开始烹饪'}
       </button>
       {cookingJob && <div className="kitchen-task-status" role="status">{ready ? '料理已完成，点击领取' : '离开厨房也会继续烹饪'}</div>}
+      {!cookingJob && cookerCount > 0 && <div className="kitchen-task-status" data-testid="cooker-stock">快煮器 ×{cookerCount} · 本锅自动消耗1个</div>}
       <div className="kitchen-slots" aria-label="待烹饪食材">
         {displayedSlots.map((item, index) => <button type="button" key={index} className={`kitchen-slot kitchen-hotspot ${item ? 'is-filled' : ''}`} data-testid={`kitchen-slot-${index}`} disabled={busy}
           aria-label={item ? `食材槽 ${index + 1}：${ingredientName(item.ingredientId)} ×${slotQuantity(item)}，${item.items.map(stack => `${qualityNames[stack.quality]} ×${stack.count}`).join('、')}，点击调整或移除` : `食材槽 ${index + 1}：放食材`} onClick={() => openIngredient(undefined, index)}>
@@ -219,7 +221,7 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
     <GameDialog open={settings} onClose={() => setSettings(false)} title="厨房" actions={<><GameButton variant="wood" onClick={() => go('restaurant')}>返回餐厅</GameButton><GameButton onClick={() => go('sales')}>查看菜架</GameButton></>}>
       <p>点菜谱牌选择目标，再选择食材品质与数量。每槽放一种食材，可以混合品质。点已放入的食材可调整或移除。</p>
       <p>开始时扣除食材并保存任务；烹饪期间可以自由切换页面，刷新后也会继续。料理完成后需领取到菜架。</p>
-      <p>{cookingDurationMs(meta) < 30000 ? '果冻快煮器已生效，新任务只需 22.5 秒。' : '每锅需要 30 秒。果冻快煮器可缩短新任务的烹饪时间。'}</p>
+      <p>{cookerCount > 0 ? `果冻快煮器库存 ${cookerCount}。下一锅成功开始时自动消耗1个，仅这一锅缩短至 22.5 秒。` : '每锅需要 30 秒。前往商店购买一次性果冻快煮器，可让下一锅缩短至 22.5 秒。'}</p>
     </GameDialog>
     <GameDialog open={result !== null} onClose={() => setResult(null)} title="料理已领取！" actions={<><GameButton variant="wood" onClick={() => setResult(null)}>继续烹饪</GameButton><GameButton onClick={() => { setResult(null); go('sales'); }}>前往菜架</GameButton></>}>
       {result && <div className="kitchen-dish-result" data-testid="cooking-presentation"><span className={`ws-sprite ws-sprite--${dishPresentation(result.dishId).icon}`} /><h2>{dishPresentation(result.dishId).name}</h2><p>{qualityNames[result.quality]} · 售价 {result.sellPrice} 金币</p><p>料理已放入菜架</p></div>}

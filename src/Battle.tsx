@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { BattleScene } from './BattleScene';
-import { durations, verdictDurationFor, verdictRemainingMs, type CombatFeedback } from './domain/combat';
+import { currentVerdictStage, durations, verdictDurationFor, verdictRemainingMs, type CombatFeedback } from './domain/combat';
+import { consumableCount } from './domain/meta';
 import { bodyAnchorLabel, bossIngredientIcon, ingredientBurstFor, type BossKind, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 import { swipeContact } from './domain/swipe';
@@ -38,7 +39,9 @@ export function Battle(){
   const feedbackManager=useRef<FeedbackManager|null>(null),audio=useRef<AudioManager|null>(null),lastReadyPulse=useRef(0);
   const [presentation,setPresentation]=useState<FeedbackSnapshot>(emptyFeedback);
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
+  const bombCount=useGame(s=>consumableCount(s.meta,'upgrade_tomato_bomb'));
   const {battle,bossKind,phase,targets,feedback,paused}=combat;
+  const verdictStage=currentVerdictStage(combat);
   const showReadyCallout=presentation.ready&&presentation.readySince!==null&&combat.time-presentation.readySince<1200;
   const resolvedTargets=targets.filter(target=>target.resolved).length;
   const nextTarget=targets.find(target=>!target.resolved);
@@ -122,7 +125,9 @@ export function Battle(){
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
-  const phaseHint=inVerdict?'储蓄已满 · 连续划过怪物':targets.length===2?`${bossKind==='jelly'?'依次招架':'双圈分别招架'} ${resolvedTargets}/${targets.length}`:'';
+  const phaseHint=verdictStage
+    ? `裁决 ${verdictStage.number}/${verdictStage.total} · ${inVerdict?'连续划过怪物':`招架组 ${verdictStage.groupsResolved}/${verdictStage.groupCount}${targets.length===2&&phase==='targetActive'?` · 双圈 ${resolvedTargets}/2`:''}`}`
+    : inVerdict?'储蓄已满 · 连续划过怪物':bossKind==='jelly'&&targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'';
   const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
   return <section className={`battle battle--storybook battle--${phase} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
     <div className="battle-stage" ref={stage} onPointerDownCapture={unlockAudio} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={event=>{if(event.pointerId===useGame.getState().combat.pointerId)useGame.getState().cancelStroke()}} onLostPointerCapture={event=>{if(event.pointerId===useGame.getState().combat.pointerId)useGame.getState().cancelStroke()}}>
@@ -151,13 +156,13 @@ export function Battle(){
         </button>
       })}
     </div>
-    <BattleHud combat={combat} visualMeter={presentation.visualMeter} readyPulse={presentation.readyPulse} onPause={pauseBattle}/>
+    <BattleHud combat={combat} visualMeter={presentation.visualMeter} readyPulse={presentation.readyPulse} bombCount={bombCount} onPause={pauseBattle}/>
     {phaseHint&&<div className="phase-ribbon"><span className="phase-dot"/>{phaseHint}{bossKind==='jelly'&&phase==='targetActive'&&resolvedTargets>0&&nextTarget&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>}
     <CircleFeedback events={presentation.events}/>
     {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}
     {showFeedback&&feedback&&(feedback.kind==='Cut'||feedback.kind==='Verdict')&&<div className={`hit-feedback hit-feedback--${feedback.kind} ${feedback.finisher?'hit-feedback--finisher':''}`} key={feedback.id} role="status" aria-live="polite"><strong>{feedback.finisher?'FINISH':feedback.kind==='Cut'?'CUT':feedback.score===100?'PERFECT VERDICT':'VERDICT'}</strong><span>{feedback.kind==='Cut'?(feedback.finisher?'击杀确认 · 怪物崩解':`主体切割 · Combo ×${combat.verdictCombo}`):`${feedback.score} 分 · 切割完成`} <b>−{feedback.amount}</b></span></div>}
     {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'破防！':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/verdictDurationFor(combat)*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}
 
-    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>本场光环初始寿命约 {(combat.tempo.durationMs/1000).toFixed(2)} 秒。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>{bossKind==='jelly'?'双圈请依次点击。':'双圈同时出现，可按任意顺序分别点击。'}<br/>储蓄条满后，本组结束时自动进入连续裁决。</p></>}{ready&&!failed&&<GameButton autoFocus variant="gold" onClick={()=>{unlockAudio();clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</GameButton>}{(paused||failed)&&<GameButton variant="wood" onClick={()=>useGame.getState().go('stages')}>退出讨伐</GameButton>}</div></div>}
+    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>本场光环寿命约 {(combat.tempo.durationMs/1000).toFixed(2)} 秒。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>{bossKind==='jelly'?'双圈请依次点击。':bossKind==='corn'?'本关只有单圈。':'双圈同时出现，可按任意顺序分别点击。'}<br/>{verdictStage?`本关共 ${verdictStage.total} 次裁决。完成本轮全部招架圈后自动裁决，Miss仍会扣血。`:'储蓄条满后，本组结束时自动进入连续裁决。'}</p></>}{ready&&!failed&&<GameButton autoFocus variant="gold" onClick={()=>{unlockAudio();clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</GameButton>}{(paused||failed)&&<GameButton variant="wood" onClick={()=>useGame.getState().go('stages')}>退出讨伐</GameButton>}</div></div>}
   </section>;
 }

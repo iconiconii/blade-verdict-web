@@ -39,6 +39,15 @@ describe('recipe-first kitchen UI', () => {
     expect(html).not.toContain('data-testid="pantry-');
   });
 
+  it('previews the next one-use cooker and explains that starting consumes one', () => {
+    const meta = createMetaState({ ownedItems: [{ itemId: 'upgrade_jelly_cooker', count: 2 }] });
+    const html = renderToStaticMarkup(<KitchenWorkbench meta={meta} cookingJob={null} {...actions} />);
+    expect(html).toContain('00:23');
+    expect(html).toContain('快煮器 ×2 · 本锅自动消耗1个');
+    expect(html).toContain('下一锅成功开始时自动消耗1个，仅这一锅缩短至 22.5 秒');
+    expect(html).not.toContain('永久');
+  });
+
   it('permits undiscovered recipes when stock suffices and disables those missing stock', () => {
     const html = renderToStaticMarkup(<KitchenRecipeOptions meta={createMetaState({ inventory: [{ ingredientId: 'ing_corn', quality: 'Normal', count: 1 }] })} selectedId={null} onSelect={() => {}} />);
     expect(html).toMatch(/data-testid="recipe-recipe_toast"[^>]*aria-pressed="false"/);

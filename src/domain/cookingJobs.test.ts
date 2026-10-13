@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { beginCooking, claimCooking, cookingRemainingMs, MAX_COOKING_TIME_MS } from './cookingJobs';
-import { addInventory, buy, type IngredientSelection } from './meta';
+import { addInventory, buy, consumableCount, type IngredientSelection } from './meta';
 import { createSave, decodeSave, encodeSave, settleBattle } from './save';
 
 const selected: IngredientSelection[] = [{ ingredientId: 'corn', quality: 'Top', count: 3 }];
@@ -92,7 +92,32 @@ describe('persistent single-pot cooking jobs', () => {
     expect(decodeSave(encodeSave(boughtMidPot))).toEqual(boughtMidPot);
     const claimed = claimCooking(boughtMidPot, 'slow', 30_000);
     const restocked = { ...claimed, meta: addInventory(claimed.meta, selected[0]) };
-    expect(beginCooking(restocked, 'recipe_corn_pancake', selected, 'fast', 40_000).cookingJob!.finishAt).toBe(62_500);
+    const fast = beginCooking(restocked, 'recipe_corn_pancake', selected, 'fast', 40_000);
+    expect(fast.cookingJob!.finishAt).toBe(62_500);
+    expect(consumableCount(fast.meta, 'upgrade_jelly_cooker')).toBe(0);
+    expect(consumableCount(restocked.meta, 'upgrade_jelly_cooker')).toBe(1);
+    expect(decodeSave(encodeSave(fast))).toEqual(fast);
+    const finishedFast = claimCooking(fast, 'fast', 62_500);
+    const nextStock = { ...finishedFast, meta: addInventory(finishedFast.meta, selected[0]) };
+    const normalAgain = beginCooking(nextStock, 'recipe_corn_pancake', selected, 'normal-again', 70_000);
+    expect(normalAgain.cookingJob!.finishAt).toBe(100_000);
+  });
+
+  it('only consumes one quick cooker for a successful new pot and never for a failed start', () => {
+    const funded = { ...stock(), meta: { ...stock().meta, coins: 480 } };
+    const prepared = { ...funded, meta: buy(buy(funded.meta, 'upgrade_jelly_cooker').state, 'upgrade_jelly_cooker').state };
+    const original = JSON.stringify(prepared);
+    expect(() => beginCooking(prepared, 'recipe_toast', selected, 'mismatch', 0)).toThrow(/不匹配/);
+    expect(() => beginCooking(prepared, 'recipe_corn_pancake', [{ ...selected[0], quality: 'Normal' }], 'insufficient', 0)).toThrow(/库存不足/);
+    expect(() => beginCooking(prepared, 'recipe_corn_pancake', selected, 'bad-time', MAX_COOKING_TIME_MS)).toThrow(/时间戳/);
+    expect(JSON.stringify(prepared)).toBe(original);
+    const first = beginCooking(prepared, 'recipe_corn_pancake', selected, 'first', 0);
+    expect(first.meta.inventory).toEqual([]);
+    expect(consumableCount(first.meta, 'upgrade_jelly_cooker')).toBe(1);
+    expect(first.cookingJob!.finishAt).toBe(22_500);
+    expect(first.revision).toBe(prepared.revision + 1);
+    expect(() => beginCooking(first, 'recipe_corn_pancake', selected, 'occupied', 30_000)).toThrow(/已有料理/);
+    expect(consumableCount(first.meta, 'upgrade_jelly_cooker')).toBe(1);
   });
 
   it('retains a cooking job during unrelated battle reward settlement', () => {

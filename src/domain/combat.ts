@@ -4,7 +4,7 @@ import {
   type BodyAnchorId, type BossKind, type ParryResult, type VerdictStroke,
 } from './v2';
 import { BlockCircleManager } from './BlockCircleManager';
-import { doubleCircleRoll, enrageConfig, levelForBoss, levelTiming, type LevelId } from './levelConfig';
+import { enrageConfig, levelForBoss, levelTiming, verdictPlanFor, type LevelId } from './levelConfig';
 
 export interface CombatFeedback {
   /** Actual extra damage from the once-per-verdict tomato bomb. */
@@ -19,12 +19,14 @@ export interface CombatFeedback {
 }
 export interface CombatTempo {
   durationMs:number; maxRadiusPx:number; telegraphMs:number; label:string;
-  attackIntervalMs:number; staggerMs:number; doubleCircleProbability:number;
+  attackIntervalMs:number; staggerMs:number;
   perfectWindowStart:number; perfectWindowEnd:number;
 }
 export interface CombatState {
   battleId:string;
   levelId:LevelId|null; enraged:boolean; enragedAt:number|null;
+  /** Completed verdict stages, then completed groups/circles in the current stage. */
+  stageIndex:number; stageGroupsResolved:number; stageCirclesResolved:number;
   /** Absolute next-group activation deadline; cleared on verdict/death/new activation. */
   nextAttackAt:number|null;
   battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase;
@@ -32,7 +34,7 @@ export interface CombatState {
   targets:AttackPresentation[]; combo:number; bestCombo:number; successfulParries:number;
   tempo:CombatTempo; feedback:CombatFeedback|null; effects:CombatFeedback[]; feedbackSequence:number;
   hitStopRemainingMs:number; stroke:VerdictStroke|null; pointerId:number|null;
-  verdictDamageDealt:number; verdictCombo:number; verdictBonusDamage:number;
+  verdictDamageDealt:number; verdictBombDamage:number; verdictCombo:number; verdictBonusDamage:number;
   tomatoBombOwned:boolean; tomatoBombTriggered:boolean;
   fever:boolean; feverStartedAt:number|null;
 }
@@ -47,21 +49,37 @@ export const verdictRemainingMs=(s:CombatState)=>Math.max(0,s.feverStartedAt===n
   ?verdictDurationFor(s)-s.elapsed:(s.attack.verdictDurationMs??feverConfig.durationMs)-(s.time-s.feverStartedAt));
 export const durations = { intro:1000, ready:650, telegraph:400, impact:280, stagger:300, deathStagger:1200, verdictReady:650, verdict:3000, settle:1000 };
 
+export function currentVerdictStage(s:Pick<CombatState,'bossKind'|'stageIndex'|'stageGroupsResolved'|'stageCirclesResolved'>){
+  const plan=verdictPlanFor(s.bossKind),stage=plan?.[s.stageIndex];
+  return stage&&plan?{...stage,number:s.stageIndex+1,total:plan.length,
+    groupCount:stage.singleGroups+stage.doubleGroups,circleCount:stage.singleGroups+stage.doubleGroups*2,
+    groupsResolved:s.stageGroupsResolved,circlesResolved:s.stageCirclesResolved}:null;
+}
+const stageComplete=(s:CombatState)=>{
+  const stage=currentVerdictStage(s);
+  return !!stage&&stage.groupsResolved===stage.groupCount&&stage.circlesResolved===stage.circleCount;
+};
+/** Stage health boundaries keep parry, equipment and bomb damage from skipping a verdict. */
+export function stageHpBoundary(s:Pick<CombatState,'bossKind'|'stageIndex'>):number {
+  const plan=verdictPlanFor(s.bossKind);
+  return plan?Math.max(0,Math.round(bossMaxHp(s.bossKind)*(plan.length-s.stageIndex-1)/plan.length)):0;
+}
+
 /** Vegetables use fixed level snapshots; only the legacy jelly accelerates with success. */
 export function tempoFor(bossKind:BossKind,successfulParries:number,enraged=false):CombatTempo {
   const levelId=levelForBoss[bossKind];
   if(levelId!==null){
-    const timing=levelTiming(levelId,enraged&&levelId===3);
+    const timing=levelTiming(levelId);
     const initial={corn:[90,400],carrot:[86,380],cabbage:[82,350],tomato:[78,320],jelly:[90,400]}[bossKind];
     const telegraphMs=Math.min(initial[1],timing.attackIntervalMs-durations.impact-durations.stagger);
     return {...timing,maxRadiusPx:initial[0],telegraphMs,
-      staggerMs:timing.attackIntervalMs-durations.impact-telegraphMs,label:enraged&&levelId===3?'狂暴':`Level ${levelId}`};
+      staggerMs:timing.attackIntervalMs-durations.impact-telegraphMs,label:enraged&&levelId>=3?'狂暴':`Level ${levelId}`};
   }
   const values=successfulParries<5?[1800,90,400]:successfulParries<11?[1650,82,340]:[1500,76,280];
   return {durationMs:values[0],maxRadiusPx:values[1],telegraphMs:values[2],
     label:successfulParries<5?'热身':successfulParries<11?'熟练':'疾风',
     attackIntervalMs:durations.impact+durations.stagger+values[2],staggerMs:durations.stagger,
-    doubleCircleProbability:0,perfectWindowStart:700/1800,perfectWindowEnd:1400/1800};
+    perfectWindowStart:700/1800,perfectWindowEnd:1400/1800};
 }
 
 const attackAtTempo=(bossKind:BossKind,tempo:CombatTempo):AttackConfig=>({
@@ -71,9 +89,10 @@ export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage
   battleId,
   battle:newBattle(bossKind),bossKind,attack:attackAtTempo(bossKind,tempoFor(bossKind,0)),
   levelId:levelForBoss[bossKind],enraged:false,enragedAt:null,nextAttackAt:null,
+  stageIndex:0,stageGroupsResolved:0,stageCirclesResolved:0,
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
-  hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictCombo:0,
+  hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictBombDamage:0,verdictCombo:0,
   verdictBonusDamage,tomatoBombOwned,tomatoBombTriggered:false,fever:false,feverStartedAt:null,
 });
 const transition=(s:CombatState,phase:BattlePhase,startedAt=s.time):CombatState=>({...s,phase,elapsed:Math.max(0,s.time-startedAt)});
@@ -83,7 +102,10 @@ function emit(s:CombatState,event:Omit<CombatFeedback,'id'|'time'>):CombatState 
 }
 export function prepareRound(s:CombatState,startedAt=s.time):CombatState {
   const tempo=tempoFor(s.bossKind,s.successfulParries,s.enraged);
-  const double=s.levelId===null?tempo.durationMs<1800&&s.round%2===0:doubleCircleRoll(s.seed,s.round)<tempo.doubleCircleProbability;
+  const stage=currentVerdictStage(s);
+  // A completed budget cannot create an extra group, even if a caller retries preparation.
+  if(s.levelId!==null&&(!stage||stage.groupsResolved>=stage.groupCount))return s;
+  const double=s.levelId===null?tempo.durationMs<1800&&s.round%2===0:s.stageGroupsResolved>=stage!.singleGroups;
   const count=double?2:1;
   return {...transition(s,'telegraph',startedAt),tempo,attack:attackAtTempo(s.bossKind,tempo),
     feedback:null,stroke:null,fever:false,feverStartedAt:null,
@@ -92,7 +114,7 @@ export function prepareRound(s:CombatState,startedAt=s.time):CombatState {
 }
 
 function checkEnrage(s:CombatState):CombatState {
-  if(s.levelId!==3||s.enraged||s.battle.bossHp<=0||s.battle.bossHp>=bossMaxHp(s.bossKind)*enrageConfig.healthThreshold)return s;
+  if(s.levelId===null||s.levelId<3||s.enraged||s.battle.bossHp<=0||s.battle.bossHp>=bossMaxHp(s.bossKind)*enrageConfig.healthThreshold)return s;
   return {...s,enraged:true,enragedAt:s.time};
 }
 
@@ -121,20 +143,29 @@ function resolveLegacyContact(s:CombatState,index:number,result:ParryResult):Com
 }
 function resolveContact(s:CombatState,index:number,result:ParryResult):CombatState {
   if(s.levelId===null)return resolveLegacyContact(s,index,result);
+  const stage=currentVerdictStage(s);
+  if(!stage||stageComplete(s))return s;
   const target=s.targets[index];
   const targets=BlockCircleManager.resolve(s.targets,index,result);
-  const battle=applyParry(s.battle,result,s.attack);
+  const applied=applyParry(s.battle,result,s.attack);
+  const stageCirclesResolved=s.stageCirclesResolved+1;
+  const groupComplete=targets.every(t=>t.resolved);
+  const stageGroupsResolved=s.stageGroupsResolved+(groupComplete?1:0);
+  // All resolved circles advance the fixed encounter budget. Miss still damages the player.
+  const battle={...applied,
+    bossHp:Math.min(s.battle.bossHp,Math.max(Math.max(1,stageHpBoundary(s)),applied.bossHp)),
+    meter:stageCirclesResolved===stage.circleCount?100:100*stageCirclesResolved/stage.circleCount};
   const combo=result==='Miss'?0:s.combo+1;
-  const next=checkEnrage(emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
+  const next=checkEnrage(emit({...s,battle,targets,stageCirclesResolved,stageGroupsResolved,combo,bestCombo:Math.max(s.bestCombo,combo),
     successfulParries:s.successfulParries+(result==='Miss'?0:1),hitStopRemainingMs:0,
   },{kind:result,circleId:target.circleId,
-    amount:result==='Miss'?s.attack.missDamage:result==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+    amount:result==='Miss'?s.battle.playerHp-battle.playerHp:s.battle.bossHp-battle.bossHp,
     energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
     finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:result==='Miss'?0:result==='Perfect'?80:25}));
   if(battle.bossHp<=0||battle.playerHp<=0)return {...transition(next,'impact'),nextAttackAt:null};
-  if(!targets.every(t=>t.resolved))return next;
+  if(!groupComplete)return next;
   const nextTempo=tempoFor(s.bossKind,next.successfulParries,next.enraged);
-  return {...transition(next,'impact'),nextAttackAt:battle.meter>=100?null:s.time+nextTempo.attackIntervalMs};
+  return {...transition(next,'impact'),nextAttackAt:stageComplete(next)?null:s.time+nextTempo.attackIntervalMs};
 }
 export function tapTarget(s:CombatState,circleId:string):CombatState {
   if(s.paused||s.phase!=='targetActive'||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
@@ -145,30 +176,45 @@ export function tapTarget(s:CombatState,circleId:string):CombatState {
 }
 export function startVerdict(s:CombatState):CombatState {
   if(s.phase!=='verdictReady'||s.paused||s.battle.meter!==100||s.battle.bossHp<=0||s.battle.playerHp<=0)return s;
+  if(s.levelId!==null&&(!stageComplete(s)||s.battle.verdictCount!==s.stageIndex))return s;
   const battle={...s.battle,meter:0,verdictCount:s.battle.verdictCount+1};
   return {...transition({...s,battle},'verdictSlash'),feedback:null,targets:[],stroke:null,pointerId:null,nextAttackAt:null,
-    verdictDamageDealt:0,verdictCombo:0,tomatoBombTriggered:false,fever:false,feverStartedAt:null};
+    verdictDamageDealt:0,verdictBombDamage:0,verdictCombo:0,tomatoBombTriggered:false,fever:false,feverStartedAt:null};
 }
 function finishVerdict(s:CombatState):CombatState {
-  // Apply the equipped weapon once, including on a no-input timeout.
-  const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-s.verdictBonusDamage)};
-  return {...transition(checkEnrage({...s,battle}),'stagger'),pointerId:null,stroke:null,nextAttackAt:null};
+  if(s.phase!=='verdictSlash')return s;
+  // The earned verdict clears the current health segment, including on an empty timeout.
+  // Legacy jelly retains its damage-based verdict and once-per-verdict weapon bonus.
+  const battle={...s.battle,bossHp:s.levelId===null?Math.max(0,s.battle.bossHp-s.verdictBonusDamage)
+    :Math.min(s.battle.bossHp,stageHpBoundary(s))};
+  const progression=s.levelId===null?{}:{stageIndex:s.stageIndex+1,stageGroupsResolved:0,stageCirclesResolved:0};
+  return {...transition(checkEnrage({...s,battle,...progression}),'stagger'),pointerId:null,stroke:null,nextAttackAt:null};
+}
+function expireVerdict(s:CombatState):CombatState {
+  const next=finishVerdict(s);
+  if(s.levelId===null)return next;
+  const amount=s.battle.bossHp-next.battle.bossHp;
+  return amount<=0?next:emit(next,{kind:'Cut',amount,energyGain:0,position:{x:.5,y:.5},angle:.65,
+    finisher:next.battle.bossHp<=0,hitStopMs:next.battle.bossHp<=0?80:25});
 }
 export function applyContinuousCut(s:CombatState,position:{x:number;y:number},insideMonster:boolean,angle=.65,path?:Array<{x:number;y:number;time:number}>,speed:'normal'|'fast'|'ferocious'='normal'):CombatState {
   const damageCap=verdictDamageCapFor(s);
   if(s.phase!=='verdictSlash'||s.paused||!insideMonster||s.battle.playerHp<=0||s.battle.bossHp<=0||s.verdictDamageDealt>=damageCap)return s;
-  const damage=Math.min(verdictCutDamageFor(s),damageCap-s.verdictDamageDealt,s.battle.bossHp);
+  const boundary=s.levelId===null?0:stageHpBoundary(s);
+  const damage=Math.min(verdictCutDamageFor(s),damageCap-s.verdictDamageDealt,Math.max(0,s.battle.bossHp-boundary));
   if(damage<=0)return s;
   const triggersBomb=s.tomatoBombOwned&&!s.tomatoBombTriggered;
-  const bombDamage=triggersBomb?Math.min(10,s.battle.bossHp-damage):0;
+  const bombDamage=triggersBomb?Math.min(10,Math.max(0,s.battle.bossHp-boundary-damage)):0;
   const battle={...s.battle,bossHp:Math.max(0,s.battle.bossHp-damage-bombDamage)};
   const verdictCombo=s.verdictCombo+1,verdictDamageDealt=s.verdictDamageDealt+damage;
   const fever=s.fever||verdictCombo>=feverConfig.comboThreshold;
   const feverStartedAt=s.feverStartedAt??(fever?s.time:null);
-  const next={...s,battle,verdictCombo,verdictDamageDealt,fever,feverStartedAt,tomatoBombTriggered:s.tomatoBombTriggered||triggersBomb};
-  // At the damage cap, the equipped bonus belongs to this same resolution.
-  // Settle it before both the finisher and enrage checks, then emit one actual hit.
-  const resolved=battle.bossHp<=0||verdictDamageDealt>=damageCap?finishVerdict(next):checkEnrage(next);
+  const verdictBombDamage=s.verdictBombDamage+bombDamage;
+  const next={...s,battle,verdictCombo,verdictDamageDealt,verdictBombDamage,fever,feverStartedAt,tomatoBombTriggered:s.tomatoBombTriggered||triggersBomb};
+  // Vegetable weapon bonuses shorten this segment's cutting requirement without skipping it.
+  // Legacy jelly still applies its bonus once after reaching the unmodified base damage cap.
+  const capReached=verdictDamageDealt+(s.levelId===null?0:s.verdictBonusDamage+verdictBombDamage)>=damageCap;
+  const resolved=battle.bossHp<=boundary||capReached?finishVerdict(next):checkEnrage(next);
   const finalHit=resolved.battle.bossHp<=0;
   return emit(resolved,
     {kind:'Cut',amount:s.battle.bossHp-resolved.battle.bossHp,bombDamage:triggersBomb?bombDamage:undefined,energyGain:0,position,angle,path,speed,finisher:finalHit,
@@ -196,7 +242,7 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
       return prepareRound({...next,round:next.round+1});
     }
     case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
-    case 'verdictSlash':return verdictRemainingMs(next)<=0?finishVerdict(next):next;
+    case 'verdictSlash':return verdictRemainingMs(next)<=0?expireVerdict(next):next;
     default:return next;
   }
 }
@@ -229,7 +275,7 @@ function tickVegetableCombat(initial:CombatState):CombatState {
         const ended=next.battle.bossHp<=0||next.battle.playerHp<=0;
         const hold=next.battle.bossHp<=0?durations.deathStagger:durations.stagger;
         if(ended)return next.elapsed>=hold?{...transition(next,'settle'),nextAttackAt:null}:next;
-        if(next.battle.meter>=100){
+        if(stageComplete(next)){
           if(next.elapsed<hold)return next;
           next={...transition(next,'verdictReady',phaseStartedAt+hold),nextAttackAt:null};
           break;
@@ -241,7 +287,7 @@ function tickVegetableCombat(initial:CombatState):CombatState {
         break;
       }
       case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
-      case 'verdictSlash':return verdictRemainingMs(next)<=0?finishVerdict(next):next;
+      case 'verdictSlash':return verdictRemainingMs(next)<=0?expireVerdict(next):next;
       default:return next;
     }
   }

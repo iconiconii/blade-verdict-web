@@ -49,7 +49,7 @@ export interface ShopItemDefinition {
   implemented: boolean;
   /** Applied only while the item is equipped.  Preview entries are always 0. */
   verdictDamageBonus: number;
-  /** Permanent upgrades apply without occupying an equipment slot. */
+  /** Consumable effects apply without occupying an equipment slot. */
   effect?: 'tomato-bomb' | 'jelly-cooker';
   description: string;
 }
@@ -210,22 +210,22 @@ export const SHOP_ITEMS: readonly ShopItemDefinition[] = Object.freeze([
   {
     id: 'upgrade_tomato_bomb',
     name: '西红柿炸弹',
-    category: 'upgrade',
+    category: 'item',
     cost: 150,
     implemented: true,
     verdictDamageBonus: 0,
     effect: 'tomato-bomb',
-    description: '永久辅具：每次裁决首次有效切割追加 10 点爆炸伤害',
+    description: '一次性：裁决首次有效切割消耗 1 个，追加 10 点爆炸伤害',
   },
   {
     id: 'upgrade_jelly_cooker',
     name: '果冻快煮器',
-    category: 'upgrade',
+    category: 'item',
     cost: 240,
     implemented: true,
     verdictDamageBonus: 0,
     effect: 'jelly-cooker',
-    description: '永久厨房升级：新一锅烹饪时间缩短 25%',
+    description: '一次性：新一锅开始时消耗 1 个，本锅烹饪时间缩短 25%',
   },
   {
     id: 'weapon_jelly_fork',
@@ -525,7 +525,7 @@ export function sellAll(state: MetaState): { state: MetaState; earned: number } 
   return { state: next, earned };
 }
 
-/** Buy once and auto-equip weapons/skins; permanent upgrades need no slot. */
+/** Weapons/skins are bought once; consumables add one unit on every purchase. */
 export function buy(state: MetaState, itemId: string): BuyResult {
   const item = findShopItem(itemId);
   if (!item.implemented) throw new Error('Shop item is a preview and cannot be purchased');
@@ -535,7 +535,10 @@ export function buy(state: MetaState, itemId: string): BuyResult {
   next.coins -= item.cost;
   if (item.category === 'item') {
     const owned = next.ownedItems.find(value => value.itemId === item.id);
-    if (owned) owned.count += 1;
+    if (owned) {
+      assertPositiveInteger(owned.count + 1, 'Total item count');
+      owned.count += 1;
+    }
     else next.ownedItems.push({ itemId: item.id, count: 1 });
   } else {
     next.purchasedShopItemIds.push(item.id);
@@ -565,7 +568,21 @@ export const equippedVerdictDamageBonus = (state: MetaState): number => {
   return findShopItem(state.equippedWeaponId).verdictDamageBonus;
 };
 
-export const hasTomatoBomb = (state: MetaState): boolean => state.purchasedShopItemIds.includes('upgrade_tomato_bomb');
+export const consumableCount = (state: MetaState, itemId: string): number => state.ownedItems.find(item => item.itemId === itemId)?.count ?? 0;
+
+/** Consume exactly one stocked item without mutating the caller's snapshot. */
+export function consumeConsumable(state: MetaState, itemId: string): MetaState {
+  const definition = findShopItem(itemId);
+  if (definition.category !== 'item' || !definition.implemented) throw new Error('Shop item is not an available consumable');
+  const index = state.ownedItems.findIndex(item => item.itemId === itemId);
+  if (index < 0 || state.ownedItems[index].count < 1) throw new Error('Insufficient item inventory');
+  const next = cloneState(state);
+  next.ownedItems[index].count -= 1;
+  if (next.ownedItems[index].count === 0) next.ownedItems.splice(index, 1);
+  return next;
+}
+
+export const hasTomatoBomb = (state: MetaState): boolean => consumableCount(state, 'upgrade_tomato_bomb') > 0;
 
 /** Snapshot this at cooking start; later purchases do not alter an active pot. */
-export const cookingDurationMs = (state: MetaState): number => state.purchasedShopItemIds.includes('upgrade_jelly_cooker') ? 22_500 : 30_000;
+export const cookingDurationMs = (state: MetaState): number => consumableCount(state, 'upgrade_jelly_cooker') > 0 ? 22_500 : 30_000;

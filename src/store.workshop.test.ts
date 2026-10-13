@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSave, decodeSave, encodeSave } from './domain/save';
 import { claimCooking } from './domain/cookingJobs';
-import { sell } from './domain/meta';
+import { consumableCount, sell } from './domain/meta';
 import { useGame } from './store';
 
 const disk = vi.hoisted(() => ({ value: null as string | null, fail: false }));
@@ -71,7 +71,7 @@ describe('workshop store wiring', () => {
     expect(useGame.getState().meta.inventory[0].count).toBe(6);
   });
 
-  it('passes permanent upgrades into the battle and the next cooking job', async () => {
+  it('offers a held bomb in battle and consumes a cooker for only the next cooking job', async () => {
     expect(await useGame.getState().buyItem('upgrade_tomato_bomb')).toBe(true);
     expect(await useGame.getState().buyItem('upgrade_jelly_cooker')).toBe(true);
     expect(useGame.getState().meta.equippedWeaponId).toBeNull();
@@ -81,5 +81,12 @@ describe('workshop store wiring', () => {
     await useGame.getState().startCooking('recipe_toast', [{ ingredientId: 'ing_corn', quality: 'Top', count: 1 }]);
     const job = useGame.getState().save.cookingJob!;
     expect(job.finishAt - job.startedAt).toBe(22500);
+    expect(consumableCount(useGame.getState().meta,'upgrade_jelly_cooker')).toBe(0);
+    expect(consumableCount(decodeSave(disk.value).meta,'upgrade_jelly_cooker')).toBe(0);
+    vi.setSystemTime(job.finishAt);
+    await useGame.getState().claimCooking(job.id);
+    await useGame.getState().startCooking('recipe_toast', [{ ingredientId: 'ing_corn', quality: 'Top', count: 1 }]);
+    const nextJob = useGame.getState().save.cookingJob!;
+    expect(nextJob.finishAt-nextJob.startedAt).toBe(30000);
   });
 });
