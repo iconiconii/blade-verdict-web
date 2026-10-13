@@ -11,8 +11,10 @@ import './ui/ui.css';
 import { HuntScreens } from './ui/hunt/HuntScreens';
 import './ui/game-frame.css';
 import { CookingIndicator } from './ui/CookingIndicator';
+import { useGameAudio } from './audio/GameAudio';
 
 export function App(){
+  useGameAudio();
   const screen=useGame(s=>s.screen);
   const battleId=useGame(s=>s.battleId);
   useEffect(()=>{const refresh=()=>useGame.getState().refreshSave();window.addEventListener('storage',refresh);window.addEventListener('focus',refresh);return()=>{window.removeEventListener('storage',refresh);window.removeEventListener('focus',refresh)}},[]);

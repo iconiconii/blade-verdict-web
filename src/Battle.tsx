@@ -9,6 +9,9 @@ import { GameButton, ItemIcon, type ItemIconName } from './ui';
 import './ui/migration.css';
 import { BattleHud } from './ui/hunt/BattleHud';
 import { AudioManager } from './audio/AudioManager';
+import { battleAudioAssets } from './audio/audioAssets';
+import { SwingAudioTracker, VerdictEndAudioTracker } from './audio/BattleAudioFeedback';
+import { createBattleAudio, duckMusic } from './audio/GameAudio';
 import { FeedbackManager, type FeedbackSnapshot } from './feedback/FeedbackManager';
 import { CircleFeedback } from './ui/hunt/CircleFeedback';
 
@@ -37,6 +40,7 @@ export function Battle(){
   const [ready,setReady]=useState(false),readyRef=useRef(false);
   const [failed,setFailed]=useState(false),failedRef=useRef(false);
   const feedbackManager=useRef<FeedbackManager|null>(null),audio=useRef<AudioManager|null>(null),lastReadyPulse=useRef(0);
+  const swingAudio=useRef(new SwingAudioTracker());
   const [presentation,setPresentation]=useState<FeedbackSnapshot>(emptyFeedback);
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
   const bombCount=useGame(s=>consumableCount(s.meta,'upgrade_tomato_bomb'));
@@ -47,7 +51,7 @@ export function Battle(){
   const nextTarget=targets.find(target=>!target.resolved);
   const feedbackOrigin=(event:CombatFeedback)=>event.anchorId?scene.current?.getBodyAnchorLayout(event.anchorId)??null:{x:event.position.x*size.width,y:event.position.y*size.height};
   const unlockAudio=()=>{void audio.current?.unlock()};
-  const stopFeedback=()=>{audio.current?.stopAll();vibrate(0)};
+  const stopFeedback=()=>{audio.current?.stopAll();swingAudio.current.cancel();vibrate(0)};
   const pauseBattle=()=>{stopFeedback();useGame.getState().pause(true)};
   const positionTarget=(index:number,button:HTMLButtonElement)=>{
     const layout=scene.current?.getTargetLayout(index);
@@ -66,17 +70,25 @@ export function Battle(){
   };
   useEffect(()=>{
     let alive=true,frame=0;
-    feedbackManager.current=new FeedbackManager();audio.current=new AudioManager();lastReadyPulse.current=0;
+    feedbackManager.current=new FeedbackManager();audio.current=createBattleAudio();lastReadyPulse.current=0;
+    void audio.current.preload(battleAudioAssets);
+    const verdictAudio=new VerdictEndAudioTracker();
+    verdictAudio.update(useGame.getState().combat);
+    const unsubscribeAudio=useGame.subscribe(state=>{
+      if(verdictAudio.update(state.combat)&&!document.hidden&&readyRef.current&&!failedRef.current){
+        audio.current?.playCue('VerdictEnd');duckMusic(1500);
+      }
+    });
     const error=()=>{if(alive){failedRef.current=true;setFailed(true)}};
     try{scene.current=new BattleScene(host.current!,error,()=>{if(alive){readyRef.current=true;setReady(true);clock.current=performance.now()}},bossKind)}catch{error()}
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
     const loop=()=>{if(!alive)return;advanceNow();if(!failedRef.current){scene.current?.render(useGame.getState().combat,reduced.matches);targetButtons.current.forEach((button,index)=>positionTarget(index,button))}frame=requestAnimationFrame(loop)};
-    const resize=()=>{const rect=stage.current!.getBoundingClientRect();setSize({width:rect.width,height:rect.height});scene.current?.resize();useGame.getState().cancelStroke()};
+    const resize=()=>{const rect=stage.current!.getBoundingClientRect();setSize({width:rect.width,height:rect.height});scene.current?.resize();swingAudio.current.cancel();useGame.getState().cancelStroke()};
     const observer=new ResizeObserver(resize);observer.observe(stage.current!);resize();
     const visibility=()=>{clock.current=performance.now();if(document.hidden)pauseBattle()};
     const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){if(useGame.getState().combat.paused){unlockAudio();clock.current=performance.now();useGame.getState().pause(false)}else pauseBattle()}};
     document.addEventListener('visibilitychange',visibility);window.addEventListener('keydown',key);frame=requestAnimationFrame(loop);
-    return()=>{alive=false;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('keydown',key);stopFeedback();audio.current?.dispose();audio.current=null;feedbackManager.current?.dispose();feedbackManager.current=null;scene.current?.dispose();scene.current=null;readyRef.current=false};
+    return()=>{alive=false;cancelAnimationFrame(frame);observer.disconnect();unsubscribeAudio();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('keydown',key);stopFeedback();audio.current?.dispose();audio.current=null;feedbackManager.current?.dispose();feedbackManager.current=null;scene.current?.dispose();scene.current=null;readyRef.current=false};
   },[]);
 
   useEffect(()=>{
@@ -86,10 +98,11 @@ export function Battle(){
     // Consume every event even while silent. Resuming never replays old audio.
     if(canPlay){
       next.newEvents.forEach(event=>audio.current?.play(event));
+      if(next.newEvents.some(event=>event.finisher))duckMusic(1100);
       if(next.newEvents.length){
         vibrate(next.newEvents.some(event=>event.bombDamage!==undefined)?[24]:next.newEvents.some(event=>event.kind==='Miss')?[18,28,18]:next.newEvents.some(event=>event.kind==='Perfect')?[18]:[8]);
       }
-      if(next.ready&&next.readyPulse!==lastReadyPulse.current){audio.current?.playReady();vibrate([18,24,42])}
+      if(next.ready&&next.readyPulse!==lastReadyPulse.current){audio.current?.playReady();duckMusic(750);vibrate([18,24,42])}
     }
     lastReadyPulse.current=next.readyPulse;
   },[combat]);
@@ -105,6 +118,7 @@ export function Battle(){
     if(useGame.getState().combat.phase==='targetActive'){tapAt(event.clientX,event.clientY);return}
     if(useGame.getState().combat.phase!=='verdictSlash'||useGame.getState().combat.pointerId!==null)return;
     const first=point(event);event.currentTarget.setPointerCapture(event.pointerId);points.current=[first];lastAccepted.current=first;useGame.getState().beginStroke(event.pointerId,first);
+    swingAudio.current.begin(event.pointerId,useGame.getState().combat);
   };
   const move=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();
@@ -115,6 +129,7 @@ export function Battle(){
     const previous=lastAccepted.current;
     if(previous){
       const sample=swipeContact(previous,p,size.width,size.height,q=>scene.current?.isPointInsideMonster(q)??false);
+      swingAudio.current.sample(event.pointerId,sample);
       if(sample.contact)useGame.getState().cut(event.pointerId,sample.contact,true,sample.angle);
       if(sample.consumed)lastAccepted.current=p;
     }
@@ -122,6 +137,7 @@ export function Battle(){
   const end=(event:ReactPointerEvent<HTMLDivElement>)=>{
     advanceNow();if(useGame.getState().combat.pointerId!==event.pointerId)return;
     move(event);useGame.getState().endStroke(event.pointerId);
+    if(swingAudio.current.finish(event.pointerId,useGame.getState().combat,document.hidden))audio.current?.playCue('SwingMiss');
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
@@ -130,7 +146,7 @@ export function Battle(){
     : inVerdict?'储蓄已满 · 连续划过怪物':bossKind==='jelly'&&targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'';
   const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
   return <section className={`battle battle--storybook battle--${phase} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
-    <div className="battle-stage" ref={stage} onPointerDownCapture={unlockAudio} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={event=>{if(event.pointerId===useGame.getState().combat.pointerId)useGame.getState().cancelStroke()}} onLostPointerCapture={event=>{if(event.pointerId===useGame.getState().combat.pointerId)useGame.getState().cancelStroke()}}>
+    <div className="battle-stage" ref={stage} onPointerDownCapture={unlockAudio} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={event=>{if(event.pointerId===useGame.getState().combat.pointerId){swingAudio.current.cancel();useGame.getState().cancelStroke()}}} onLostPointerCapture={event=>{if(event.pointerId===useGame.getState().combat.pointerId){swingAudio.current.cancel();useGame.getState().cancelStroke()}}}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
       {showReadyCallout&&<div key={presentation.readyPulse} className="verdict-ready-callout" role="status" aria-live="polite"><strong>裁决就绪</strong><span>{phase==='targetActive'?'完成本组后释放':'即将自动释放'}</span></div>}
