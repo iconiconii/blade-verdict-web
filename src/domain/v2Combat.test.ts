@@ -83,16 +83,16 @@ describe('simultaneous independent circles',()=>{
     expect(s.effects.map(event=>event.circleId)).toEqual(order.map(index=>s.targets[index].circleId));
     expect(s.effects.map(event=>event.id)).toEqual([1,2]);
   });
-  it('keeps Perfect damage when the other circle misses and advances both resolved circles',()=>{
+  it('keeps Perfect damage when the other circle misses without charging Miss energy',()=>{
     let s=active();s=tickCombat(s,perfectTime(s));s=tapTarget(s,s.targets[0].circleId);
     s=tickCombat(s,s.tempo.durationMs-s.elapsed);
-    expect(s.battle).toMatchObject({bossHp:839,playerHp:2,meter:75});
+    expect(s.battle).toMatchObject({bossHp:839,playerHp:2,meter:62.5});
     expect(s.combo).toBe(0);expect(s.bestCombo).toBe(1);
-    expect(s.feedback).toMatchObject({kind:'Miss',amount:1,energyGain:12.5,hitStopMs:0});
+    expect(s.feedback).toMatchObject({kind:'Miss',amount:1,energyGain:0,hitStopMs:0});
   });
   it('settles both expirations in target order in one update and never repeats damage',()=>{
     const s=active(),next=tickCombat(s,s.tempo.durationMs);
-    expect(next.battle.playerHp).toBe(1);expect(next.battle.meter).toBe(75);
+    expect(next.battle.playerHp).toBe(1);expect(next.battle.meter).toBe(50);
     expect(next.targets.every(target=>target.result==='Miss')).toBe(true);
     expect(next.effects.map(event=>event.circleId)).toEqual(s.targets.map(target=>target.circleId));
     expect(next.effects.map(event=>event.time)).toEqual([next.time,next.time]);
@@ -148,7 +148,7 @@ describe('simultaneous independent circles',()=>{
     let s=active();s=resolveAll(s);s=tickCombat(s,s.tempo.attackIntervalMs);
     s=tapTarget(s,s.targets[0].circleId);s={...s,battle:{...s.battle,playerHp:1}};
     s=tickCombat(s,s.tempo.durationMs);
-    expect(s.battle.playerHp).toBe(0);expect(s.battle.meter).toBe(100);
+    expect(s.battle.playerHp).toBe(0);expect(s.battle.meter).toBe(87.5);
     s=tickCombat(s,durations.impact+durations.stagger);
     expect(s.phase).toBe('settle');expect(s.battle.verdictCount).toBe(0);
     let first=active();first={...first,battle:{...first.battle,playerHp:1}};

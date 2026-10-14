@@ -73,9 +73,15 @@ function playEncounter(encounter:Encounter,mode:Mode,seed=7319,bonus=0,bomb=fals
         expect(startVerdict(s)).toBe(s);
       }
       if(missedId){
-        s=tickCombat(s,s.tempo.durationMs-s.elapsed);resolvedCircles++;misses++;
+        const before=s.battle.meter;
+        s=tickCombat(s,s.tempo.durationMs-s.elapsed);misses++;
         expect(s.feedback?.kind).toBe('Miss');
+        expect(s.battle.meter).toBe(before);expect(s.stageGroupsResolved).toBe(group);
         expect(tapTarget(s,missedId)).toBe(s);
+        s=tickCombat(s,encounter.duration);
+        expect(s.phase).toBe('targetActive');expect(s.targets).toHaveLength(1);
+        expect(s.retryingGroup).toBe(true);
+        s=tapTarget(s,s.targets[0].circleId);resolvedCircles++;
       }
       expect(s.phase).toBe('impact');
       expect(s.stageGroupsResolved).toBe(group+1);expect(s.stageCirclesResolved).toBe(resolvedCircles);
@@ -147,11 +153,11 @@ describe('every level and every verdict executes the exact encounter table',()=>
     expect(startVerdict(forged)).toBe(forged);
     expect(tickCombat(forged,durations.verdictReady).battle.verdictCount).toBe(0);
   });
-  it('keeps early misses in the budget but fails immediately when player HP is exhausted',()=>{
+  it('does not advance energy on early misses and fails when player HP is exhausted',()=>{
     let s=nextStageFirstGroup(createCombat(1,'carrot'));
     s={...s,battle:{...s.battle,playerHp:1}};
     s=tickCombat(s,s.tempo.durationMs);
-    expect(s.stageCirclesResolved).toBe(1);expect(s.battle.meter).toBe(12.5);
+    expect(s.stageCirclesResolved).toBe(0);expect(s.battle.meter).toBe(0);
     expect(s.battle.playerHp).toBe(0);
     s=tickCombat(s,durations.impact+durations.stagger);
     expect(s.phase).toBe('settle');expect(s.battle.verdictCount).toBe(0);

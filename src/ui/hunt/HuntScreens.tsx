@@ -82,7 +82,7 @@ export function HuntScreens() {
     <GameDialog open={settings} onClose={() => setSettings(false)} title="探险指南" actions={<><GameButton variant="wood" onClick={() => useGame.getState().go('restaurant')}>返回选关</GameButton><GameButton onClick={() => setSettings(false)}>继续探险</GameButton></>}>
       <p>通关玉米、胡萝卜、白菜后，依次解锁下一只蔬菜怪物。开锁表示可以挑战，勾表示已通关。果冻秘境保持开放。</p>
       <p>蔬菜关卡逐关加快。每场三颗爱心，漏点一个圈扣一颗；白菜和西红柿低血量时会狂暴。</p>
-      <p>完成本轮招架后，点击左下角释放裁决。限时内连续划过怪物完成切割，空划不造成伤害；果冻秘境保留原有自动裁决。</p>
+      <p>MISS 不蓄能。蔬菜关卡会补出漏掉的圈，已成功的圈不重复结算。蓄满后点击左下角释放裁决，果冻秘境同样需要点击。限时内连续划过怪物，空划不造成伤害。</p>
     </GameDialog>
   </section>;
 }

@@ -41,7 +41,7 @@ describe.each(levels)('$boss manual verdict and hearts',level=>{
     for(let i=0;i<10000&&s.phase!=='settle';i++)s=tickCombat(s,16);
     expect(s.phase).toBe('settle');expect(s.defeatReason).toBe('hearts');
     expect(s.battle).toMatchObject({playerHp:0,bossHp:hp,verdictCount:0});
-    expect(s.stageCirclesResolved).toBe(3);
+    expect(s.stageCirclesResolved).toBe(0);expect(s.battle.meter).toBe(0);
     expect(tickCombat(s,60000).battle).toEqual(s.battle);
     expect(startVerdict(s)).toBe(s);
   });

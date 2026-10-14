@@ -29,7 +29,7 @@ describe('reference hunt UI', () => {
     const state = createCombat(1, 'jelly');
     state.time = 28500;
     state.battle.bossHp = 320;
-    state.battle.playerHp = 76;
+    state.battle.playerHp = 2;
     state.battle.meter = 65;
     state.combo = 4;
     const html = renderToStaticMarkup(<BattleHud combat={state} visualMeter={60} onPause={() => {}} />);
@@ -43,7 +43,8 @@ describe('reference hunt UI', () => {
     expect(html).toContain('width:40%');
     expect(html).toContain('height:60%');
     expect(html).toContain('aria-valuenow="65"');
-    expect(html.match(/<button/g)).toHaveLength(1); // Pause only; meter is automatic.
+    expect(html.match(/<button/g)).toHaveLength(2); // Pause and manual verdict.
+    expect(html).toContain('剩余生命 2/3');
     expect(html).not.toContain('5000');
   });
 
@@ -98,14 +99,21 @@ describe('reference hunt UI', () => {
     expect(triggered).toContain('data-triggered="true"');
   });
 
-  it('prompts restocking after the last bomb is spent and keeps jelly meter rules',()=>{
+  it('shows jelly hearts, empty equipment and manual release wording',()=>{
     const state=createCombat(1,'jelly');
     const html=renderToStaticMarkup(<BattleHud combat={state} visualMeter={0} bombCount={0} onPause={()=>{}}/>);
-    expect(html).toContain('商店补充');
+    expect(html).toContain('未携带');
+    expect(html).toContain('装备1');expect(html).toContain('装备2');
+    expect(html).toContain('基础厨刀');expect(html).toContain('剩余生命 3/3');
     expect(html).not.toContain('商店解锁');
     expect(html).not.toContain('icons/tomato.png');
-    expect(html).toContain('蓄满自动裁决');
+    expect(html).toContain('蓄满后点击释放');expect(html).not.toContain('自动裁决');
     state.battle.meter=100;
-    expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('本组结束自动裁决');
+    expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('点击释放裁决');
+  });
+  it('shows the equipped weapon alongside the carried bomb',()=>{
+    const html=renderToStaticMarkup(<BattleHud combat={createCombat()} visualMeter={0} weaponName="玉米斩骨刀" bombCount={2} onPause={()=>{}}/>);
+    expect(html).toContain('装备1：玉米斩骨刀');expect(html).toContain('首刀自动 · ×2');
+    expect(html).not.toContain('未开放');expect(html).not.toContain('果冻快煮器');
   });
 });

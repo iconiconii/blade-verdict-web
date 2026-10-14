@@ -129,7 +129,7 @@ export const useGame=create<GameStore>((set,get)=>{
     },
     tap:input=>set(s=>s.screen==='battle'&&input.battleId===s.battleId&&input.battleId===s.combat.battleId
       ?{combat:tapTarget(s.combat,input.circleId)}:s),
-    releaseVerdict:battleId=>set(s=>s.screen==='battle'&&s.battleId===battleId&&s.combat.battleId===battleId&&s.combat.levelId!==null
+    releaseVerdict:battleId=>set(s=>s.screen==='battle'&&s.battleId===battleId&&s.combat.battleId===battleId
       ?{combat:startVerdict(s.combat)}:s),
     pause:paused=>{
       if(paused&&pendingBomb)pendingBomb.cancelled=true;

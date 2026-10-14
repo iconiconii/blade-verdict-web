@@ -16,11 +16,11 @@
 .hunt-health-well i { display: block; height: 100%; background: #f72133 url('/assets/ui-kit/hunt/hp-fill.webp') center / auto 100%; transition: width .38s ease; }
 .hunt-boss-hud > strong { display: block; margin-top: .5cqw; color: #fff9e3; font-weight: 950; font-size: 3.6cqw; font-variant-numeric: tabular-nums; text-shadow: 0 2px 2px #1b140d; }
 .hunt-charge { position: absolute; z-index: 5; top: 34%; bottom: max(5%, env(safe-area-inset-bottom)); left: .5%; width: 24%; pointer-events: none; }
-.hunt-charge-shaft { position: absolute; left: 14%; right: 49%; top: 0; bottom: 14%; }
+.hunt-charge-shaft { position: absolute; z-index: 0; left: 14%; right: 49%; top: 0; bottom: 14%; }
 .hunt-charge-shaft > img { position: absolute; inset: 0; z-index: 2; object-fit: fill; pointer-events: none; }
 .hunt-charge-well { position: absolute; z-index: 1; top: 6.7%; bottom: 4%; left: 27%; right: 22%; background: #36231b url('/assets/ui-kit/hunt/meter-track.webp') center / 100% 100%; overflow: hidden; border-radius: 6px; display: flex; align-items: flex-end; }
 .hunt-charge-well i { width: 100%; background: #ffe835 url('/assets/ui-kit/hunt/meter-fill.webp') center / 100% 100%; border-radius: 4px; }
-.hunt-charge-medallion { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; }
+.hunt-charge-medallion { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: 22%; }
 .hunt-charge button.hunt-charge-medallion { width: 100%; padding: 0; border: 0; background: transparent; pointer-events: auto; touch-action: manipulation; cursor: pointer; }
 .hunt-charge button.hunt-charge-medallion:disabled { cursor: default; opacity: 1; }
 .hunt-charge button.hunt-charge-medallion:focus-visible { outline: 3px solid #fff2ac; border-radius: 50%; }
@@ -69,3 +69,6 @@
 @media (prefers-reduced-motion: reduce) { .hunt-charge.is-ready, .hunt-charge.is-ready .hunt-charge-medallion { animation: none; } .hunt-charge-ready-burst { animation: none; opacity: .55; } }
 .hunt-item-slot.has-bomb > .gui-item-icon { position: absolute; left: 20%; top: 13%; width: 60%; height: 58%; }
 .hunt-item-slot[data-triggered="true"] > .gui-item-icon { filter: saturate(.5); opacity: .65; }
+.hunt-weapon-icon { position: absolute; left: 20%; top: 13%; width: 60%; height: 58%; display: grid; place-items: center; color: #ffe78c; background: #392820; border-radius: 50%; }
+.hunt-weapon-icon svg { width: 70%; height: 70%; }
+.hunt-equipment-detail { display: block; color: #f1d4a3; text-align: center; font-size: 2.1cqw; line-height: 1.35; white-space: nowrap; text-shadow: 0 1px 3px #000; }

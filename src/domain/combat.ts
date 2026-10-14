@@ -27,8 +27,9 @@ export interface CombatState {
   battleId:string;
   levelId:LevelId|null; enraged:boolean; enragedAt:number|null;
   defeatReason:'hearts'|'verdict-timeout'|null;
-  /** Completed verdict stages, then completed groups/circles in the current stage. */
+  /** Completed stages, then successfully completed groups/circles. Misses are retried. */
   stageIndex:number; stageGroupsResolved:number; stageCirclesResolved:number;
+  retryingGroup:boolean;
   /** Absolute next-group activation deadline; cleared on verdict/death/new activation. */
   nextAttackAt:number|null;
   battle:BattleState; bossKind:BossKind; attack:AttackConfig; phase:BattlePhase;
@@ -85,7 +86,7 @@ export function tempoFor(bossKind:BossKind,successfulParries:number,enraged=fals
 }
 
 const attackAtTempo=(bossKind:BossKind,tempo:CombatTempo,stageIndex=0):AttackConfig=>{
-  const attack={...attackForBoss(bossKind),perfectWindowStart:tempo.perfectWindowStart,perfectWindowEnd:tempo.perfectWindowEnd};
+  const attack={...attackForBoss(bossKind),missDamage:1,perfectWindowStart:tempo.perfectWindowStart,perfectWindowEnd:tempo.perfectWindowEnd};
   const plan=verdictPlanFor(bossKind),stage=plan?.[stageIndex];
   if(!plan||!stage)return attack;
   const upper=Math.round(bossMaxHp(bossKind)*(plan.length-stageIndex)/plan.length);
@@ -98,10 +99,10 @@ const attackAtTempo=(bossKind:BossKind,tempo:CombatTempo,stageIndex=0):AttackCon
 };
 export const createCombat=(seed=7319,bossKind:BossKind='corn',verdictBonusDamage=0,battleId=`${bossKind}-${seed}`,tomatoBombOwned=false):CombatState=>({
   battleId,
-  battle:{...newBattle(bossKind),playerHp:levelForBoss[bossKind]===null?100:vegetableCombatConfig.hearts},bossKind,attack:attackAtTempo(bossKind,tempoFor(bossKind,0)),
+  battle:{...newBattle(bossKind),playerHp:vegetableCombatConfig.hearts},bossKind,attack:attackAtTempo(bossKind,tempoFor(bossKind,0)),
   levelId:levelForBoss[bossKind],enraged:false,enragedAt:null,nextAttackAt:null,
   defeatReason:null,
-  stageIndex:0,stageGroupsResolved:0,stageCirclesResolved:0,
+  stageIndex:0,stageGroupsResolved:0,stageCirclesResolved:0,retryingGroup:false,
   phase:'intro',elapsed:0,time:0,round:0,seed,paused:false,targets:[],combo:0,bestCombo:0,
   successfulParries:0,tempo:tempoFor(bossKind,0),feedback:null,effects:[],feedbackSequence:0,
   hitStopRemainingMs:0,stroke:null,pointerId:null,verdictDamageDealt:0,verdictBombDamage:0,verdictCombo:0,
@@ -118,8 +119,9 @@ export function prepareRound(s:CombatState,startedAt=s.time):CombatState {
   // A completed budget cannot create an extra group, even if a caller retries preparation.
   if(s.levelId!==null&&(!stage||stage.groupsResolved>=stage.groupCount))return s;
   const double=s.levelId===null?tempo.durationMs<1800&&s.round%2===0:s.stageGroupsResolved>=stage!.singleGroups;
-  const count=double?2:1;
-  return {...transition(s,'telegraph',startedAt),tempo,attack:attackAtTempo(s.bossKind,tempo,s.stageIndex),
+  const retries=s.levelId===null?0:s.targets.filter(target=>target.result==='Miss').length;
+  const count=retries||(double?2:1);
+  return {...transition(s,'telegraph',startedAt),tempo,retryingGroup:retries>0,attack:attackAtTempo(s.bossKind,tempo,s.stageIndex),
     feedback:null,stroke:null,fever:false,feverStartedAt:null,
     targets:BlockCircleManager.create({seed:s.seed,round:s.round,bossKind:s.bossKind,count,
       simultaneous:s.levelId!==null,durationMs:tempo.durationMs,maxRadiusPx:tempo.maxRadiusPx})};
@@ -133,19 +135,26 @@ function checkEnrage(s:CombatState):CombatState {
 function resolveLegacyContact(s:CombatState,index:number,result:ParryResult):CombatState {
   const target=s.targets[index];
   const targets=BlockCircleManager.resolve(s.targets,index,result);
+  // Heart loss belongs to the individual circle, not to the relay aggregate.
+  const contactBattle=result==='Miss'?{...s.battle,playerHp:Math.max(0,s.battle.playerHp-1)}:s.battle;
+  if(contactBattle.playerHp<=0){
+    return emit({...transition(s,'impact'),battle:contactBattle,targets,combo:0,defeatReason:'hearts'},
+      {kind:'Miss',circleId:target.circleId,amount:1,energyGain:0,position:target.position,anchorId:target.anchorId,angle:0,hitStopMs:0});
+  }
   if(targets.length>1&&!targets.every(t=>t.resolved)){
-    return emit({...s,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
+    return emit({...s,battle:contactBattle,combo:result==='Miss'?0:s.combo,targets:targets.map((t,i)=>i===index+1?{...t,startDelayMs:s.elapsed+relayDelayMs}:t),
       hitStopRemainingMs:0},
-      {kind:result,circleId:target.circleId,amount:0,energyGain:0,pendingRound:true,position:target.position,
+      {kind:result,circleId:target.circleId,amount:result==='Miss'?1:0,energyGain:0,pendingRound:result!=='Miss',position:target.position,
         contactResult:result,
         anchorId:target.anchorId,angle:index%2?-.65:.65,hitStopMs:result==='Miss'?0:result==='Perfect'?45:25});
   }
   const aggregate=targets.length>1?(targets.some(t=>t.result==='Miss')?'Miss':targets.every(t=>t.result==='Perfect')?'Perfect':'Nice'):result;
-  const battle=applyParry(s.battle,aggregate,s.attack);
+  const battle=aggregate==='Miss'?contactBattle:applyParry(contactBattle,aggregate,s.attack);
   const combo=aggregate==='Miss'?0:s.combo+1;
   const next=emit({...s,battle,targets,combo,bestCombo:Math.max(s.bestCombo,combo),
     successfulParries:s.successfulParries+(aggregate==='Miss'?0:1),hitStopRemainingMs:0,
-  },{kind:aggregate,circleId:target.circleId,amount:aggregate==='Miss'?s.attack.missDamage:aggregate==='Nice'?s.attack.niceCounterDamage:s.attack.perfectCounterDamage,
+  },{kind:aggregate==='Miss'?result:aggregate,circleId:target.circleId,amount:aggregate==='Miss'?(result==='Miss'?1:0):s.battle.bossHp-battle.bossHp,
+    pendingRound:aggregate==='Miss'&&result!=='Miss',
     contactResult:result,
     energyGain:battle.meter-s.battle.meter,position:target.position,anchorId:target.anchorId,angle:index%2?-.65:.65,
     finisher:battle.bossHp===0,hitStopMs:battle.bossHp===0?80:aggregate==='Miss'?0:aggregate==='Perfect'?45:25});
@@ -160,10 +169,10 @@ function resolveContact(s:CombatState,index:number,result:ParryResult):CombatSta
   const target=s.targets[index];
   const targets=BlockCircleManager.resolve(s.targets,index,result);
   const applied=applyParry(s.battle,result,s.attack);
-  const stageCirclesResolved=s.stageCirclesResolved+1;
+  const stageCirclesResolved=s.stageCirclesResolved+(result==='Miss'?0:1);
   const groupComplete=targets.every(t=>t.resolved);
-  const stageGroupsResolved=s.stageGroupsResolved+(groupComplete?1:0);
-  // All resolved circles advance the fixed encounter budget. Miss still damages the player.
+  const stageGroupsResolved=s.stageGroupsResolved+(groupComplete&&targets.every(t=>t.result!=='Miss')?1:0);
+  // Only successful circles advance energy. A failed subset retries this group.
   const battle={...applied,
     bossHp:Math.min(s.battle.bossHp,Math.max(Math.max(1,stageHpBoundary(s)),applied.bossHp)),
     meter:stageCirclesResolved===stage.circleCount?100:100*stageCirclesResolved/stage.circleCount};
@@ -252,7 +261,7 @@ export function tickCombat(s:CombatState,delta:number):CombatState {
       if(next.battle.meter>=100)return transition(next,'verdictReady');
       return prepareRound({...next,round:next.round+1});
     }
-    case 'verdictReady':return next.elapsed>=durations.verdictReady?startVerdict(next):next;
+    case 'verdictReady':return next;
     case 'verdictSlash':return verdictRemainingMs(next)<=0?expireVerdict(next):next;
     default:return next;
   }

@@ -5,16 +5,16 @@ import './battle-hud.css';
 import { ItemIcon } from '../index';
 
 /** Read-only HUD. The battle simulation remains the only source of time/resources. */
-export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, onPause, onRelease }: { combat: CombatState; visualMeter: number; readyPulse?: number; bombCount?: number; onPause: () => void; onRelease?: () => void }) {
+export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, weaponName = '基础厨刀', onPause, onRelease }: { combat: CombatState; visualMeter: number; readyPulse?: number; bombCount?: number; weaponName?: string; onPause: () => void; onRelease?: () => void }) {
   const { battle, bossKind, phase } = combat;
   const maximum = newBattle(bossKind);
   const verdict = phase === 'verdictReady' || phase === 'verdictSlash';
   const ready=battle.meter>=100&&phase!=='verdictSlash'&&phase!=='settle'&&battle.bossHp>0&&battle.playerHp>0;
   return <>
     <header className="hunt-battle-toolbar">
-      {combat.levelId!==null&&<div className="hunt-hearts" role="status" aria-label={`剩余生命 ${battle.playerHp}/3`} data-testid="player-hearts">
+      <div className="hunt-hearts" role="status" aria-label={`剩余生命 ${battle.playerHp}/3`} data-testid="player-hearts">
         {[0,1,2].map(index=><span key={index} className={index<battle.playerHp?'is-full':'is-empty'} aria-hidden="true">♥</span>)}
-      </div>}
+      </div>
       <button type="button" className="hunt-battle-pause" aria-label="暂停战斗" onClick={onPause}><HuntArt name="pause" /></button>
     </header>
     <div className="hunt-boss-hud">
@@ -27,18 +27,21 @@ export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, 
     </div>
     <aside className={`hunt-charge ${verdict ? 'is-verdict' : ''} ${ready ? 'is-ready' : ''}`} data-testid="resource-meter" data-ready={ready}>
       <div className="hunt-charge-shaft" role="progressbar" aria-label={`${bossKindLabel(bossKind).replace('怪','')}裁决储蓄`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={battle.meter}><div className="hunt-charge-well"><i style={{ height: `${Math.max(0, Math.min(100, visualMeter))}%` }} /></div><HuntArt name="meter-shaft" /></div>
-      {combat.levelId===null?<div className="hunt-charge-medallion"><HuntArt name="cut-medallion" /><span>{ready?'就绪':verdict?'裁决中':`${Math.round(visualMeter)}%`}</span></div>:
-        <button type="button" className="hunt-charge-medallion" data-testid="release-verdict" aria-label="释放裁决" disabled={!ready||phase!=='verdictReady'||combat.paused||!onRelease} onClick={onRelease}>
+      <button type="button" className="hunt-charge-medallion" data-testid="release-verdict" aria-label="释放裁决" disabled={!ready||phase!=='verdictReady'||combat.paused||!onRelease} onClick={onRelease}>
           <HuntArt name="cut-medallion" /><span>{ready?'释放':verdict?'裁决中':`${Math.round(visualMeter)}%`}</span>
-        </button>}
+      </button>
       {ready&&readyPulse>0&&<i key={readyPulse} className="hunt-charge-ready-burst" aria-hidden="true" />}
-      <span className="hunt-charge-caption">{verdict && !ready ? '连续切割' : bossKind === 'jelly' ? ready ? '本组结束自动裁决' : '蓄满自动裁决' : ready ? '点击释放裁决' : '蓄满后点击释放'}</span>
+      <span className="hunt-charge-caption">{verdict && !ready ? '连续切割' : ready ? '点击释放裁决' : '蓄满后点击释放'}</span>
     </aside>
     <div className="hunt-item-slots" aria-label="战斗辅具">
+      <div className="hunt-item-slot has-weapon" data-testid="weapon-status" aria-label={`装备1：${weaponName}`}>
+        <HuntArt name="item-socket" /><span className="hunt-weapon-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l8.5-8.5m-3-3L14 4l3 3-4.5 4.5M8 13l3 3m-5 4h4"/></svg></span>
+        <small>装备1</small><span className="hunt-equipment-detail">{weaponName}</span>
+      </div>
       <div className={`hunt-item-slot ${bombCount > 0 || combat.tomatoBombTriggered ? 'has-bomb' : ''}`} data-testid="bomb-status" data-triggered={combat.tomatoBombTriggered} aria-label={`西红柿炸弹：库存 ${bombCount}，${combat.tomatoBombTriggered ? '本次已消耗1个' : bombCount > 0 ? '裁决首刀自动消耗1个' : '前往商店购买或补充'}`}>
         <HuntArt name="item-socket" />{(bombCount > 0 || combat.tomatoBombTriggered) && <ItemIcon name="tomato" size={42} />}
-        <small>{combat.tomatoBombTriggered ? `已用 · 余${bombCount}` : bombCount > 0 ? `首刀自动 · ×${bombCount}` : '商店补充'}</small>
-      </div><div className="hunt-item-slot" aria-label="道具栏 2 尚未开放"><HuntArt name="item-socket" /><small>未开放</small></div>
+        <small>装备2</small><span className="hunt-equipment-detail">{combat.tomatoBombTriggered ? `已用 · 余${bombCount}` : bombCount > 0 ? `首刀自动 · ×${bombCount}` : '未携带'}</span>
+      </div>
     </div>
   </>;
 }

@@ -53,7 +53,7 @@ describe('accessible web combat',()=>{
     expect(tapTarget(s,0).battle.meter).toBe(22);
     expect(tapTarget(tickCombat(s,800),0).battle.meter).toBe(34);
     const missed=tickCombat({...s,battle:{...s.battle,meter:52}},1800);
-    expect(missed.battle).toMatchObject({playerHp:92,meter:52});
+    expect(missed.battle).toMatchObject({playerHp:2,meter:52});
   });
   it('uses deterministic, distinct body anchors',()=>{
     expect(deterministicTarget(7319,0,0,1)).toEqual(deterministicTarget(7319,0,0,1));
@@ -87,23 +87,23 @@ describe('accessible web combat',()=>{
     let missThenPerfect=active('jelly',true);
     missThenPerfect=tickCombat(missThenPerfect,missThenPerfect.targets[0].ringDurationMs);
     missThenPerfect=tapTarget(tickCombat(missThenPerfect,relayDelayMs+800),1);
-    expect(missThenPerfect.feedback).toMatchObject({kind:'Miss',contactResult:'Perfect'});
+    expect(missThenPerfect.feedback).toMatchObject({kind:'Perfect',contactResult:'Perfect',amount:0,energyGain:0,pendingRound:true});
   });
-  it('aggregates a relay miss once after the second ring expires',()=>{
+  it('charges the missed relay circle once when the second ring expires',()=>{
     let s=tapTarget(active('jelly',true),0);
     s=tickCombat(s,relayDelayMs+s.targets[1].ringDurationMs);
-    expect(s.battle).toMatchObject({playerHp:92,bossHp:800,meter:0});
+    expect(s.battle).toMatchObject({playerHp:2,bossHp:800,meter:0});
     expect(s.feedback?.kind).toBe('Miss');
   });
   it('gives the second ring a full window even after the first times out',()=>{
     let s=active('jelly',true);
     s=tickCombat(s,s.targets[0].ringDurationMs);
-    expect(s.battle.playerHp).toBe(100);
+    expect(s.battle.playerHp).toBe(2);
     expect(s.targets[1].startDelayMs).toBe(s.elapsed+relayDelayMs);
     s=tapTarget(tickCombat(s,relayDelayMs),1);
-    expect(s.battle).toMatchObject({playerHp:92,meter:0});
+    expect(s.battle).toMatchObject({playerHp:2,meter:0});
   });
-  it('stops queued rings on full energy and automatically enters verdict once',()=>{
+  it('stops queued rings on full energy and manually enters verdict once',()=>{
     let s=active('jelly');
     s=tapTarget({...s,battle:{...s.battle,meter:90}},0);
     expect(s.phase).toBe('impact');
@@ -113,6 +113,7 @@ describe('accessible web combat',()=>{
     expect(s.battle.meter).toBe(100);
     expect(tickCombat({...s,paused:true},2000).phase).toBe('verdictReady');
     s=tickCombat(s,durations.verdictReady);
+    expect(s.phase).toBe('verdictReady');s=startVerdict(s);
     expect(s.phase).toBe('verdictSlash');
     expect(s.battle).toMatchObject({meter:0,verdictCount:1});
     expect(startVerdict(s)).toBe(s);
@@ -231,7 +232,7 @@ describe('continuous body cutting',()=>{
     }
     expect(s.phase).toBe('settle');
     expect(s.battle.bossHp).toBe(0);
-    expect(s.battle.playerHp).toBe(kind==='corn'?3:100);
+    expect(s.battle.playerHp).toBe(3);
     expect(s.battle.verdictCount).toBeLessThanOrEqual(4);
   });
 });
