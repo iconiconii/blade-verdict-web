@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { applyContinuousCut, createCombat, currentVerdictStage, durations, prepareRound, startVerdict, tapTarget, tickCombat, verdictDurationFor, type CombatState } from './combat';
+import { applyContinuousCut, createCombat, currentVerdictStage, durations, prepareRound, startVerdict, tapTarget, tickCombat, type CombatState } from './combat';
 import { verdictPlanFor } from './levelConfig';
 import { bossMaxHp, type BossKind } from './v2';
 
 // Acceptance values are independent of the production configuration.
 const cases=[
   {kind:'corn',duration:1500,stages:[[5,0]]},
-  {kind:'carrot',duration:1200,stages:[[4,2],[3,3]]},
-  {kind:'cabbage',duration:900,stages:[[2,4],[1,5],[0,6]]},
-  {kind:'tomato',duration:700,stages:[[1,4],[0,5],[0,6],[0,7]]},
+  {kind:'carrot',duration:1100,stages:[[4,2],[3,3]]},
+  {kind:'cabbage',duration:800,stages:[[2,4],[1,5],[0,6]]},
+  {kind:'tomato',duration:600,stages:[[1,4],[0,5],[0,6],[0,7]]},
 ] as const;
 const point={x:.5,y:.5};
-const modes=['Good/full','Perfect/full','Good/empty','mixed/empty'] as const;
+const modes=['Good/full','Perfect/full','mixed/full'] as const;
 type Mode=typeof modes[number];
 type Encounter=typeof cases[number];
 function nextStageFirstGroup(s:CombatState){
@@ -52,7 +52,7 @@ function playEncounter(encounter:Encounter,mode:Mode,seed=7319,bonus=0,bomb=fals
       expect(s.targets.map(target=>target.ringDurationMs)).toEqual(s.targets.map(()=>encounter.duration));
       expect(s.targets.every(target=>target.startDelayMs===0)).toBe(true);
       seenGroups.push(s.targets.length);
-      if(mode==='Perfect/full'||mode==='mixed/empty'){
+      if(mode==='Perfect/full'||mode==='mixed/full'){
         s=tickCombat(s,s.tempo.durationMs*(s.tempo.perfectWindowStart+s.tempo.perfectWindowEnd)/2);
       }
       if(group===0){
@@ -61,12 +61,12 @@ function playEncounter(encounter:Encounter,mode:Mode,seed=7319,bonus=0,bomb=fals
         expect(tapTarget(paused,paused.targets[0].circleId)).toBe(paused);
       }
       const targets=group%2?[...s.targets].reverse():s.targets;
-      const missedId=mode==='mixed/empty'&&group===0?targets[0].circleId:null;
+      const missedId=mode==='mixed/full'&&group===0&&misses<2?targets[0].circleId:null;
       for(const target of targets){
         expect(seenCircles.has(target.circleId)).toBe(false);seenCircles.add(target.circleId);
         if(target.circleId===missedId)continue;
         const before=s;s=tapTarget(s,target.circleId);resolvedCircles++;
-        expect(s.feedback?.kind).toBe(mode==='Good/full'||mode==='Good/empty'?'Nice':'Perfect');
+        expect(s.feedback?.kind).toBe(mode==='Good/full'?'Nice':'Perfect');
         expect(s.feedback?.amount).toBe(before.battle.bossHp-s.battle.bossHp);
         expect(tapTarget(s,target.circleId)).toBe(s);
         if(resolvedCircles<circles)expect(s.battle.meter).toBeLessThan(100);
@@ -94,15 +94,13 @@ function playEncounter(encounter:Encounter,mode:Mode,seed=7319,bonus=0,bomb=fals
     expect(resolvedCircles).toBe(circles);expect(s.battle.meter).toBe(100);
     expect(prepareRound(s)).toBe(s);
     s=tickCombat(s,durations.impact+durations.stagger);expect(s.phase).toBe('verdictReady');
-    s=tickCombat(s,durations.verdictReady);expect(s.phase).toBe('verdictSlash');
+    s=tickCombat(s,60000);expect(s.phase).toBe('verdictReady');
+    expect(s.battle.verdictCount).toBe(stageIndex);
+    const paused={...s,paused:true};expect(startVerdict(paused)).toBe(paused);
+    s=startVerdict(s);expect(s.phase).toBe('verdictSlash');
     expect(s.battle.verdictCount).toBe(stageIndex+1);expect(s.battle.meter).toBe(0);
     expect(startVerdict(s)).toBe(s);expect(s.verdictBombDamage).toBe(0);
-    const before=s;
-    if(mode.endsWith('/empty')){
-      s=tickCombat(s,verdictDurationFor(s));
-      expect(s.feedback?.amount).toBe(before.battle.bossHp-s.battle.bossHp);
-      expect(s.tomatoBombTriggered).toBe(false);
-    }else s=finishCuts(s);
+    s=finishCuts(s);
     const boundary=Math.round(bossMaxHp(encounter.kind)*(encounter.stages.length-stageIndex-1)/encounter.stages.length);
     expect(s.battle.bossHp).toBe(boundary);endHp.push(s.battle.bossHp);
     expect(s.stageIndex).toBe(stageIndex+1);
@@ -113,7 +111,7 @@ function playEncounter(encounter:Encounter,mode:Mode,seed=7319,bonus=0,bomb=fals
   s=tickCombat(s,durations.deathStagger);
   expect(s.phase).toBe('settle');expect(s.battle.bossHp).toBe(0);
   expect(s.battle.verdictCount).toBe(encounter.stages.length);
-  expect(s.battle.playerHp).toBe(100-misses*s.attack.missDamage);
+  expect(s.battle.playerHp).toBe(3-misses);
   expect(observed).toEqual(encounter.stages);
   expect(currentVerdictStage(s)).toBeNull();expect(prepareRound(s)).toBe(s);
   expect(tickCombat(s,60000).battle).toEqual(s.battle);
@@ -127,12 +125,12 @@ describe('every level and every verdict executes the exact encounter table',()=>
     });
     it(encounter.kind+' retains all budgets with the cleaver and bomb equipped',()=>{
       playEncounter(encounter,'Perfect/full',17,8,true);
-      playEncounter(encounter,'Good/empty',18,8,true);
+      playEncounter(encounter,'Good/full',18,8,true);
     });
   }
-  it('never generates a corn double across seeds, success qualities or empty verdicts',()=>{
+  it('never generates a corn double across seeds or success qualities',()=>{
     for(const seed of [0,1,2,7,91,7319,0xffffffff]){
-      expect(playEncounter(cases[0],seed%2?'Perfect/full':'Good/empty',seed).observed).toEqual([[5,0]]);
+      expect(playEncounter(cases[0],seed%2?'Perfect/full':'Good/full',seed).observed).toEqual([[5,0]]);
     }
   });
   it('reproduces anchor positions without changing any stage budget across seeds',()=>{
@@ -151,7 +149,7 @@ describe('every level and every verdict executes the exact encounter table',()=>
   });
   it('keeps early misses in the budget but fails immediately when player HP is exhausted',()=>{
     let s=nextStageFirstGroup(createCombat(1,'carrot'));
-    s={...s,battle:{...s.battle,playerHp:14}};
+    s={...s,battle:{...s.battle,playerHp:1}};
     s=tickCombat(s,s.tempo.durationMs);
     expect(s.stageCirclesResolved).toBe(1);expect(s.battle.meter).toBe(12.5);
     expect(s.battle.playerHp).toBe(0);
@@ -162,7 +160,7 @@ describe('every level and every verdict executes the exact encounter table',()=>
     const previous=playEncounter(cases[3],'Perfect/full').s;
     const fresh=createCombat(previous.seed,previous.bossKind,0,'new-battle');
     expect(fresh).toMatchObject({stageIndex:0,stageGroupsResolved:0,stageCirclesResolved:0,enraged:false,feedback:null,effects:[]});
-    expect(fresh.battle).toMatchObject({meter:0,verdictCount:0,playerHp:100,bossHp:1000});
+    expect(fresh.battle).toMatchObject({meter:0,verdictCount:0,playerHp:3,bossHp:1000});
   });
 });
 
@@ -173,13 +171,13 @@ describe('equipment shortens cuts without skipping verdict stages',()=>{
       stageGroupsResolved:plan.singleGroups+plan.doubleGroups,stageCirclesResolved:plan.singleGroups+2*plan.doubleGroups,
       battle:{...initial.battle,meter:100}});
   }
-  it('makes the corn cleaver and bomb reduce cutting work while preserving one final resolution',()=>{
+  it('applies cleaver and bomb damage once without phantom damage on the last cut',()=>{
     const basic=finishCuts(firstVerdict('corn'));
     const cleaver=finishCuts(firstVerdict('corn',8));
     const bomb=finishCuts(firstVerdict('corn',0,true));
-    expect(basic.verdictCombo).toBe(17);
-    expect(cleaver.verdictCombo).toBe(16);expect(cleaver.verdictDamageDealt).toBe(192);
-    expect(bomb.verdictCombo).toBe(16);expect(bomb.verdictBombDamage).toBe(10);
+    expect(basic.verdictCombo).toBe(8);
+    expect(cleaver.verdictCombo).toBe(8);expect(cleaver.verdictDamageDealt).toBe(792);
+    expect(bomb.verdictCombo).toBe(8);expect(bomb.verdictBombDamage).toBe(10);
     for(const result of [basic,cleaver,bomb]){
       expect(result.battle.verdictCount).toBe(1);expect(result.battle.bossHp).toBe(0);
       expect(result.effects.filter(event=>event.finisher)).toHaveLength(1);

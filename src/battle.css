@@ -133,3 +133,4 @@
 .bomb-fragments i { animation-duration: .5s; animation-delay: 0s; filter: drop-shadow(0 0 5px #ff9c44); --tx: calc((var(--burst-index) - 3) * 24px); --ty: calc(-35px - var(--burst-row,0) * 18px); }
 @keyframes bomb-callout { from { opacity: 0; margin-top: 8px; } 15%,65% { opacity: 1; } to { opacity: 0; margin-top: -20px; } }
 @media (prefers-reduced-motion: reduce) { .bomb-fragments { display: none; } .bomb-feedback > strong { animation: none; } }
+.result-failure-reason { margin: 12px 24px; text-align: center; color: #ffd596; font-size: 14px; line-height: 1.6; }

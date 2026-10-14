@@ -21,7 +21,12 @@
 .hunt-charge-well { position: absolute; z-index: 1; top: 6.7%; bottom: 4%; left: 27%; right: 22%; background: #36231b url('/assets/ui-kit/hunt/meter-track.webp') center / 100% 100%; overflow: hidden; border-radius: 6px; display: flex; align-items: flex-end; }
 .hunt-charge-well i { width: 100%; background: #ffe835 url('/assets/ui-kit/hunt/meter-fill.webp') center / 100% 100%; border-radius: 4px; }
 .hunt-charge-medallion { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; }
-.hunt-charge-medallion span { position: absolute; bottom: 12%; width: 100%; text-align: center; color: #fff8b8; text-shadow: 0 2px #6c2405; font-size: 3.3cqw; font-weight: 900; }
+.hunt-charge button.hunt-charge-medallion { width: 100%; padding: 0; border: 0; background: transparent; pointer-events: auto; touch-action: manipulation; cursor: pointer; }
+.hunt-charge button.hunt-charge-medallion:disabled { cursor: default; opacity: 1; }
+.hunt-charge button.hunt-charge-medallion:focus-visible { outline: 3px solid #fff2ac; border-radius: 50%; }
+.hunt-hearts { margin-right: auto; display: flex; gap: 1.3cqw; padding: 1.5cqw 2cqw; border-radius: 14px; background: #29172cd9; border: 2px solid #c3934b; font-size: 7cqw; line-height: 1; color: #ff5365; text-shadow: 0 2px #6c1624; }
+.hunt-hearts .is-empty { color: #51424b; text-shadow: none; }
+.hunt-charge-medallion span { position: absolute; left: 0; bottom: 12%; width: 100%; text-align: center; color: #fff8b8; text-shadow: 0 2px #6c2405; font-size: 3.3cqw; font-weight: 900; }
 .hunt-charge.is-verdict .hunt-charge-medallion { filter: drop-shadow(0 0 12px #ffc53d); }
 .hunt-charge.is-ready { filter: drop-shadow(0 0 8px #ffe76a) drop-shadow(0 0 18px #ff9f2d); animation: verdict-ready-breathe 1.25s ease-in-out infinite; }
 .hunt-charge.is-ready .hunt-charge-well { box-shadow: 0 0 8px #fff3a6, inset 0 0 8px #ffe94b; }

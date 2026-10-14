@@ -205,7 +205,7 @@ export const SHOP_ITEMS: readonly ShopItemDefinition[] = Object.freeze([
     cost: 120,
     implemented: true,
     verdictDamageBonus: 8,
-    description: '每次裁决结算后追加 8 点伤害',
+    description: '每次蔬菜裁决首刀 +8 伤害；果冻结算时追加',
   },
   {
     id: 'upgrade_tomato_bomb',

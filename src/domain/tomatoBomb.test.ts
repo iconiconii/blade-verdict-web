@@ -53,14 +53,14 @@ describe('tomato bomb eligibility supplied by inventory consumption', () => {
 
   it('resolves bomb, cap and cleaver once before checking enrage or emitting feedback', () => {
     const initial = ready('tomato', 8);
-    const state = { ...initial, verdictDamageDealt: 160, battle: { ...initial.battle, bossHp: 28 } };
+    const state = { ...initial, verdictDamageDealt: 160, battle: { ...initial.battle, bossHp: 50 } };
     const hit = applyContinuousCut(state, point, true);
     expect(hit.battle.bossHp).toBe(0);
     expect(hit.enraged).toBe(false);
     expect(hit.enragedAt).toBeNull();
-    expect(hit.feedback).toMatchObject({ amount: 28, bombDamage: 10, finisher: true, hitStopMs: 80 });
+    expect(hit.feedback).toMatchObject({ amount: 50, bombDamage: 10, weaponDamage:8, finisher: true, hitStopMs: 80 });
     expect(hit.effects).toHaveLength(1);
-    expect(hit.verdictDamageDealt).toBe(170);
+    expect(hit.verdictDamageDealt).toBe(192);
     expect(hit.verdictCombo).toBe(1);
     expect(hit.battle.meter).toBe(0);
   });
@@ -72,7 +72,7 @@ describe('tomato bomb eligibility supplied by inventory consumption', () => {
     expect(hit.feedback).toMatchObject({ amount: 12, finisher: true, hitStopMs: 80 });
     expect(hit.feedback?.bombDamage).toBeUndefined();
     expect(hit.battle.bossHp).toBe(0);
-    expect(hit.verdictDamageDealt).toBe(170);
+    expect(hit.verdictDamageDealt).toBe(175);
   });
 
   it('ignores misses, pauses, expired phases and dead combatants', () => {
@@ -97,10 +97,10 @@ describe('tomato bomb eligibility supplied by inventory consumption', () => {
 
   it('finishes through the bomb without a later enrage or duplicate hit', () => {
     const base = ready('tomato');
-    const state = { ...base, battle: { ...base.battle, bossHp: 18 } };
+    const state = { ...base, battle: { ...base.battle, bossHp: 40 } };
     const hit = applyContinuousCut(state, point, true);
     expect(hit.battle.bossHp).toBe(0);
-    expect(hit.feedback).toMatchObject({ amount: 18, bombDamage: 8, finisher: true, hitStopMs: 80 });
+    expect(hit.feedback).toMatchObject({ amount: 40, bombDamage: 8, finisher: true, hitStopMs: 80 });
     expect(hit.enraged).toBe(false);
     expect(applyContinuousCut(hit, point, true)).toBe(hit);
   });

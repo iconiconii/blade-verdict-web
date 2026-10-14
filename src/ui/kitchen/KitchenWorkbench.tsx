@@ -84,7 +84,6 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
   const [slots, setSlots] = useState(emptyKitchenSlots);
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [picker, setPicker] = useState<IngredientPicker | null>(null);
-  const [settings, setSettings] = useState(false);
   const [recipesOpen, setRecipesOpen] = useState(false);
   const [hint, setHint] = useState('');
   const [now, setNow] = useState(() => Date.now());
@@ -174,7 +173,9 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
       <img className="kitchen-backplate" src={assetUrl('assets/ui-kit/kitchen/kitchen-backplate.png')} alt="" draggable={false} />
       <div className="kitchen-wallet" aria-label={`金币 ${meta.coins}`}><strong>{meta.coins.toLocaleString('zh-CN')}</strong></div>
       <button type="button" className="kitchen-wallet-add kitchen-hotspot" aria-label="前往菜架赚取金币" onClick={() => go('sales')} />
-      <button type="button" className="kitchen-settings kitchen-hotspot" aria-label="厨房设置" onClick={() => setSettings(true)} />
+      <button type="button" className="kitchen-settings kitchen-hotspot kitchen-shelf-entry" aria-label="打开菜架" data-testid="kitchen-shelf-entry" onClick={() => go('sales')}>
+        <svg viewBox="0 0 48 40" aria-hidden="true"><path d="M6 8v27M42 8v27M5 19h38M5 34h38M10 15h10m8 0h10M13 29h22" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/><path d="M10 15a5 5 0 0 1 10 0m8 0a5 5 0 0 1 10 0M14 29a10 10 0 0 1 20 0" fill="currentColor"/></svg><span>菜架</span>
+      </button>
       <h1 className="kitchen-sr-only">厨房</h1>
       <div className="kitchen-time" aria-label={`烹饪时间 ${cookingClock(remaining)}`}><time>{cookingClock(remaining)}</time></div>
       <button type="button" className={`kitchen-recipe-target kitchen-hotspot ${recipe ? 'has-recipe' : ''}`} aria-label={recipe ? `菜谱目标：${recipe.name}，${requirementsLabel(recipe)}` : '菜谱目标：选择菜谱'} onClick={() => setRecipesOpen(true)} disabled={busy}>
@@ -198,7 +199,6 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
         </button>)}
         {pantry.length === 0 && <div className="kitchen-empty-pantry"><p>{cookingJob ? '食材已入锅，去收集下一份吧' : '背包里还没有食材'}</p><GameButton variant="wood" onClick={() => go('stages')}>去探险</GameButton></div>}
       </div>
-      <span className="kitchen-pantry-caption">{pantry.length} 种食材</span>
       {meta.pendingDishes.length > 0 && <button type="button" className="kitchen-sales-link kitchen-hotspot" onClick={() => go('sales')} data-testid="kitchen-sales">菜架 · {meta.pendingDishes.length} 道</button>}
       {(hint || saveIssue) && <div className="kitchen-hint" role="status" onClick={() => setHint('')}>{saveIssue || hint}</div>}
       {cookingJob && !ready && <div className="kitchen-pot-animation" key={cookingJob.id} aria-label="食材正在烹饪">{cookingJob.ingredients.map((item, index) => <span key={index} style={{ '--flight': index } as CSSProperties}><ItemIcon name={ingredientIcon(item.ingredientId)} /></span>)}</div>}
@@ -217,11 +217,6 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
     <GameDialog open={recipesOpen} onClose={() => setRecipesOpen(false)} title="菜谱目标">
       <p>先选择菜谱，再按数量配菜。食材充足即可选择，每锅制作一道料理。</p>
       <KitchenRecipeOptions meta={meta} selectedId={recipe?.id ?? null} onSelect={chooseRecipe} />
-    </GameDialog>
-    <GameDialog open={settings} onClose={() => setSettings(false)} title="厨房" actions={<><GameButton variant="wood" onClick={() => go('restaurant')}>返回餐厅</GameButton><GameButton onClick={() => go('sales')}>查看菜架</GameButton></>}>
-      <p>点菜谱牌选择目标，再选择食材品质与数量。每槽放一种食材，可以混合品质。点已放入的食材可调整或移除。</p>
-      <p>开始时扣除食材并保存任务；烹饪期间可以自由切换页面，刷新后也会继续。料理完成后需领取到菜架。</p>
-      <p>{cookerCount > 0 ? `果冻快煮器库存 ${cookerCount}。下一锅成功开始时自动消耗1个，仅这一锅缩短至 22.5 秒。` : '每锅需要 30 秒。前往商店购买一次性果冻快煮器，可让下一锅缩短至 22.5 秒。'}</p>
     </GameDialog>
     <GameDialog open={result !== null} onClose={() => setResult(null)} title="料理已领取！" actions={<><GameButton variant="wood" onClick={() => setResult(null)}>继续烹饪</GameButton><GameButton onClick={() => { setResult(null); go('sales'); }}>前往菜架</GameButton></>}>
       {result && <div className="kitchen-dish-result" data-testid="cooking-presentation"><span className={`ws-sprite ws-sprite--${dishPresentation(result.dishId).icon}`} /><h2>{dishPresentation(result.dishId).name}</h2><p>{qualityNames[result.quality]} · 售价 {result.sellPrice} 金币</p><p>料理已放入菜架</p></div>}

@@ -3,6 +3,10 @@ import type { SavedWorkshop } from './save';
 import type { BossKind } from './v2';
 
 export const VEGETABLE_BOSS_ORDER: readonly BossKind[] = ['corn', 'carrot', 'cabbage', 'tomato'];
+export function nextBossAfter(boss:BossKind):BossKind|null {
+  const index=VEGETABLE_BOSS_ORDER.indexOf(boss);
+  return index<0?null:VEGETABLE_BOSS_ORDER[index+1]??null;
+}
 export type MonsterProgress = 'locked' | 'available' | 'cleared';
 
 /** Unlocks depend on permanent clear records, never on remaining ingredients. */

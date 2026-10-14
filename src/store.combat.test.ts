@@ -52,5 +52,27 @@ describe('battle input lifecycle',()=>{
     expect(second.battleId).not.toBe(first.battleId);
     expect(second.combat.battleId).toBe(second.battleId);
     expect(second.combat.enraged).toBe(false);
+    expect(second.combat.battle.playerHp).toBe(3);
+  });
+
+  it('guards manual release by battle identity, phase, pause and visibility, and releases once',()=>{
+    const original=useGame.getState().combat;
+    useGame.getState().releaseVerdict('battle-a');expect(useGame.getState().combat).toBe(original);
+    const ready={...original,phase:'verdictReady' as const,stageGroupsResolved:5,stageCirclesResolved:5,battle:{...original.battle,meter:100}};
+    useGame.setState({combat:ready});
+    useGame.getState().releaseVerdict('old-battle');expect(useGame.getState().combat).toBe(ready);
+    useGame.getState().pause(true);const paused=useGame.getState().combat;
+    useGame.getState().releaseVerdict('battle-a');expect(useGame.getState().combat).toBe(paused);
+    useGame.setState({screen:'stages',combat:ready});
+    useGame.getState().releaseVerdict('battle-a');expect(useGame.getState().combat).toBe(ready);
+    useGame.setState({screen:'battle'});useGame.getState().releaseVerdict('battle-a');
+    const released=useGame.getState().combat;
+    expect(released.phase).toBe('verdictSlash');expect(released.battle.verdictCount).toBe(1);
+    expect(released.battle.meter).toBe(0);
+    useGame.getState().releaseVerdict('battle-a');expect(useGame.getState().combat).toBe(released);
+  });
+
+  it('redirects legacy home navigation to chapter selection',()=>{
+    useGame.getState().go('restaurant');expect(useGame.getState().screen).toBe('stages');
   });
 });

@@ -31,22 +31,22 @@ describe('accessible web combat',()=>{
   it.each([0,200,524,1225,1499])('accepts a Good click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Nice');
-    expect(s.battle).toMatchObject({playerHp:100,bossHp:792,meter:20});
+    expect(s.battle).toMatchObject({playerHp:3,bossHp:762,meter:20});
   });
   it.each([525,800,1224])('accepts a Perfect click at %i ms',time=>{
     const s=tapTarget(tickCombat(active(),time),0);
     expect(s.feedback?.kind).toBe('Perfect');
-    expect(s.battle).toMatchObject({playerHp:100,bossHp:788,meter:20});
+    expect(s.battle).toMatchObject({playerHp:3,bossHp:736,meter:20});
   });
   it('resolves each target once, including the exact timeout boundary',()=>{
     const timeout=tickCombat(active(),1500);
-    expect(timeout.battle.playerHp).toBe(88);
+    expect(timeout.battle.playerHp).toBe(2);
     expect(timeout.targets[0]).toMatchObject({resolved:true,result:'Miss'});
     expect(tapTarget(timeout,0)).toBe(timeout);
-    expect(tickCombat(timeout,20).battle.playerHp).toBe(88);
+    expect(tickCombat(timeout,20).battle.playerHp).toBe(2);
     const hit=tapTarget(active(),0);
     expect(tapTarget(hit,0)).toBe(hit);
-    expect(tapTarget(active(),9).battle.playerHp).toBe(100);
+    expect(tapTarget(active(),9).battle.playerHp).toBe(3);
   });
   it('preserves stored energy on Miss and uses monster-specific gains',()=>{
     const s=active('jelly');
@@ -227,11 +227,11 @@ describe('continuous body cutting',()=>{
         s=tapTarget(s,target.targetIndex);
       }else if(s.phase==='verdictSlash'){
         s=applyContinuousCut(s,{x:.5,y:.5},true);
-      }else s=tickCombat(s,1500);
+      }else if(s.phase==='verdictReady')s=startVerdict(s);else s=tickCombat(s,1500);
     }
     expect(s.phase).toBe('settle');
     expect(s.battle.bossHp).toBe(0);
-    expect(s.battle.playerHp).toBe(100);
+    expect(s.battle.playerHp).toBe(kind==='corn'?3:100);
     expect(s.battle.verdictCount).toBeLessThanOrEqual(4);
   });
 });

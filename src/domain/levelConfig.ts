@@ -16,15 +16,19 @@ export interface LevelConfig {
 export const LEVEL_CONFIG:Readonly<Record<LevelId,Readonly<LevelConfig>>> = {
   1:{speedMultiplier:1.2,perfectWindowMultiplier:1.20,attackIntervalMs:1500,
     verdictStages:[{singleGroups:5,doubleGroups:0}]},
-  2:{speedMultiplier:1.5,perfectWindowMultiplier:1.00,attackIntervalMs:1200,
+  2:{speedMultiplier:18/11,perfectWindowMultiplier:1.00,attackIntervalMs:1100,
     verdictStages:[{singleGroups:4,doubleGroups:2},{singleGroups:3,doubleGroups:3}]},
-  3:{speedMultiplier:2,perfectWindowMultiplier:.80,attackIntervalMs:900,
+  3:{speedMultiplier:2.25,perfectWindowMultiplier:.80,attackIntervalMs:800,
     verdictStages:[{singleGroups:2,doubleGroups:4},{singleGroups:1,doubleGroups:5},{singleGroups:0,doubleGroups:6}]},
-  4:{speedMultiplier:18/7,perfectWindowMultiplier:.80,attackIntervalMs:700,
+  4:{speedMultiplier:3,perfectWindowMultiplier:.80,attackIntervalMs:600,
     verdictStages:[{singleGroups:1,doubleGroups:4},{singleGroups:0,doubleGroups:5},{singleGroups:0,doubleGroups:6},{singleGroups:0,doubleGroups:7}]},
 };
 export const levelForBoss:Readonly<Record<BossKind,LevelId|null>>={corn:1,carrot:2,cabbage:3,tomato:4,jelly:null};
 export const vegetableRingBaselineMs=1800;
+// Percentages apply to a stage budget, never the whole boss: every listed
+// circle and verdict remains playable. Perfect earns up to 40% of a segment;
+// Good earns 60% of that per-circle damage. The rest requires actual cuts.
+export const vegetableCombatConfig={hearts:3,parryShare:.4,goodMultiplier:.6,cutsPerSegment:8} as const;
 export const enrageConfig={healthThreshold:.20} as const;
 
 export function verdictPlanFor(bossKind:BossKind):readonly Readonly<VerdictStageConfig>[]|null {

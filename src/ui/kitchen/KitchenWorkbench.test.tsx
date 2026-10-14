@@ -44,7 +44,9 @@ describe('recipe-first kitchen UI', () => {
     const html = renderToStaticMarkup(<KitchenWorkbench meta={meta} cookingJob={null} {...actions} />);
     expect(html).toContain('00:23');
     expect(html).toContain('快煮器 ×2 · 本锅自动消耗1个');
-    expect(html).toContain('下一锅成功开始时自动消耗1个，仅这一锅缩短至 22.5 秒');
+    expect(html).not.toContain('厨房设置');
+    expect(html).toContain('打开菜架');
+    expect(html).not.toContain('种食材');
     expect(html).not.toContain('永久');
   });
 

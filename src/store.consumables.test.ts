@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCombat, tapTarget, tickCombat, type CombatState } from './domain/combat';
+import { createCombat, startVerdict, applyContinuousCut, tapTarget, tickCombat, type CombatState } from './domain/combat';
 import { consumableCount } from './domain/meta';
 import { createSave, decodeSave, encodeSave } from './domain/save';
 import { useGame } from './store';
@@ -20,7 +20,7 @@ function nextVerdict(initial:CombatState):CombatState {
     if(state.phase==='verdictSlash')return state;
     if(state.phase==='targetActive'){
       for(const circle of state.targets)state=tapTarget(state,circle.circleId);
-    }else state=tickCombat(state,50);
+    }else if(state.phase==='verdictReady')state=startVerdict(state);else state=tickCombat(state,50);
   }
   throw new Error('Could not reach the next verdict');
 }
@@ -54,11 +54,13 @@ describe('one-use battle items through the persisted store',()=>{
     await saved();
     expect(consumableCount(decodeSave(disk.value).meta,'upgrade_tomato_bomb')).toBe(1);
     expect(useGame.getState().combat.feedback?.bombDamage).toBe(10);
-    expect(hp-useGame.getState().combat.battle.bossHp).toBe(21);
+    expect(hp-useGame.getState().combat.battle.bossHp).toBe(64);
     cut();
     expect(useGame.getState().combat.feedback?.bombDamage).toBeUndefined();
     expect(consumableCount(useGame.getState().meta,'upgrade_tomato_bomb')).toBe(1);
-    const next=nextVerdict(tickCombat(useGame.getState().combat,10_000));
+    let completed=useGame.getState().combat;
+    for(let i=0;i<10&&completed.phase==='verdictSlash';i++)completed=applyContinuousCut(completed,{x:.5,y:.5},true);
+    const next=nextVerdict(completed);
     expect(next.battle.verdictCount).toBe(2);
     useGame.setState({combat:next});
     useGame.getState().beginStroke(7,{x:.5,y:.5,time:next.time});
@@ -118,7 +120,7 @@ describe('one-use battle items through the persisted store',()=>{
     await useGame.getState().buyItem('upgrade_tomato_bomb');enterVerdict();
     const hp=useGame.getState().combat.battle.bossHp;
     disk.fail=true;cut();await saved();
-    expect(hp-useGame.getState().combat.battle.bossHp).toBe(11);
+    expect(hp-useGame.getState().combat.battle.bossHp).toBe(54);
     expect(useGame.getState().combat.feedback?.bombDamage).toBeUndefined();
     expect(consumableCount(decodeSave(disk.value).meta,'upgrade_tomato_bomb')).toBe(1);
     cut();
@@ -132,7 +134,7 @@ describe('one-use battle items through the persisted store',()=>{
     disk.value=encodeSave(otherTab);
     const hp=useGame.getState().combat.battle.bossHp;
     cut();await saved();
-    expect(hp-useGame.getState().combat.battle.bossHp).toBe(11);
+    expect(hp-useGame.getState().combat.battle.bossHp).toBe(54);
     expect(useGame.getState().combat.feedback?.bombDamage).toBeUndefined();
     expect(consumableCount(useGame.getState().meta,'upgrade_tomato_bomb')).toBe(0);
   });

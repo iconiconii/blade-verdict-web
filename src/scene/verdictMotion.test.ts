@@ -112,6 +112,7 @@ describe.each(['corn','jelly'] as const)('%s verdict animation',kind=>{
     g.update(s);
     const mouth=g.root.getObjectByName(`${kind}-pain-mouth`);
     expect(mouth).toBeDefined();expect(mouth?.visible).toBe(true);
+    if(kind==='corn')for(let i=0;i<8;i++)s=applyContinuousCut(s,{x:.5,y:.5},true);
     s=tickCombat(s,durations.verdict);g.update(s);
     if(kind==='corn'){
       expect(s.battle.bossHp).toBe(0);
@@ -127,7 +128,7 @@ describe.each(['corn','jelly'] as const)('%s verdict animation',kind=>{
   it('keeps geometry finite and positive through maximum cuts, recovery and death',()=>{
     const g=actor(kind);let s=startVerdict(ready(kind));
     for(let i=0;i<17;i++)s=applyContinuousCut(s,{x:.5,y:.5},true,i%2?Math.PI:0);
-    expect(s.verdictDamageDealt).toBe(200);expect(s.phase).toBe('stagger');
+    expect(s.verdictDamageDealt).toBe(kind==='corn'?800:200);expect(s.phase).toBe('stagger');
     for(const elapsed of [0,50,150,299]){
       g.update({...s,elapsed,time:s.time+elapsed});
       expect(pose(g).every(Number.isFinite)).toBe(true);

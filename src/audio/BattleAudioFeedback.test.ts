@@ -23,7 +23,8 @@ describe('audio-only verdict endings',()=>{
     const before=structuredClone(s);
     expect(observer.update(s)).toBe(false);
     const ended=tickCombat(s,verdictDurationFor(s));
-    expect(observer.update(ended)).toBe(true);
+    expect(observer.update(ended)).toBe(kind==='jelly');
+    if(kind!=='jelly'){expect(ended.phase).toBe('settle');expect(ended.battle.bossHp).toBe(s.battle.bossHp);}
     expect(observer.update(ended)).toBe(false);
     expect(observer.update(tickCombat(ended,durations.deathStagger))).toBe(false);
     expect(s).toEqual(before);

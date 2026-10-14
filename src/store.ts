@@ -8,7 +8,7 @@ import { createSave, settleBattle, type SavedWorkshop } from './domain/save';
 import { beginCooking, claimCooking as claimCookingJob } from './domain/cookingJobs';
 import { canChallengeBoss } from './domain/progression';
 import { readWorkshopSave, updateWorkshopSave } from './persistence';
-import { applyContinuousCut, createCombat, tapTarget, tickCombat, type CombatState } from './domain/combat';
+import { applyContinuousCut, createCombat, startVerdict, tapTarget, tickCombat, type CombatState } from './domain/combat';
 import type { BossKind } from './domain/v2';
 
 // Bound input history even though the renderer no longer draws a pointer line.
@@ -29,6 +29,7 @@ interface GameStore {
   notice:Notice|null; saving:boolean; saveIssue:string|null; battleId:string|null; pendingBattle:PendingBattle|null;
   go:(screen:Screen)=>void; start:(bossKind?:BossKind)=>void; advance:(delta:number)=>void;
   tap:(input:CircleInput)=>void; pause:(paused:boolean)=>void;
+  releaseVerdict:(battleId:string)=>void;
   beginStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void; moveStroke:(pointerId:number,point:{x:number;y:number;time:number})=>void;
   cut:(pointerId:number,point:{x:number;y:number},insideMonster:boolean,angle?:number)=>void; endStroke:(pointerId:number)=>void; cancelStroke:()=>void; dismissTutorial:()=>void;
   startCooking:(recipeId:string,selected:IngredientSelection[])=>Promise<boolean>; claimCooking:(jobId:string)=>Promise<boolean>;
@@ -88,7 +89,7 @@ export const useGame=create<GameStore>((set,get)=>{
     return transact(save=>({...save,meta:mutate(save.meta)}),message);
   };
   return {
-    screen:'restaurant',combat:createCombat(),save:loaded.save,meta:loaded.save.meta,tutorialSeen:loaded.save.tutorialSeen,
+    screen:'stages',combat:createCombat(),save:loaded.save,meta:loaded.save.meta,tutorialSeen:loaded.save.tutorialSeen,
     notice:null,saving:false,saveIssue:loaded.issue,battleId:null,pendingBattle:null,
     refreshSave:()=>{
       if(get().saving)return;
@@ -99,7 +100,7 @@ export const useGame=create<GameStore>((set,get)=>{
     go:screen=>{
       if(get().pendingBattle){set({notice:{kind:'error',message:'请先重试保存本场战利品，避免遗失。'}});return}
       if(screen!=='battle'&&pendingBomb)pendingBomb.cancelled=true;
-      get().refreshSave();set({screen,notice:null});
+      get().refreshSave();set({screen:screen==='restaurant'?'stages':screen,notice:null});
     },
     start:(bossKind='corn')=>{
       if(get().saving||get().pendingBattle)return;
@@ -128,6 +129,8 @@ export const useGame=create<GameStore>((set,get)=>{
     },
     tap:input=>set(s=>s.screen==='battle'&&input.battleId===s.battleId&&input.battleId===s.combat.battleId
       ?{combat:tapTarget(s.combat,input.circleId)}:s),
+    releaseVerdict:battleId=>set(s=>s.screen==='battle'&&s.battleId===battleId&&s.combat.battleId===battleId&&s.combat.levelId!==null
+      ?{combat:startVerdict(s.combat)}:s),
     pause:paused=>{
       if(paused&&pendingBomb)pendingBomb.cancelled=true;
       set(s=>({combat:{...s.combat,paused,pointerId:null,stroke:s.combat.phase==='verdictSlash'?null:s.combat.stroke}}));

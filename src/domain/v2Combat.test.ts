@@ -71,14 +71,14 @@ describe('simultaneous independent circles',()=>{
     let s=tickCombat(active(),perfectTime(active()));
     s=tapTarget(s,s.targets[order[0]].circleId);
     expect(s.phase).toBe('targetActive');
-    expect(s.battle).toMatchObject({bossHp:847,meter:62.5,playerHp:100});
+    expect(s.battle).toMatchObject({bossHp:839,meter:62.5,playerHp:3});
     expect(s.combo).toBe(1);
-    expect(s.feedback).toMatchObject({kind:'Perfect',amount:13,energyGain:12.5,hitStopMs:80});
+    expect(s.feedback).toMatchObject({kind:'Perfect',amount:21,energyGain:12.5,hitStopMs:80});
     expect(s.feedback?.pendingRound).toBeUndefined();
     expect(s.feedback?.contactResult).toBeUndefined();
     s=tapTarget(s,s.targets[order[1]].circleId);
     expect(s.phase).toBe('impact');
-    expect(s.battle).toMatchObject({bossHp:834,meter:75,playerHp:100});
+    expect(s.battle).toMatchObject({bossHp:818,meter:75,playerHp:3});
     expect(s.combo).toBe(2);expect(s.successfulParries).toBe(2);
     expect(s.effects.map(event=>event.circleId)).toEqual(order.map(index=>s.targets[index].circleId));
     expect(s.effects.map(event=>event.id)).toEqual([1,2]);
@@ -86,17 +86,17 @@ describe('simultaneous independent circles',()=>{
   it('keeps Perfect damage when the other circle misses and advances both resolved circles',()=>{
     let s=active();s=tickCombat(s,perfectTime(s));s=tapTarget(s,s.targets[0].circleId);
     s=tickCombat(s,s.tempo.durationMs-s.elapsed);
-    expect(s.battle).toMatchObject({bossHp:847,playerHp:86,meter:75});
+    expect(s.battle).toMatchObject({bossHp:839,playerHp:2,meter:75});
     expect(s.combo).toBe(0);expect(s.bestCombo).toBe(1);
-    expect(s.feedback).toMatchObject({kind:'Miss',amount:14,energyGain:12.5,hitStopMs:0});
+    expect(s.feedback).toMatchObject({kind:'Miss',amount:1,energyGain:12.5,hitStopMs:0});
   });
   it('settles both expirations in target order in one update and never repeats damage',()=>{
     const s=active(),next=tickCombat(s,s.tempo.durationMs);
-    expect(next.battle.playerHp).toBe(72);expect(next.battle.meter).toBe(75);
+    expect(next.battle.playerHp).toBe(1);expect(next.battle.meter).toBe(75);
     expect(next.targets.every(target=>target.result==='Miss')).toBe(true);
     expect(next.effects.map(event=>event.circleId)).toEqual(s.targets.map(target=>target.circleId));
     expect(next.effects.map(event=>event.time)).toEqual([next.time,next.time]);
-    expect(tickCombat(next,1).battle.playerHp).toBe(72);
+    expect(tickCombat(next,1).battle.playerHp).toBe(1);
     expect(tapTarget(next,s.targets[0].circleId)).toBe(next);
   });
   it('does not repeat hits or accept stale circles or paused input',()=>{
@@ -111,7 +111,7 @@ describe('simultaneous independent circles',()=>{
   it('treats a tap at the exact deadline as one Miss',()=>{
     const s=active('corn',1),atDeadline={...s,time:s.time+s.tempo.durationMs,elapsed:s.tempo.durationMs};
     const result=tapTarget(atDeadline,s.targets[0].circleId);
-    expect(result.feedback?.kind).toBe('Miss');expect(result.battle.playerHp).toBe(88);
+    expect(result.feedback?.kind).toBe('Miss');expect(result.battle.playerHp).toBe(2);
     expect(tapTarget(result,s.targets[0].circleId)).toBe(result);
   });
   it('waits for the last circle of the final group before filling energy and starting one verdict',()=>{
@@ -124,7 +124,7 @@ describe('simultaneous independent circles',()=>{
     expect(s.battle.meter).toBe(100);expect(s.feedback?.energyGain).toBe(12.5);
     s=tickCombat(s,durations.impact+durations.stagger);
     expect(s.phase).toBe('verdictReady');
-    s=tickCombat(s,durations.verdictReady);
+    s=tickCombat(s,durations.verdictReady);expect(s.phase).toBe('verdictReady');s=startVerdict(s);
     expect(s.phase).toBe('verdictSlash');expect(s.battle.verdictCount).toBe(1);
     expect(s.battle.meter).toBe(0);expect(startVerdict(s)).toBe(s);
   });
@@ -146,12 +146,12 @@ describe('simultaneous independent circles',()=>{
   });
   it('stops pending expiry damage when the player dies even when the stage could fill energy',()=>{
     let s=active();s=resolveAll(s);s=tickCombat(s,s.tempo.attackIntervalMs);
-    s=tapTarget(s,s.targets[0].circleId);s={...s,battle:{...s.battle,playerHp:14}};
+    s=tapTarget(s,s.targets[0].circleId);s={...s,battle:{...s.battle,playerHp:1}};
     s=tickCombat(s,s.tempo.durationMs);
     expect(s.battle.playerHp).toBe(0);expect(s.battle.meter).toBe(100);
     s=tickCombat(s,durations.impact+durations.stagger);
     expect(s.phase).toBe('settle');expect(s.battle.verdictCount).toBe(0);
-    let first=active();first={...first,battle:{...first.battle,playerHp:14}};
+    let first=active();first={...first,battle:{...first.battle,playerHp:1}};
     first=tickCombat(first,first.tempo.durationMs);
     expect(first.effects).toHaveLength(1);expect(first.targets[1].resolved).toBe(false);
   });
@@ -169,13 +169,13 @@ describe('absolute group timing',()=>{
   it('does not add frame overshoot to each intermediate presentation stage',()=>{
     let s=resolveAll(active('carrot'));const settledAt=s.time;
     s=tickCombat(s,350);expect(s.phase).toBe('stagger');expect(s.elapsed).toBe(70);
-    s=tickCombat(s,500);expect(s.phase).toBe('telegraph');expect(s.elapsed).toBe(30);
-    s=tickCombat(s,350);expect(s.phase).toBe('targetActive');expect(s.time-settledAt).toBe(1200);
+    s=tickCombat(s,500);expect(s.phase).toBe('telegraph');expect(s.elapsed).toBe(130);
+    s=tickCombat(s,250);expect(s.phase).toBe('targetActive');expect(s.time-settledAt).toBe(1100);
   });
   it('creates one fresh group after a slow frame instead of replaying expired groups',()=>{
     const s=resolveAll(active()),round=s.round,next=tickCombat(s,60000);
     expect(next.phase).toBe('targetActive');expect(next.round).toBe(round+1);
-    expect(next.battle.playerHp).toBe(100);expect(next.targets.every(target=>!target.resolved&&target.ringElapsedMs===0)).toBe(true);
+    expect(next.battle.playerHp).toBe(3);expect(next.targets.every(target=>!target.resolved&&target.ringElapsedMs===0)).toBe(true);
   });
 });
 

@@ -12,6 +12,9 @@
 .kitchen-wallet strong { font-size: 4.35cqw; line-height: 1; color: #fff9e4; font-variant-numeric: tabular-nums; text-shadow: 0 2px 2px #210b00; }
 .kitchen-scene .kitchen-wallet-add { left: 32.8%; top: max(3.5%, env(safe-area-inset-top)); width: 7.5%; height: 4.3%; }
 .kitchen-scene .kitchen-settings { left: 83.8%; top: max(2.65%, env(safe-area-inset-top)); width: 12%; height: 6.3%; }
+.kitchen-scene .kitchen-shelf-entry { background: #60341c; border: 2px solid #e0ac61; border-radius: 12px; box-shadow: 0 2px 4px #2b170e; color: #ffdfa0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.kitchen-shelf-entry svg { width: 75%; height: 60%; }
+.kitchen-shelf-entry span { font-size: clamp(10px, 2.6cqw, 14px); font-weight: 900; line-height: 1; }
 .kitchen-time { position: absolute; left: 46.2%; top: 16.6%; width: 17%; height: 3.8%; display: grid; place-items: center; }
 .kitchen-time time { color: #321000; font-size: 5.55cqw; font-weight: 950; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -.03em; }
 .kitchen-scene .kitchen-recipe-target { top: 31.7%; left: 79.7%; width: 17%; height: 7.7%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #542f0f; }
