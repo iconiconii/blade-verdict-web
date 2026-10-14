@@ -69,7 +69,8 @@
 .monster-progress--available { background: #477d15; border-color: #bada4c; }
 .monster-progress--cleared { background: #398014; border-color: #bada4c; }
 .hunt-preview-card { width: 60%; height: 100%; max-width: 240px; margin: auto; position: relative; }
-.hunt-preview-card > img { object-fit: fill; }
+/* Card assets include a bottom name strip; the large preview uses the live heading below. */
+.hunt-preview-card > img { object-fit: fill; clip-path: inset(0 0 21% 0); }
 .hunt-progress-label { display: inline-flex; position: relative; align-items: center; gap: 7px; margin: 0; padding: 4px 12px; border-radius: 9px; background: #3d661a; color: #fff8d0; font-size: 3.5cqw; }
 .hunt-progress-label .monster-progress { position: static; width: 24px; height: 24px; border: 0; box-shadow: none; }
 .hunt-progress-label--locked { background: #503019; }

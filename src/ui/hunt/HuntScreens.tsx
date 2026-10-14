@@ -67,7 +67,7 @@ export function HuntScreens() {
         <div className={`hunt-monster-display ${selection !== 'corn' && selection !== 'jelly' ? 'is-preview' : ''}`}>
           {selection === 'corn' || selection === 'jelly'
             ? <HuntArt name={selection === 'corn' ? 'corn-portrait' : 'jelly-portrait'} className="hunt-monster-portrait" alt={name} />
-            : <div className="hunt-preview-card"><HuntArt name={`card-${selection}`} alt={name} /><MonsterProgressBadge progress={progress} /></div>}
+            : <div className="hunt-preview-card"><img src={assetUrl(`assets/ui-kit/hunt/preview-${selection}.png`)} alt={name} draggable={false} /></div>}
           <Arrows onPrevious={() => browseMonster(-1)} onNext={() => browseMonster(1)} />
         </div>
         <div className="hunt-monster-status"><h2>{name}</h2><p className={`hunt-progress-label hunt-progress-label--${progress}`}><MonsterProgressBadge progress={progress} />{monsterProgressLabel[progress]}</p>{!playable && <small>通关前一只怪物后解锁</small>}</div>
