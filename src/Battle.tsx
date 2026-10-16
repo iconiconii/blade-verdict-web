@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { BattleScene } from './BattleScene';
+import type { BattleScene } from './BattleScene';
+import { SpriteBattleScene } from './SpriteBattleScene';
 import { currentVerdictStage, durations, verdictDurationFor, verdictRemainingMs, type CombatFeedback } from './domain/combat';
 import { consumableCount, SHOP_ITEMS } from './domain/meta';
 import { bodyAnchorLabel, bossIngredientIcon, ingredientBurstFor, type BossKind, type VerdictPoint } from './domain/v2';
@@ -14,6 +15,7 @@ import { SwingAudioTracker, VerdictEndAudioTracker } from './audio/BattleAudioFe
 import { createBattleAudio, duckMusic } from './audio/GameAudio';
 import { FeedbackManager, type FeedbackSnapshot } from './feedback/FeedbackManager';
 import { CircleFeedback } from './ui/hunt/CircleFeedback';
+import { battleVisualMode } from './scene/sprites/battleVisualMode';
 
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
 const battleIcon=(bossKind:BossKind):ItemIconName=>bossIngredientIcon(bossKind);
@@ -34,7 +36,8 @@ function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|nul
 
 export function Battle(){
   const host=useRef<HTMLDivElement>(null),stage=useRef<HTMLDivElement>(null);
-  const scene=useRef<BattleScene|null>(null),clock=useRef(0),points=useRef<VerdictPoint[]>([]),lastAccepted=useRef<VerdictPoint|null>(null);
+  const scene=useRef<BattleScene|SpriteBattleScene|null>(null),clock=useRef(0),points=useRef<VerdictPoint[]>([]),lastAccepted=useRef<VerdictPoint|null>(null);
+  const capturedPointer=useRef<number|null>(null);
   const targetButtons=useRef(new Map<number,HTMLButtonElement>());
   const [size,setSize]=useState({width:1,height:1});
   const [ready,setReady]=useState(false),readyRef=useRef(false);
@@ -52,7 +55,14 @@ export function Battle(){
   const nextTarget=targets.find(target=>!target.resolved);
   const feedbackOrigin=(event:CombatFeedback)=>event.anchorId?scene.current?.getBodyAnchorLayout(event.anchorId)??null:{x:event.position.x*size.width,y:event.position.y*size.height};
   const unlockAudio=()=>{void audio.current?.unlock()};
-  const stopFeedback=()=>{audio.current?.stopAll();swingAudio.current.cancel();vibrate(0)};
+  const clearStrokeInput=(pointerId=capturedPointer.current)=>{
+    if(pointerId===null||capturedPointer.current!==pointerId)return;
+    capturedPointer.current=null;points.current=[];lastAccepted.current=null;
+    swingAudio.current.cancel();
+    const element=stage.current;
+    if(element?.hasPointerCapture(pointerId))element.releasePointerCapture(pointerId);
+  };
+  const stopFeedback=()=>{audio.current?.stopAll();clearStrokeInput();swingAudio.current.cancel();vibrate(0)};
   const pauseBattle=()=>{stopFeedback();useGame.getState().pause(true)};
   const positionTarget=(index:number,button:HTMLButtonElement)=>{
     const layout=scene.current?.getTargetLayout(index);
@@ -81,10 +91,29 @@ export function Battle(){
       }
     });
     const error=()=>{if(alive){failedRef.current=true;setFailed(true)}};
-    try{scene.current=new BattleScene(host.current!,error,()=>{if(alive){readyRef.current=true;setReady(true);clock.current=performance.now()}},bossKind)}catch{error()}
+    const sceneReady=()=>{if(alive){readyRef.current=true;setReady(true);clock.current=performance.now()}};
+    const setupScene=async()=>{
+      if(battleVisualMode(bossKind)==='three'){
+        // Tomato has no replacement action frames yet; load its Three scene
+        // only for that battle. Other monsters never download the 3D rig.
+        const {BattleScene}=await import('./BattleScene');
+        if(alive)scene.current=new BattleScene(host.current!,error,sceneReady,bossKind);
+      }else scene.current=new SpriteBattleScene(host.current!,error,sceneReady,bossKind);
+    };
+    void setupScene().catch(error);
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-    const loop=()=>{if(!alive)return;advanceNow();if(!failedRef.current){scene.current?.render(useGame.getState().combat,reduced.matches);targetButtons.current.forEach((button,index)=>positionTarget(index,button))}frame=requestAnimationFrame(loop)};
-    const resize=()=>{const rect=stage.current!.getBoundingClientRect();setSize({width:rect.width,height:rect.height});scene.current?.resize();swingAudio.current.cancel();useGame.getState().cancelStroke()};
+    const loop=()=>{
+      if(!alive)return;
+      frame=requestAnimationFrame(loop);
+      try{
+        advanceNow();
+        if(!failedRef.current){
+          scene.current?.render(useGame.getState().combat,reduced.matches);
+          targetButtons.current.forEach((button,index)=>positionTarget(index,button));
+        }
+      }catch(cause){console.error('Battle frame failed',cause);error()}
+    };
+    const resize=()=>{const rect=stage.current!.getBoundingClientRect();setSize({width:rect.width,height:rect.height});scene.current?.resize();clearStrokeInput();swingAudio.current.cancel();useGame.getState().cancelStroke()};
     const observer=new ResizeObserver(resize);observer.observe(stage.current!);resize();
     const visibility=()=>{clock.current=performance.now();if(document.hidden)pauseBattle()};
     const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){if(useGame.getState().combat.paused){unlockAudio();clock.current=performance.now();useGame.getState().pause(false)}else pauseBattle()}};
@@ -107,6 +136,9 @@ export function Battle(){
     }
     lastReadyPulse.current=next.readyPulse;
   },[combat]);
+  // The final cut can end the verdict before pointerup arrives. DOM capture
+  // belongs to this gesture, independently of the already-reset combat pointer.
+  useEffect(()=>{if(phase!=='verdictSlash'||paused)clearStrokeInput()},[phase,paused]);
   useEffect(()=>{if(paused)stopFeedback()},[paused]);
   const tapAt=(clientX:number,clientY:number)=>{
     const rect=stage.current?.getBoundingClientRect();if(!rect)return;
@@ -118,7 +150,7 @@ export function Battle(){
     advanceNow();if(event.button!==0||useGame.getState().combat.paused)return;
     if(useGame.getState().combat.phase==='targetActive'){tapAt(event.clientX,event.clientY);return}
     if(useGame.getState().combat.phase!=='verdictSlash'||useGame.getState().combat.pointerId!==null)return;
-    const first=point(event);event.currentTarget.setPointerCapture(event.pointerId);points.current=[first];lastAccepted.current=first;useGame.getState().beginStroke(event.pointerId,first);
+    const first=point(event);event.currentTarget.setPointerCapture(event.pointerId);capturedPointer.current=event.pointerId;points.current=[first];lastAccepted.current=first;useGame.getState().beginStroke(event.pointerId,first);
     swingAudio.current.begin(event.pointerId,useGame.getState().combat);
   };
   const move=(event:ReactPointerEvent<HTMLDivElement>)=>{
@@ -136,18 +168,24 @@ export function Battle(){
     }
   };
   const end=(event:ReactPointerEvent<HTMLDivElement>)=>{
-    advanceNow();if(useGame.getState().combat.pointerId!==event.pointerId)return;
-    move(event);useGame.getState().endStroke(event.pointerId);
-    if(swingAudio.current.finish(event.pointerId,useGame.getState().combat,document.hidden))audio.current?.playCue('SwingMiss');
-    if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+    advanceNow();
+    if(useGame.getState().combat.pointerId===event.pointerId){
+      move(event);useGame.getState().endStroke(event.pointerId);
+      if(swingAudio.current.finish(event.pointerId,useGame.getState().combat,document.hidden))audio.current?.playCue('SwingMiss');
+    }
+    clearStrokeInput(event.pointerId);
+  };
+  const cancelPointer=(pointerId:number)=>{
+    if(useGame.getState().combat.pointerId===pointerId)useGame.getState().cancelStroke();
+    clearStrokeInput(pointerId);
   };
   const inVerdict=phase==='verdictReady'||phase==='verdictSlash';
   const phaseHint=verdictStage
     ? `裁决 ${verdictStage.number}/${verdictStage.total} · ${inVerdict?(phase==='verdictReady'?'点击左下角释放裁决':'连续划过怪物'):`招架组 ${verdictStage.groupsResolved}/${verdictStage.groupCount}${combat.retryingGroup?' · 补漏':''}${targets.length===2&&phase==='targetActive'?` · 双圈 ${resolvedTargets}/2`:''}`}`
     : inVerdict?(phase==='verdictReady'?'点击左下角释放裁决':'连续划过怪物'):bossKind==='jelly'&&targets.length===2?`依次招架 ${resolvedTargets}/${targets.length}`:'';
   const showFeedback=Boolean(feedback&&combat.time-feedback.time<650);
-  return <section className={`battle battle--storybook battle--${phase} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused}>
-    <div className="battle-stage" ref={stage} onPointerDownCapture={unlockAudio} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={event=>{if(event.pointerId===useGame.getState().combat.pointerId){swingAudio.current.cancel();useGame.getState().cancelStroke()}}} onLostPointerCapture={event=>{if(event.pointerId===useGame.getState().combat.pointerId){swingAudio.current.cancel();useGame.getState().cancelStroke()}}}>
+  return <section className={`battle battle--storybook battle--${phase} ${feedback?.finisher&&showFeedback?'battle--finisher':''}`} data-testid="battle" data-battle-phase={phase} data-paused={paused} data-visual-mode={battleVisualMode(bossKind)}>
+    <div className="battle-stage" ref={stage} onPointerDownCapture={unlockAudio} onPointerDown={begin} onPointerMove={move} onPointerUp={end} onPointerCancel={event=>cancelPointer(event.pointerId)} onLostPointerCapture={event=>cancelPointer(event.pointerId)}>
       <div ref={host} className="canvas" aria-hidden="true"/>
       <div className="battle-vignette"/>
       {showReadyCallout&&<div key={presentation.readyPulse} className="verdict-ready-callout" role="status" aria-live="polite"><strong>裁决就绪</strong><span>点击左下角释放</span></div>}
@@ -180,6 +218,6 @@ export function Battle(){
     {showFeedback&&feedback&&(feedback.kind==='Cut'||feedback.kind==='Verdict')&&<div className={`hit-feedback hit-feedback--${feedback.kind} ${feedback.finisher?'hit-feedback--finisher':''}`} key={feedback.id} role="status" aria-live="polite"><strong>{feedback.finisher?'FINISH':feedback.kind==='Cut'?'CUT':feedback.score===100?'PERFECT VERDICT':'VERDICT'}</strong><span>{feedback.kind==='Cut'?(feedback.finisher?'击杀确认 · 怪物崩解':`主体切割 · Combo ×${combat.verdictCombo}`):`${feedback.score} 分 · 切割完成`} <b>−{feedback.amount}</b></span></div>}
     {inVerdict&&<div className={`verdict-heading ${combat.fever?'verdict-heading--fever':''}`}><small>{combat.fever?'FEVER':'BREAK'}</small><h2>{phase==='verdictReady'?'裁决就绪':'切！'}</h2>{phase==='verdictSlash'&&<div className="verdict-clock"><i style={{width:`${verdictRemainingMs(combat)/verdictDurationFor(combat)*100}%`}}/><span>{(verdictRemainingMs(combat)/1000).toFixed(1)}s · Combo ×{combat.verdictCombo}</span></div>}</div>}
 
-    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>资源或 WebGL 暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>本场光环寿命约 {(combat.tempo.durationMs/1000).toFixed(2)} 秒。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>{bossKind==='jelly'?'双圈请依次点击。':bossKind==='corn'?'本关只有单圈。':'双圈同时出现，可按任意顺序分别点击。'}<br/>{verdictStage?`本关共 ${verdictStage.total} 次裁决。漏点一圈失去一颗爱心、不蓄能，并补出漏圈；三次漏点失败。蓄满后点击左下角释放裁决；限时内完成切割，否则挑战失败。`:'每漏一个圈扣一颗爱心，三次漏点失败。MISS 不蓄能。蓄满后点击左下角释放裁决。'}</p></>}{ready&&!failed&&<GameButton autoFocus variant="gold" onClick={()=>{unlockAudio();clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</GameButton>}{(paused||failed)&&<GameButton variant="wood" onClick={()=>useGame.getState().go('stages')}>退出讨伐</GameButton>}</div></div>}
+    {(!ready||!tutorialSeen||paused||failed)&&<div className="battle-modal-backdrop"><div className="battle-modal" role="dialog" aria-modal="true" aria-labelledby="battle-dialog-title"><small>BLADE VERDICT</small><h2 id="battle-dialog-title">{failed?'场景加载失败':!ready?'正在进入农场…':paused?'战斗已暂停':'先认识你的节拍'}</h2>{failed?<p>怪物动作资源或场景暂不可用。你的本场战斗已经停止计时。</p>:!ready?<p>准备怪物、场景和刀光</p>:paused?<p>生命与攻击时间已冻结，准备好再继续。</p>:<><p>本场光环寿命约 {(combat.tempo.durationMs/1000).toFixed(2)} 秒。<br/>找青色甜蜜点打出 Perfect，其余时间也会得到 Good。<br/>{bossKind==='jelly'?'双圈请依次点击。':bossKind==='corn'?'本关只有单圈。':'双圈同时出现，可按任意顺序分别点击。'}<br/>{verdictStage?`本关共 ${verdictStage.total} 次裁决。漏点一圈失去一颗爱心、不蓄能，并补出漏圈；三次漏点失败。蓄满后点击左下角释放裁决；限时内完成切割，否则挑战失败。`:'每漏一个圈扣一颗爱心，三次漏点失败。MISS 不蓄能。蓄满后点击左下角释放裁决。'}</p></>}{ready&&!failed&&<GameButton autoFocus variant="gold" onClick={()=>{unlockAudio();clock.current=performance.now();if(paused)useGame.getState().pause(false);else useGame.getState().dismissTutorial()}}>{paused?'继续战斗':'开始战斗'}</GameButton>}{(paused||failed)&&<GameButton variant="wood" onClick={()=>useGame.getState().go('stages')}>退出讨伐</GameButton>}</div></div>}
   </section>;
 }
