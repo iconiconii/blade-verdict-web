@@ -1,6 +1,8 @@
 import type { CombatFeedback, CombatState } from '../domain/combat';
 import { feedbackPriority, selectActorFeedback } from '../feedback/FeedbackManager';
 
+export interface VisualHold {from:number;until:number}
+
 /** Presentation-only gate. Never passed back into combat/input state. */
 export class ImpactPresentation {
   private seen=0;
@@ -37,9 +39,12 @@ export class ImpactPresentation {
     const age=state.time-this.pulseAt;
     const shake=reducedMotion||age>=100?0:Math.sin(age*.14)*this.amplitude*(1-age/100);
     // A death must supersede an earlier held living pose immediately.
-    const mayHold=!reducedMotion&&this.held&&state.time<this.until
+    const canHold=!reducedMotion&&this.held
       &&(state.phase===this.held.phase||(!['verdictReady','verdictSlash','settle'].includes(state.phase)&&!['verdictReady','verdictSlash','settle'].includes(this.held.phase)))
       &&(state.battle.bossHp>0)===(this.held.battle.bossHp>0);
-    return {actor:mayHold?this.held!:actor,shake};
+    // Keep the interval available on the release frame too. Sprite playback
+    // subtracts its overlap instead of jumping forward by the frozen time.
+    const hold:VisualHold|null=canHold?{from:this.pulseAt,until:this.until}:null;
+    return {actor:canHold&&state.time<this.until?this.held!:actor,shake,hold};
   }
 }

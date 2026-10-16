@@ -57,39 +57,16 @@ export function parseSpriteManifest(value:unknown):SpriteManifest {
   return manifest as SpriteManifest;
 }
 
-type ClipTimeline={starts:number[];units:number};
-const timelines=new WeakMap<SpriteManifest,Map<string,ClipTimeline>>();
-
-function clipTimeline(manifest:SpriteManifest,clip:SpriteClip,bossKind:Exclude<BossKind,'tomato'>):ClipTimeline {
-  let cached=timelines.get(manifest);
-  if(!cached){cached=new Map();timelines.set(manifest,cached)}
-  const key=`${bossKind}:${clip}`,existing=cached.get(key);
-  if(existing)return existing;
-  const frames=manifest.clips[clip],starts:number[]=[];
-  const sparse=bossKind==='carrot'||bossKind==='cabbage';
-  const maxGap=sparse?(clip==='Idle'?2:3):Infinity;
-  let units=0;
-  for(let index=0;index<frames.length;index++){
-    starts.push(units);
-    // Preserve nearby source spacing, but do not freeze on missing exports.
-    units+=Math.min(frames[index+1]?.n-frames[index].n||1,maxGap);
-  }
-  const timeline={starts,units};cached.set(key,timeline);return timeline;
+export function clipDurationMs(manifest:SpriteManifest,clip:SpriteClip,bossKind:Exclude<BossKind,'tomato'>){
+  return clip==='Idle'?manifest.clips.Idle.length*1000/24:reactionDurationMs(bossKind,clip);
 }
 
-/** Bounded source spacing keeps sparse exports moving at a stable cadence. */
+/** Export IDs identify poses, not dwell times. Each available pose gets one beat. */
 export function frameAt(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:Exclude<BossKind,'tomato'>='corn'):SpriteFrame {
-  const frames=manifest.clips[clip],timeline=clipTimeline(manifest,clip,bossKind);
-  const duration=clip==='Idle'?timeline.units*1000/24:reactionDurationMs(bossKind,clip);
+  const frames=manifest.clips[clip],duration=clipDurationMs(manifest,clip,bossKind);
   const age=clip==='Idle'?((Math.max(0,elapsedMs)%duration)+duration)%duration:
     Math.max(0,Math.min(elapsedMs,duration-0.001));
-  const position=timeline.units*age/duration;
-  let low=0,high=frames.length-1;
-  while(low<high){
-    const middle=Math.ceil((low+high)/2);
-    if(timeline.starts[middle]<=position)low=middle;else high=middle-1;
-  }
-  return frames[low];
+  return frames[Math.min(frames.length-1,Math.floor(frames.length*age/duration))];
 }
 
 /** Only the current monster is fetched. Tight frames fit a bounded decoded cache. */

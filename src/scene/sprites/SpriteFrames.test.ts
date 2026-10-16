@@ -35,6 +35,12 @@ it('ships all four supplied action sets with every referenced frame',()=>{
 });
 
 describe('sprite frame timing and placement',()=>{
+  it.each(['corn','carrot','cabbage','jelly'] as const)('plays %s Idle exports at an even 24 fps',boss=>{
+    const supplied=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
+    supplied.clips.Idle.forEach((frame,index)=>{
+      expect(frameAt(supplied,'Idle',(index+.5)*1000/24,boss).n).toBe(frame.n);
+    });
+  });
   it.each(['carrot','cabbage'] as const)('does not freeze a sparse %s action on a missing source number',boss=>{
     const supplied=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     for(const clip of ['Idle','Good','Perfect','Miss'] as const){
@@ -45,7 +51,7 @@ describe('sprite frame timing and placement',()=>{
         held=current===previous?held+1:1;previous=current;
         longest=Math.max(longest,held);
       }
-      expect(longest,`${boss} ${clip} longest still pose`).toBeLessThanOrEqual(clip==='Idle'?84:70);
+      expect(longest,`${boss} ${clip} longest still pose`).toBeLessThanOrEqual(clip==='Idle'?42:70);
     }
   });
 
@@ -63,13 +69,13 @@ describe('sprite frame timing and placement',()=>{
     }
   });
 
-  it('holds a sparse source frame until its original video number passes',()=>{
+  it('uses export order rather than missing source numbers as dwell times',()=>{
     expect(frameAt(manifest,'Idle',0).n).toBe(1);
-    expect(frameAt(manifest,'Idle',42).n).toBe(1);
-    expect(frameAt(manifest,'Idle',100).n).toBe(3);
-    expect(frameAt(manifest,'Idle',370).n).toBe(9);
-    expect(frameAt(manifest,'Idle',420).n).toBe(1);
-    expect(frameAt(manifest,'Good',300).n).toBe(1);
+    expect(frameAt(manifest,'Idle',42).n).toBe(3);
+    expect(frameAt(manifest,'Idle',100).n).toBe(9);
+    expect(frameAt(manifest,'Idle',125).n).toBe(1);
+    expect(frameAt(manifest,'Good',200).n).toBe(1);
+    expect(frameAt(manifest,'Good',300).n).toBe(7);
     expect(frameAt(manifest,'Good',449).n).toBe(7);
   });
 

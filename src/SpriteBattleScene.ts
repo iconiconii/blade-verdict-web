@@ -4,7 +4,8 @@ import { FeedbackManager } from './feedback/FeedbackManager';
 import { ImpactPresentation } from './scene/ImpactPresentation';
 import type { ParryTargetLayout } from './scene/layout';
 import { verdictMotion } from './scene/verdictMotion';
-import { SpriteFrameBank, frameAt, reactionDurationMs, spriteClips, type SpriteBox, type SpriteClip } from './scene/sprites/SpriteFrames';
+import { SpriteFrameBank, clipDurationMs, frameAt, spriteClips, type SpriteBox, type SpriteClip } from './scene/sprites/SpriteFrames';
+import { SpritePlayback } from './scene/sprites/SpritePlayback';
 import { neutralTransform, spriteAnchor, spriteContainsPoint, spriteGeometry, spritePoseBounds, transformPoint,
   type ActorTransform, type SpriteGeometry } from './scene/sprites/SpriteGeometry';
 
@@ -35,11 +36,16 @@ export class SpriteBattleScene {
   private actorTransform:ActorTransform=neutralTransform;
   private poseBounds:SpriteBox|null=null;
   private lastImage:HTMLImageElement|null=null;
+  private playback:SpritePlayback;
+  private playbackKey='';
+  private drawnImage:HTMLImageElement|null=null;
+  private transition:{image:HTMLImageElement;pose:SpriteBox;time:number;duration:number}|null=null;
   private disposed=false;
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
     if(bossKind==='tomato')throw Error('Tomato still uses its existing battle scene');
     this.bossKind=bossKind;
+    this.playback=new SpritePlayback(bossKind);
     const ctx=this.canvas.getContext('2d',{alpha:true});
     if(!ctx)throw Error('Canvas 2D is unavailable');
     this.ctx=ctx;
@@ -91,15 +97,6 @@ export class SpriteBattleScene {
   isPointInsideMonster(point:Point){
     const geometry=this.geometry;if(!geometry)return false;
     return spriteContainsPoint(geometry,this.actorTransform,point,this.width,this.height);
-  }
-
-  private reaction(state:CombatState,reducedMotion:boolean):{clip:SpriteClip;age:number}{
-    const event=state.feedback,result=event?.contactResult??event?.kind;
-    const clip:SpriteClip=result==='Nice'?'Good':result==='Perfect'?'Perfect':result==='Miss'?'Miss':'Idle';
-    const age=event?Math.max(0,state.time-event.time):Infinity;
-    const duration=reactionDurationMs(this.bossKind,clip);
-    if(clip==='Idle'||age>=duration)return {clip:'Idle',age:reducedMotion?0:state.time};
-    return {clip,age:reducedMotion?duration*.58:age};
   }
 
   private effectHeavyFrame(clip:SpriteClip,frame:{n:number}){
@@ -270,7 +267,20 @@ export class SpriteBattleScene {
     const snapshot=this.feedbackManager.update(state);
     const presentation=this.impactPresentation.update(state,reducedMotion,snapshot.actorFeedback);
     this.actorTransform=this.transformation(presentation.actor,reducedMotion,presentation.shake);
-    const {clip,age}=this.reaction(presentation.actor,reducedMotion);
+    const playback=this.playback.update(state,snapshot.actorFeedback,presentation.hold,reducedMotion);
+    const {clip,age}=playback;
+    const cycle=clip==='Idle'?Math.floor(age/clipDurationMs(this.frameBank.manifest,clip,this.bossKind)):0;
+    const key=`${playback.revision}:${cycle}`;
+    if(this.playbackKey!==key){
+      this.transition=this.drawnImage&&this.poseBounds
+        ?{image:this.drawnImage,pose:this.poseBounds,time:playback.time,
+          duration:clip==='Idle'?(cycle>0?40:80):24}:null;
+      this.playbackKey=key;
+    }
+    // Cuts and death keep their existing immediate feedback and split effect.
+    if(reducedMotion||state.phase==='verdictSlash'||state.phase==='settle'||state.battle.bossHp<=0)this.transition=null;
+    const blend=this.transition?smooth((playback.time-this.transition.time)/this.transition.duration):1;
+    if(blend>=1)this.transition=null;
     const frame=frameAt(this.frameBank.manifest,clip,age,this.bossKind);
     const exactImage=this.frameBank.request(frame);
     const effectHeavy=this.effectHeavyFrame(clip,frame);
@@ -279,6 +289,8 @@ export class SpriteBattleScene {
     const displayedClip=displayedFrame&&spriteClips.find(name=>this.frameBank.manifest!.clips[name].includes(displayedFrame));
     this.poseBounds=displayedFrame&&displayedClip
       ?spritePoseBounds(this.frameBank.manifest,displayedClip,displayedFrame):this.geometry.sourceBody;
+    if(this.transition)this.poseBounds=this.transition.pose.map((value,index)=>
+      value+(this.poseBounds![index]-value)*blend) as SpriteBox;
     this.frameBank.prefetch(clip,frame,6);
     if(exactImage&&!effectHeavy)this.lastImage=exactImage;
     this.drawGround(state,reducedMotion);
@@ -291,11 +303,13 @@ export class SpriteBattleScene {
       if(finisher&&state.time-finisher.time>=80)
         this.drawFinisherHalves(image,finisher,state.time-finisher.time,reducedMotion);
       else if(state.battle.bossHp>0||finisher){
-        this.drawActorImage(image);
+        if(this.transition)this.drawActorImage(this.transition.image,1-blend);
+        this.drawActorImage(image,blend);
       }else{
         const deathAge=state.feedback?Math.max(0,state.time-state.feedback.time):0;
         this.drawActorImage(image,1-smooth((deathAge-150)/700));
       }
+      this.drawnImage=this.transition&&blend<.5?this.transition.image:image;
     }
     // A handful of supplied Perfect frames are full-canvas starbursts. Keep
     // the previous body pose legible, and treat the artwork as a brief accent.
@@ -309,5 +323,6 @@ export class SpriteBattleScene {
     this.disposed=true;this.frameBank.dispose();this.feedbackManager.dispose();
     this.canvas.remove();this.lastImage=null;this.geometry=null;this.targetLayouts=[];
     this.poseBounds=null;
+    this.drawnImage=null;this.transition=null;
   }
 }

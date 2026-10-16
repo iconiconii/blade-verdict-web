@@ -12,6 +12,94 @@ const manifest:SpriteManifest={sourceSize:[960,960],crop:[0,0,960,960],clips:{
 
 afterEach(()=>vi.unstubAllGlobals());
 
+const suppliedManifests=import.meta.glob<string>('/public/assets/monster-sprites/*/manifest.json',
+  {eager:true,query:'?raw',import:'default'});
+
+async function recordedScene(boss:'carrot'|'cabbage'){
+  const source=JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]) as SpriteManifest;
+  const draws:Array<{src:string;alpha:number}>=[];
+  const properties:Record<string,unknown>={globalAlpha:1};
+  const context=new Proxy(properties,{get:(target,key)=>key==='drawImage'
+    ?(image:HTMLImageElement)=>draws.push({src:image.src,alpha:Number(properties.globalAlpha)})
+    :target[key as string]??(()=>{})}) as unknown as CanvasRenderingContext2D;
+  vi.stubGlobal('document',{createElement:()=>({dataset:{},style:{},setAttribute:()=>{},getContext:()=>context,remove:()=>{}})});
+  vi.stubGlobal('fetch',async()=>({ok:true,json:async()=>source}));
+  vi.stubGlobal('Image',class {
+    decoding='';onload:(()=>void)|null=null;onerror:(()=>void)|null=null;value='';
+    set src(value:string){this.value=value;queueMicrotask(()=>this.onload?.())}
+    get src(){return this.value}
+    decode(){return Promise.resolve()}
+  });
+  let ready=false;
+  const host={appendChild:()=>{},getBoundingClientRect:()=>({width:390,height:844})} as unknown as HTMLElement;
+  const scene=new SpriteBattleScene(host,()=>{},()=>{ready=true},boss);
+  await vi.waitFor(()=>expect(ready).toBe(true));
+  return {scene,draws,source};
+}
+
+it.each(['carrot','cabbage'] as const)('plays every %s Perfect frame after hit stop instead of catching up',async boss=>{
+  const {scene,draws,source}=await recordedScene(boss);
+  const initial=createCombat(1,boss),event={id:1,kind:'Perfect' as const,time:1000,
+    amount:1,position:{x:.5,y:.5},energyGain:0,angle:0,hitStopMs:80};
+  try{
+    scene.render({...initial,time:1000});
+    for(let age=0;age<=640;age+=5){
+      const state={...initial,time:1000+age,feedback:event,effects:[event]};
+      scene.render(state);
+      expect(state.time).toBe(1000+age);
+    }
+    const visible=new Set(draws.filter(draw=>draw.alpha>.01).map(draw=>draw.src.split(`${boss}/`)[1]));
+    expect(source.clips.Perfect.filter(frame=>!visible.has(frame.file)).map(frame=>frame.n)).toEqual([]);
+  }finally{scene.dispose()}
+});
+
+it('blends the last reaction into the start of Idle, not the global battle-time pose',async()=>{
+  const {scene,draws,source}=await recordedScene('carrot');
+  const initial=createCombat(1,'carrot'),event={id:1,kind:'Miss' as const,time:1234,
+    amount:1,position:{x:.5,y:.5},energyGain:0,angle:0};
+  try{
+    for(let age=0;age<=540;age+=10)scene.render({...initial,time:1234+age,feedback:event,effects:[event]});
+    const tail=draws.slice(-2);
+    expect(tail[0].src).toContain('/Miss/');
+    expect(tail[1].src).toContain(source.clips.Idle[0].file);
+    expect(tail.every(draw=>draw.alpha>0&&draw.alpha<1)).toBe(true);
+  }finally{scene.dispose()}
+});
+
+it('bridges the Idle loop seam with a short crossfade',async()=>{
+  const {scene,draws}=await recordedScene('carrot');
+  const initial=createCombat(1,'carrot');
+  try{
+    for(let time=0;time<=1060;time+=10)scene.render({...initial,time});
+    const tail=draws.slice(-2);
+    expect(tail[0].src).toContain('Idle/00090.webp');
+    expect(tail[1].src).toContain('Idle/00002.webp');
+    expect(tail.every(draw=>draw.alpha>0&&draw.alpha<1)).toBe(true);
+  }finally{scene.dispose()}
+});
+
+it('keeps the second circle animating and clickable during the first circle hit stop',async()=>{
+  const {scene}=await recordedScene('cabbage');
+  try{
+    let state=createCombat(1,'cabbage');
+    for(let i=0;i<100&&state.phase!=='targetActive';i++)state=tickCombat(state,50);
+    const event={id:1,kind:'Perfect' as const,amount:1,position:{x:.5,y:.5},time:state.time,
+      energyGain:1,angle:0,hitStopMs:80};
+    const first={...state.targets[0],resolved:true,result:'Perfect' as const};
+    const second={...state.targets[0],circleId:'second',targetIndex:1,anchorId:'rightKnee' as const};
+    state={...state,targets:[first,second],feedback:event,effects:[event]};
+    scene.render(state);
+    const before=scene.getTargetLayout(1)!;
+    const next=tickCombat(state,40);
+    scene.render(next);
+    const after=scene.getTargetLayout(1)!;
+    expect(next.time-state.time).toBe(40);
+    expect(after.diameter).not.toBe(before.diameter);
+    expect(scene.getTargetAt(after.x,after.y,next)?.circleId).toBe('second');
+    expect(tapTarget(next,'second').targets[1].resolved).toBe(true);
+  }finally{scene.dispose()}
+});
+
 it('keeps rendering a shrinking carrot ring after verdict, then resumes the next group',async()=>{
   const arc=(_x:number,_y:number,radius:number)=>{
     if(radius<0)throw new DOMException('The arc radius is negative','IndexSizeError');
