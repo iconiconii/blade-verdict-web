@@ -16,7 +16,7 @@ export function WorldNavigation({ active }: { active: Screen }) {
     {worldNavigationItems.map(item => <button type="button" key={item.id}
       aria-label={item.label} aria-current={selected === item.id ? 'page' : undefined}
       data-testid={`nav-${item.id}`} onClick={() => useGame.getState().go(item.id)}>
-      <img src={assetUrl(`assets/ui-kit/hunt/nav-${item.id}.webp`)} alt="" draggable={false} />
+      <img src={assetUrl(`assets/art-1016/hunt/nav-${item.id}.webp`)} alt="" draggable={false} />
     </button>)}
   </nav>;
 }

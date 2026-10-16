@@ -19,7 +19,11 @@
 .hunt-chapter-title .hunt-text-title { font-size: 10cqw; height: auto; color: #ffe773; text-shadow: 0 4px #a26815, 2px 2px #603008; }
 .hunt-map-display { position: absolute; inset: 27.5% 0 auto; height: 38%; }
 .hunt-map-island { object-fit: contain !important; width: 76% !important; margin: auto; }
-.hunt-screen--jelly .hunt-map-island { object-fit: contain !important; width: 100% !important; }
+.hunt-shell--chapters .hunt-screen--jelly { background: radial-gradient(ellipse at 50% 45%, #773609, #4a1b07 75%); }
+.hunt-screen--jelly .hunt-chapter-title { top: 10.8%; left: 12%; right: 12%; }
+.hunt-screen--jelly .hunt-chapter-title h1 { height: 16cqw; }
+.hunt-screen--jelly .hunt-map-display { top: 24.5%; height: 42.5%; }
+.hunt-screen--jelly .hunt-map-island { object-fit: contain !important; width: 87% !important; }
 .hunt-arrow { position: absolute; z-index: 1; top: 38%; width: 8%; height: 17%; }
 .hunt-arrow img { width: 68%; margin: auto; }
 .hunt-arrow--previous { left: 4%; }
@@ -45,9 +49,7 @@
 .hunt-monster-title h1 { height: 13cqw; margin: 0; }
 .hunt-monster-title p { color: #fff3d0; font-size: 3.6cqw; letter-spacing: .04em; margin: 1cqw -8cqw 0; }
 .hunt-monster-display { position: absolute; top: 20.3%; left: 0; right: 0; height: 34.2%; }
-.hunt-monster-portrait { width: 68% !important; object-fit: contain !important; margin: auto; }
-.hunt-screen--jelly .hunt-monster-portrait { object-fit: contain !important; width: 95% !important; }
-.hunt-monster-display.is-preview .hunt-monster-portrait { object-fit: contain !important; width: 70% !important; }
+.hunt-monster-portrait { width: 78% !important; object-fit: contain !important; object-position: center bottom; margin: auto; }
 .hunt-monster-display .hunt-arrow { top: 35%; }
 .hunt-monster-status { position: absolute; top: 54%; left: 15%; right: 15%; text-align: center; }
 .hunt-monster-status h2 { color: #fff5cf; font-size: 7.4cqw; margin: 0 0 .5cqw; line-height: 1.2; text-shadow: 0 3px #422005; }
@@ -55,22 +57,18 @@
 .hunt-coming-soon { color: #efcea7; font-size: 3.5cqw; margin: 2cqw 0 0; }
 .hunt-roster-hint { position: absolute; top: 64.2%; width: 100%; text-align: center; font-size: 3.5cqw; color: #fff3d0; margin: 0; letter-spacing: .07em; }
 .hunt-roster { position: absolute; inset: 67.7% 4% auto; height: 14.5%; display: flex; justify-content: center; gap: 2%; }
-.hunt-roster-card { width: 23.5%; height: 100%; transition: transform .15s; position: relative; }
-.hunt-roster-card.is-selected { transform: translateY(-3px); filter: brightness(1.07); }
+.hunt-roster .hunt-roster-card { width: 23.5%; height: 100%; transition: transform .15s; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; background: #653514; border: 2px solid #b18550; border-radius: 10px; overflow: hidden; }
+.hunt-roster .hunt-roster-card.is-selected { transform: translateY(-3px); filter: brightness(1.07); background: #acd548; border-color: #e9ff98; box-shadow: 0 0 0 1px #80aa2a; }
 .hunt-roster-card:not(.is-selected) { filter: saturate(.7) brightness(.82); }
-.hunt-roster-card img { object-fit: fill; }
-.hunt-screen--jelly .hunt-roster-card { width: 25%; border: 4px solid #9de135; border-radius: 10px; background: #653514; }
-.hunt-screen--jelly .hunt-roster-card img { height: 76%; object-fit: cover; }
-.hunt-screen--jelly .hunt-roster-card strong { font-size: 3.4cqw; color: #fff0c2; }
+.hunt-roster-card .hunt-monster-thumbnail { height: 78%; width: 100%; object-fit: contain; }
+.hunt-roster-card strong { display: block; width: 100%; line-height: 1.4; padding: 1px 0 3px; font-size: 3.1cqw; color: #fff0c2; white-space: nowrap; }
+.hunt-roster-card.is-selected strong { color: #352000; }
 @media (max-height: 650px) and (min-width: 600px) { .hunt-screen { width: 360px; height: 640px; } }
 @media (prefers-reduced-motion: reduce) { .hunt-primary, .hunt-roster-card { transition: none; } }
 .monster-progress { position: absolute; top: 4%; right: 4%; width: 31%; height: 27%; display: grid; place-items: center; color: #fff9da; background: #432512; border: 2px solid #7c582d; border-radius: 28%; box-shadow: 0 1px 3px #2b140b; }
 .monster-progress svg { width: 58%; height: 66%; filter: drop-shadow(0 1px 1px #241407); }
 .monster-progress--available { background: #477d15; border-color: #bada4c; }
 .monster-progress--cleared { background: #398014; border-color: #bada4c; }
-.hunt-preview-card { width: 60%; height: 100%; max-width: 240px; margin: auto; position: relative; }
-/* Card assets include a bottom name strip; the large preview uses the live heading below. */
-.hunt-preview-card > img { object-fit: fill; clip-path: inset(0 0 21% 0); }
 .hunt-progress-label { display: inline-flex; position: relative; align-items: center; gap: 7px; margin: 0; padding: 4px 12px; border-radius: 9px; background: #3d661a; color: #fff8d0; font-size: 3.5cqw; }
 .hunt-progress-label .monster-progress { position: static; width: 24px; height: 24px; border: 0; box-shadow: none; }
 .hunt-progress-label--locked { background: #503019; }

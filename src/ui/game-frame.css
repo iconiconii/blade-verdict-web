@@ -34,10 +34,10 @@ main.game-stage { width: 100%; height: 100dvh; background: #301307; overflow: hi
 }
 .game-frame .world-navigation button {
   flex: 1; min-width: 44px; min-height: 44px; height: 100%; margin: 0; padding: 0;
-  border: 0; background: transparent; border-radius: 0; position: relative;
+  border: 1px solid #d99b2c; background: linear-gradient(#ffe674, #fbc83a); border-radius: 0; position: relative;
 }
-.game-frame .world-navigation img { display: block; width: 100%; height: 100%; object-fit: fill; }
-.game-frame .world-navigation button[aria-current='page'] { transform: translateY(-3px); filter: brightness(1.12); }
+.game-frame .world-navigation img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.game-frame .world-navigation button[aria-current='page'] { transform: translateY(-3px); background: linear-gradient(#dfff71, #b6e842); border-color: #d4f776; }
 .game-frame .world-navigation button:focus-visible { outline: 3px solid #fff8b6; outline-offset: -4px; }
 
 /* Mobile composition is also used inside the portrait desktop frame. Breakpoint
@@ -91,7 +91,7 @@ main.game-stage { width: 100%; height: 100dvh; background: #301307; overflow: hi
 .game-frame .ws-group-title { gap: 8px; }
 .game-frame .ws-group-title > span { font-size: 11px; }
 .game-frame .ui-dish-card { grid-template-columns: 64px minmax(0, 1fr); min-height: 120px; gap: 12px; }
-.game-frame .ui-dish-card__art { min-height: 70px; }
+.game-frame .ui-dish-card__art { min-height: 70px; background: transparent; }
 .game-frame .ui-dish-card__body h2, .game-frame .ui-sale-card h2, .game-frame .ui-shop-card__copy h2 { font: 850 18px/1.4 system-ui, sans-serif; }
 .game-frame .ui-dish-card__meta { flex-wrap: wrap; gap: 6px; }
 .game-frame .ui-sale-card, .game-frame .ui-shop-card { grid-template-columns: 56px minmax(0, 1fr); min-height: 0; gap: 12px; }

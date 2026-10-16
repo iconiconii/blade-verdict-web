@@ -1,0 +1,2 @@
+.dish-art { display: inline-block; width: 64px; height: 64px; max-width: 100%; object-fit: contain; flex-shrink: 0; vertical-align: middle; }
+.ui-dish-card__art:has(.dish-art) { background: transparent; }

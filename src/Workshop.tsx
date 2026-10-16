@@ -17,6 +17,7 @@ import { KitchenWorkbench } from './ui/kitchen/KitchenWorkbench';
 import { assetUrl } from './ui/assets';
 import './ui/migration.css';
 import { dishPresentation } from './ui/dishes';
+import { DishArt } from './ui/DishArt';
 
 export type WorkshopScreen = Screen;
 type GameState = ReturnType<typeof useGame.getState>;
@@ -68,11 +69,6 @@ function Icon({ name, size = 18 }: { name: 'arrow' | 'back' | 'pan' | 'bag' | 'b
     spark: <path d="m12 2 1.6 6.4L20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6L12 2Zm6 14 .7 2.3L21 19l-2.3.7L18 22l-.7-2.3L15 19l2.3-.7L18 16Z" />,
   };
   return <svg className="ws-icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
-}
-
-function Sprite({ name, label }: { name: 'corn' | 'jelly' | 'toast' | 'pudding' | 'combo' | 'locked'; label?: string }) {
-  if (name === 'corn') return <ItemIcon name="corn" label={label} size={64} />;
-  return <span className={`ws-sprite ws-sprite--${name}`} aria-label={label} role={label ? 'img' : undefined} />;
 }
 
 function qualityRank(value: Quality): number {
@@ -153,23 +149,22 @@ export function EquipmentPanel({ meta, go }: { meta: MetaState; go: (screen: Wor
   return <div className="ws-equipment-layout"><GamePanel material="wood" className="ws-equipped-card"><span className="ws-panel-kicker">CURRENT LOADOUT</span><h2>当前装备</h2><div className="ws-loadout-item"><span className="ws-loadout-icon"><Icon name="sword" size={27} /></span><div><b>{meta.equippedWeaponId ? (SHOP_ITEMS.find(item => item.id === meta.equippedWeaponId)?.name ?? '未知装备') : '基础厨刀'}</b><small>{meta.equippedWeaponId ? '裁决伤害加成已生效' : '没有额外加成'}</small></div></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => { void Promise.resolve(getWorkshopState().equipItem(null)).catch(() => undefined); }}>卸下装备</ActionButton></GamePanel><GamePanel material="wood" className="ws-owned-card"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">OWNED ITEMS</span><h2>已拥有</h2></div><ActionButton variant="quiet" onClick={() => go('shop')}>前往商店 <Icon name="arrow" size={16} /></ActionButton></div>{owned.length ? owned.map(item => <div className="ws-owned-row" key={item.id}>{item.effect ? <ItemIcon name={item.effect === 'tomato-bomb' ? 'tomato' : 'pot'} size={26} /> : <Icon name={item.category === 'weapon' ? 'sword' : 'spark'} size={20} />}<span><b>{item.name}</b><small>{item.description}</small></span><span className="ws-owned-tag">{item.category === 'item' ? `×${consumableCount(meta, item.id)}` : '已拥有'}</span></div>) : <EmptyState title="还没有装备或道具" text="在商店购买武器或补充一次性道具。" action="查看商店" onAction={() => go('shop')} />}</GamePanel></div>;
 }
 
-function Cookbook({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
+export function Cookbook({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   return <section className="ws-screen ws-screen--cookbook" data-testid="workshop-cookbook"><div className="ws-content"><PageHeading eyebrow="THE ARCHIVE" title="料理图鉴" subtitle="每一道料理，都记录着你走过的战斗。" back onBack={() => go('restaurant')} /><div className="ui-card-grid">{RECIPES.map(recipe => <CatalogDishCard key={recipe.id} recipe={recipe} unlocked={meta.unlockedRecipeIds.includes(recipe.id)} record={meta.dishRecords.find(item => item.dishId === recipe.outputDishId)} />)}</div><div className="ws-collection-note"><Icon name="book" size={19} /><span>已掌握 <b>{meta.unlockedRecipeIds.length}</b> / {RECIPES.length} 道配方</span><ActionButton variant="quiet" onClick={() => go('kitchen')}>去厨房制作 <Icon name="arrow" size={16} /></ActionButton></div></div><WorkshopNav active="cookbook" /></section>;
 }
 
 function CatalogDishCard({ recipe, unlocked, record }: { recipe: typeof RECIPES[number]; unlocked: boolean; record?: MetaState['dishRecords'][number] }) {
-  const dish = dishPresentation(recipe.outputDishId);
-  return <GamePanel material="wood" className={`ui-dish-card ${unlocked ? '' : 'is-locked'}`}><div className="ui-dish-card__art"><Sprite name={unlocked ? (dish?.icon ?? 'toast') : 'locked'} label={unlocked ? recipe.name : '未解锁'} /></div><div className="ui-dish-card__body"><span className="ws-panel-kicker">{unlocked ? 'DISCOVERED' : 'UNKNOWN RECIPE'}</span><h2>{unlocked ? recipe.name : '???'}</h2>{unlocked ? <><p>{Object.entries(recipe.requirements).map(([id, count]) => `${INGREDIENTS.find(item => item.id === id)?.name ?? id} ×${count}`).join(' · ')}</p><div className="ui-dish-card__meta">{qualityBadge(record?.bestQuality ?? 'Normal')}<span>制作 {record?.cookCount ?? 0} 次</span></div></> : <p>制作一次后解锁详细记录</p>}</div></GamePanel>;
+  return <GamePanel material="wood" className={`ui-dish-card ${unlocked ? '' : 'is-locked'}`}><div className="ui-dish-card__art"><DishArt dishId={recipe.outputDishId} locked={!unlocked} /></div><div className="ui-dish-card__body"><span className="ws-panel-kicker">{unlocked ? 'DISCOVERED' : 'UNKNOWN RECIPE'}</span><h2>{unlocked ? recipe.name : '???'}</h2>{unlocked ? <><p>{Object.entries(recipe.requirements).map(([id, count]) => `${INGREDIENTS.find(item => item.id === id)?.name ?? id} ×${count}`).join(' · ')}</p><div className="ui-dish-card__meta">{qualityBadge(record?.bestQuality ?? 'Normal')}<span>制作 {record?.cookCount ?? 0} 次</span></div></> : <p>制作一次后解锁详细记录</p>}</div></GamePanel>;
 }
 
-function Sales({ meta, go, sellDish, sellAllDishes }: { meta: MetaState; go: (screen: WorkshopScreen) => void; sellDish: (id: string) => Promise<boolean> | boolean; sellAllDishes: () => Promise<boolean> | boolean }) {
+export function Sales({ meta, go, sellDish, sellAllDishes }: { meta: MetaState; go: (screen: WorkshopScreen) => void; sellDish: (id: string) => Promise<boolean> | boolean; sellAllDishes: () => Promise<boolean> | boolean }) {
   const runSellAll = () => { void Promise.resolve(sellAllDishes()).catch(() => undefined); };
   return <section className="ws-screen ws-screen--sales" data-testid="workshop-sales"><div className="ws-content"><PageHeading eyebrow="THE COUNTER" title="菜架" subtitle="料理完成了。现在，把它们交给愿意付出金币的客人。" back backLabel="返回厨房" onBack={() => go('kitchen')} />{meta.pendingDishes.length ? <><div className="ui-toolbar"><div><span className="ws-panel-kicker">READY TO SERVE</span><strong>{meta.pendingDishes.length} 道料理</strong></div><ActionButton mutates variant="primary" testId="sell-all" onClick={runSellAll}><Icon name="coin" size={17} /> 全部出售 · {formatPrice(meta.pendingDishes.reduce((sum, dish) => sum + dish.sellPrice, 0))}</ActionButton></div><div className="ui-card-grid">{meta.pendingDishes.map(dish => <SaleDishCard key={dish.instanceId} dish={dish} onSell={() => { void Promise.resolve(sellDish(dish.instanceId)).catch(() => undefined); }} />)}</div></> : <EmptyState icon="shop" title="菜架还空着" text="用探险带回的食材烹调料理，完成后会在这里等待出售。" action="去厨房" onAction={() => go('kitchen')} />}</div><WorkshopNav active="sales" /></section>;
 }
 
 function SaleDishCard({ dish, onSell }: { dish: MetaState['pendingDishes'][number]; onSell: () => void }) {
   const info = dishPresentation(dish.dishId);
-  return <GamePanel material="wood" className="ui-sale-card"><Sprite name={info?.icon ?? 'toast'} label={info?.name ?? dish.dishId} /><div><span className="ws-panel-kicker">FRESHLY COOKED</span><h2>{info?.name ?? dish.dishId}</h2><div>{qualityBadge(dish.quality)} <span className="ws-price">{formatPrice(dish.sellPrice)} ◈</span></div></div><ActionButton mutates variant="quiet" testId={`sell-${dish.instanceId}`} onClick={onSell}>出售</ActionButton></GamePanel>;
+  return <GamePanel material="wood" className="ui-sale-card"><DishArt dishId={dish.dishId} /><div><span className="ws-panel-kicker">FRESHLY COOKED</span><h2>{info.name}</h2><div>{qualityBadge(dish.quality)} <span className="ws-price">{formatPrice(dish.sellPrice)} ◈</span></div></div><ActionButton mutates variant="quiet" testId={`sell-${dish.instanceId}`} onClick={onSell}>出售</ActionButton></GamePanel>;
 }
 
 export function Shop({ meta, go, buyItem, equipItem }: { meta: MetaState; go: (screen: WorkshopScreen) => void; buyItem: (id: string) => Promise<boolean> | boolean; equipItem: (id: string | null) => Promise<boolean> | boolean }) {

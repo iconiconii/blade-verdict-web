@@ -7,6 +7,7 @@ import { GameButton, GameDialog, ItemIcon, type ItemIconName } from '../index';
 import { worldNavigationItems } from '../WorldNavigation';
 import { assetUrl } from '../assets';
 import { dishPresentation } from '../dishes';
+import { DishArt } from '../DishArt';
 import { amountsForSlot, cookingClock, emptyKitchenSlots, ingredientQuantity, maximumQualityAmount, placeIngredient, recipeMissingIngredients, remainingForSelection, selectedIngredients, slotQuantity, slotsForIngredients, type KitchenSlots, type QualityAmounts } from './selection';
 import './kitchen.css';
 
@@ -44,7 +45,7 @@ export function KitchenRecipeOptions({ meta, selectedId, onSelect }: { meta: Met
   return <div className="kitchen-recipe-options">{RECIPES.map(recipe => {
     const missing = recipeMissingIngredients(meta, recipe);
     return <button type="button" key={recipe.id} data-testid={`recipe-${recipe.id}`} className={`kitchen-recipe-option ${selectedId === recipe.id ? 'is-selected' : ''}`} disabled={missing.length > 0} aria-pressed={selectedId === recipe.id} onClick={() => onSelect(recipe)}>
-      <span className={`ws-sprite ws-sprite--${dishPresentation(recipe.outputDishId).icon}`} />
+      <DishArt dishId={recipe.outputDishId} />
       <span><b>{recipe.name}</b><span className="kitchen-recipe-requirements">{requirementsLabel(recipe)}</span><small className={missing.length ? 'is-missing' : 'is-available'}>{missing.length ? `缺少 ${missing.map(item => `${ingredientName(item.ingredientId)} ×${item.count}`).join('、')}` : selectedId === recipe.id ? '当前目标' : '食材充足 · 选择菜谱'}</small></span>
     </button>;
   })}</div>;
@@ -219,7 +220,7 @@ export function KitchenWorkbench({ meta, cookingJob, go, startCooking, claimCook
       <KitchenRecipeOptions meta={meta} selectedId={recipe?.id ?? null} onSelect={chooseRecipe} />
     </GameDialog>
     <GameDialog open={result !== null} onClose={() => setResult(null)} title="料理已领取！" actions={<><GameButton variant="wood" onClick={() => setResult(null)}>继续烹饪</GameButton><GameButton onClick={() => { setResult(null); go('sales'); }}>前往菜架</GameButton></>}>
-      {result && <div className="kitchen-dish-result" data-testid="cooking-presentation"><span className={`ws-sprite ws-sprite--${dishPresentation(result.dishId).icon}`} /><h2>{dishPresentation(result.dishId).name}</h2><p>{qualityNames[result.quality]} · 售价 {result.sellPrice} 金币</p><p>料理已放入菜架</p></div>}
+      {result && <div className="kitchen-dish-result" data-testid="cooking-presentation"><DishArt dishId={result.dishId} /><h2>{dishPresentation(result.dishId).name}</h2><p>{qualityNames[result.quality]} · 售价 {result.sellPrice} 金币</p><p>料理已放入菜架</p></div>}
     </GameDialog>
   </section>;
 }

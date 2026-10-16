@@ -73,8 +73,8 @@
 .kitchen-recipe-option { display: flex; gap: 10px; width: 100%; align-items: center; padding: 9px 7px; border: 1px solid #b18a5033; border-radius: 8px; background: #f9e1a633; color: #4b250e; text-align: left; }
 .kitchen-recipe-option.is-selected { border-color: #6e8b23; background: #d0da8244; }
 .kitchen-recipe-option:disabled { color: #745b3d; background: #d6c1a444; cursor: not-allowed; }
-.kitchen-recipe-option:disabled .ws-sprite { filter: saturate(.4); opacity: .7; }
-.kitchen-recipe-option .ws-sprite { flex-shrink: 0; width: 50px; height: 50px; }
+.kitchen-recipe-option:disabled .dish-art { filter: saturate(.4); opacity: .7; }
+.kitchen-recipe-option .dish-art { width: 58px; height: 58px; }
 .kitchen-recipe-option > span:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .kitchen-recipe-option b { font-size: 15px; }
 .kitchen-recipe-requirements { font-size: 11px; line-height: 1.55; }
@@ -82,7 +82,7 @@
 .kitchen-recipe-option .is-missing { color: #954727; }
 .kitchen-recipe-option .is-available { color: #4d7117; }
 .kitchen-dish-result { text-align: center; animation: kitchen-dish-pop .5s ease-out both; }
-.kitchen-dish-result .ws-sprite { width: 100px; height: 100px; }
+.kitchen-dish-result .dish-art { width: 120px; height: 120px; }
 .kitchen-dish-result h2 { margin: 10px 0; }
 .kitchen-dish-result p { margin: 4px 0; }
 .kitchen-workbench .gui-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }

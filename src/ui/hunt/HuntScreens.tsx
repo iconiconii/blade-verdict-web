@@ -4,11 +4,10 @@ import { bossDisplayNames, type BossKind } from '../../domain/v2';
 import { GameButton, GameDialog } from '../index';
 import './hunt.css';
 import { WorldNavigation } from '../WorldNavigation';
-import { assetUrl } from '../assets';
+import { huntArtUrl, monsterPortraitUrl } from './art';
 import { monsterProgress } from '../../domain/progression';
 import { MonsterProgressBadge, monsterProgressLabel } from './MonsterProgress';
 
-const asset = (name: string) => assetUrl(`assets/ui-kit/hunt/${name}.webp`);
 const chapters = [
   { name: '蔬菜园', number: '第一章', boss: 'corn' as BossKind },
   { name: '果冻秘境', number: '第二章', boss: 'jelly' as BossKind },
@@ -16,7 +15,11 @@ const chapters = [
 const vegetableMonsters: readonly BossKind[] = ['corn', 'carrot', 'cabbage', 'tomato'];
 
 export function HuntArt({ name, className, alt = '' }: { name: string; className?: string; alt?: string }) {
-  return <img className={className} src={asset(name)} alt={alt} draggable={false} />;
+  return <img className={className} src={huntArtUrl(name)} alt={alt} draggable={false} />;
+}
+
+export function MonsterPortrait({ boss, thumbnail = false }: { boss: BossKind; thumbnail?: boolean }) {
+  return <img className={thumbnail ? 'hunt-monster-thumbnail' : 'hunt-monster-portrait'} src={monsterPortraitUrl(boss, thumbnail)} alt={bossDisplayNames[boss]} draggable={false} />;
 }
 
 function Wallet() {
@@ -54,9 +57,9 @@ export function HuntScreens() {
       {view === 'chapters' ? <>
         <div className="hunt-toolbar"><Wallet /><button className="hunt-settings" type="button" aria-label="探险帮助与返回" onClick={() => setSettings(true)}><HuntArt name="settings" /></button></div>
         <div className="hunt-chapter-title"><p>— {data.number} —</p>
-          {chapter === 0 ? <h1><HuntArt name="chapter-title" alt="蔬菜园" /></h1> : <h1 className="hunt-text-title">果冻秘境</h1>}
+          <h1><HuntArt name={chapter === 0 ? 'chapter-title' : 'jelly-title'} alt={data.name} /></h1>
         </div>
-        <div className="hunt-map-display"><HuntArt name={chapter === 0 ? 'chapter-island' : 'jelly-portrait'} className="hunt-map-island" alt={chapter === 0 ? '玉米、胡萝卜、白菜和西红柿组成的蔬菜园' : '果冻秘境'} /><Arrows onPrevious={() => browseChapter(-1)} onNext={() => browseChapter(1)} /></div>
+        <div className="hunt-map-display"><HuntArt name={chapter === 0 ? 'chapter-island' : 'jelly-island'} className="hunt-map-island" alt={chapter === 0 ? '玉米、胡萝卜、白菜和西红柿组成的蔬菜园' : '果冻秘境水晶岛'} /><Arrows onPrevious={() => browseChapter(-1)} onNext={() => browseChapter(1)} /></div>
         <div className="hunt-chapter-dots" aria-label="选择章节">{Array.from({ length: 5 }, (_, i) => <button type="button" key={i} disabled={i >= chapters.length} aria-label={chapters[i]?.name ?? `第 ${i + 1} 章尚未开放`} aria-current={i === chapter ? 'step' : undefined} onClick={() => setChapter(i)}><HuntArt name={i === chapter ? 'dot-active' : 'dot'} /></button>)}</div>
         <button type="button" className="hunt-primary hunt-primary--chapter" data-testid="choose-monsters" aria-label="讨伐：选择怪物" onClick={openMonsters}><HuntArt name="cta-hunt" /></button>
         <WorldNavigation active="stages" />
@@ -64,16 +67,14 @@ export function HuntScreens() {
         <div className="hunt-toolbar hunt-toolbar--monsters"><HuntArt name="chef-avatar" className="hunt-avatar" /><Wallet /></div>
         <button type="button" className="hunt-back" aria-label="返回章节选择" onClick={() => setView('chapters')}><HuntArt name="back" /></button>
         <div className="hunt-monster-title"><h1><HuntArt name="select-title" alt="怪兽选择" /></h1><p>— {data.number} · {data.name} —</p></div>
-        <div className={`hunt-monster-display ${selection !== 'corn' && selection !== 'jelly' ? 'is-preview' : ''}`}>
-          {selection === 'corn' || selection === 'jelly'
-            ? <HuntArt name={selection === 'corn' ? 'corn-portrait' : 'jelly-portrait'} className="hunt-monster-portrait" alt={name} />
-            : <div className="hunt-preview-card"><img src={assetUrl(`assets/ui-kit/hunt/preview-${selection}.png`)} alt={name} draggable={false} /></div>}
+        <div className="hunt-monster-display">
+          <MonsterPortrait boss={selection} />
           <Arrows onPrevious={() => browseMonster(-1)} onNext={() => browseMonster(1)} />
         </div>
         <div className="hunt-monster-status"><h2>{name}</h2><p className={`hunt-progress-label hunt-progress-label--${progress}`}><MonsterProgressBadge progress={progress} />{monsterProgressLabel[progress]}</p>{!playable && <small>通关前一只怪物后解锁</small>}</div>
         <p className="hunt-roster-hint">— 左右切换讨伐目标 —</p>
         <div className="hunt-roster" aria-label="选择讨伐怪物">{roster.map(id => <button type="button" key={id} aria-label={`${bossDisplayNames[id]} · ${monsterProgressLabel[monsterProgress(save, id)]}`} aria-pressed={selection === id} className={`hunt-roster-card ${selection === id ? 'is-selected' : ''}`} onClick={() => setSelection(id)}>
-          {id === 'jelly' ? <><HuntArt name="jelly-portrait" /><strong>果冻怪</strong></> : <HuntArt name={`card-${id}`} />}
+          <MonsterPortrait boss={id} thumbnail /><strong>{bossDisplayNames[id]}</strong>
           <MonsterProgressBadge progress={monsterProgress(save, id)} />
         </button>)}</div>
         <button type="button" className="hunt-primary hunt-primary--monster" disabled={!playable} aria-label={`开始讨伐${name}`} data-testid={selection === 'jelly' ? 'start-jelly' : 'start'} onClick={start}><HuntArt name="cta-start" /></button>

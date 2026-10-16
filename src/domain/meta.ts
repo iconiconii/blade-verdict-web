@@ -162,7 +162,7 @@ export const RECIPES: readonly RecipeDefinition[] = Object.freeze([
   {
     id: 'recipe_tomato_salsa',
     outputDishId: 'dish_tomato_salsa',
-    name: '西红柿莎莎',
+    name: '西红柿汁',
     requirements: freezeRecord({ ing_tomato: 1 }),
     multiplier: 1.2,
   },

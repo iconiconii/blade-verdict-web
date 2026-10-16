@@ -28,7 +28,8 @@ export function GameBanner({ title, children, tone = 'reward' }: { title: string
 }
 
 export function ItemIcon({ name, label, size = 64 }: { name: ItemIconName; label?: string; size?: number }) {
-  return <img className="gui-item-icon" src={assetUrl(`assets/ui-kit/icons/${name}.png`)} alt={label ?? ''} width={size} height={size} draggable={false} />;
+  const path = name === 'coin' ? 'assets/art-1016/hunt/coin.webp' : `assets/ui-kit/icons/${name}.png`;
+  return <img className="gui-item-icon" src={assetUrl(path)} alt={label ?? ''} width={size} height={size} draggable={false} />;
 }
 
 export function RarityBadge({ rarity }: { rarity: Rarity }) {
