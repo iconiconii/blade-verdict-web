@@ -11,15 +11,23 @@ const render=(events:CombatFeedback[],time=0,bossKind:BossKind='corn')=>renderTo
 const cutEvent=()=>applyContinuousCut(verdict('corn'),{x:.5,y:.5},true).feedback!;
 
 it.each([
-  {kind:'Nice',energyGain:1,finisher:false,size:34,count:3},
-  {kind:'Perfect',energyGain:1,finisher:false,size:34,count:8},
-  {kind:'Cut',energyGain:0,finisher:false,size:40,count:3},
-  {kind:'Cut',energyGain:0,finisher:true,size:48,count:8},
-] as const)('enlarges $kind food to $size px while retaining $count particles',({kind,energyGain,finisher,size,count})=>{
+  {kind:'Cut',energyGain:0,finisher:false,size:80,count:6},
+  {kind:'Cut',energyGain:0,finisher:true,size:96,count:12},
+] as const)('doubles $kind food dimensions to $size px and increases the count to $count',({kind,energyGain,finisher,size,count})=>{
   const html=render([{...cutEvent(),kind,energyGain,finisher}]);
   const images=html.match(/<img [^>]+>/g)??[];
   expect(images).toHaveLength(count);
   for(const image of images)expect(image).toContain(`width="${size}" height="${size}"`);
+});
+
+it.each(['corn','carrot','cabbage','tomato','jelly'] as const)('does not render food for any %s parry result',boss=>{
+  const base=cutEvent();
+  for(const kind of ['Nice','Perfect','Miss'] as const){
+    expect(render([{...base,kind,energyGain:kind==='Miss'?0:1}],0,boss)).toBe('');
+  }
+  // Mixed feedback still renders only the Cut, not the preceding parries.
+  expect(render([{...base,id:2,kind:'Nice',energyGain:1},
+    {...base,id:3,kind:'Perfect',energyGain:1},base],0,boss).match(/<img /g)).toHaveLength(6);
 });
 
 function verdict(boss:BossKind){
@@ -36,7 +44,7 @@ it.each(['corn','carrot','cabbage','tomato','jelly'] as const)('renders food aft
   expect(hit.feedback).toMatchObject({kind:'Cut',energyGain:0});
   const events=new FeedbackManager().update(hit).events;
   const html=renderToStaticMarkup(<IngredientBursts events={events} bossKind={boss} time={hit.time} origin={()=>({x:150,y:250})}/>);
-  expect(html.match(/<img /g)??[]).toHaveLength(3);
+  expect(html.match(/<img /g)??[]).toHaveLength(6);
   const icon=boss==='jelly'?'gem':boss;
   expect(html).toContain(`/assets/ui-kit/icons/${icon}.png`);
   expect(`/public/assets/ui-kit/icons/${icon}.png` in assetFiles).toBe(true);
@@ -49,7 +57,7 @@ it('keeps the final Cut after leaving verdict and delays its larger burst by the
   expect(hit.phase).not.toBe('verdictSlash');
   expect(hit.feedback).toMatchObject({kind:'Cut',finisher:true});
   const manager=new FeedbackManager(),events=manager.update(hit).events;
-  expect(render(events).match(/<img /g)).toHaveLength(8);
+  expect(render(events).match(/<img /g)).toHaveLength(12);
   expect(render(events)).toContain('animation-delay:80ms');
   expect(render(events,100)).toContain('animation-delay:-20ms');
   expect(selectVerdictBursts(events,599)).toHaveLength(1);
@@ -62,24 +70,25 @@ it('bounds rapid repeated contacts, deduplicates IDs and keeps the finisher',()=
   const final={...base,id:201,time:200,finisher:true};
   const incoming=[...events,final,...events,final],snapshot=JSON.stringify(incoming);
   const bursts=selectVerdictBursts(incoming,240);
-  expect(bursts).toHaveLength(verdictFoodLimits.bursts);
+  expect(bursts).toHaveLength(4);
   expect(new Set(bursts.map(burst=>burst.event.id)).size).toBe(bursts.length);
-  expect(bursts[0]).toMatchObject({event:{id:201},count:8});
-  expect(bursts.reduce((sum,burst)=>sum+burst.count,0)).toBe(23);
+  expect(bursts[0]).toMatchObject({event:{id:201},count:12});
+  expect(bursts.reduce((sum,burst)=>sum+burst.count,0)).toBe(30);
   expect((render(incoming,240).match(/<img /g)??[]).length).toBeLessThanOrEqual(verdictFoodLimits.particles);
   expect(JSON.stringify(incoming)).toBe(snapshot);
   expect(selectVerdictBursts([...incoming].reverse(),240)).toEqual(bursts);
+  const ordinary=selectVerdictBursts(events,240);
+  expect(ordinary).toHaveLength(verdictFoodLimits.bursts);
+  expect(ordinary.reduce((sum,burst)=>sum+burst.count,0)).toBe(30);
 });
 
-it('ignores invalid, future and expired cuts without changing ordinary parry bursts',()=>{
+it('ignores invalid, future and expired cuts',()=>{
   const base=cutEvent();
   const ignored:CombatFeedback[]=[{...base,amount:0},{...base,id:2,time:10},
     {...base,id:3,time:-520},{...base,id:4,pendingRound:true},{...base,id:5,kind:'Miss'}];
   expect(selectVerdictBursts(ignored,0)).toEqual([]);
   expect(selectVerdictBursts([base],519)).toHaveLength(1);
   expect(selectVerdictBursts([base],520)).toHaveLength(0);
-  expect((render([{...base,kind:'Nice',energyGain:1}]).match(/<img /g)??[])).toHaveLength(3);
-  expect((render([{...base,kind:'Perfect',energyGain:1}]).match(/<img /g)??[])).toHaveLength(8);
   expect(render([{...base,kind:'Miss',energyGain:0}])).toBe('');
   expect(applyContinuousCut(verdict('corn'),{x:.1,y:.1},false).feedback).toBeNull();
 });
