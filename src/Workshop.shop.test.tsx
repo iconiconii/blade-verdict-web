@@ -6,6 +6,26 @@ import { EquipmentPanel, Shop } from './Workshop';
 const actions = { go: () => {}, buyItem: () => true, equipItem: () => true };
 const itemCard = (html: string, id: string) => html.split(`data-testid="shop-${id}"`)[1].split('data-testid="shop-')[0];
 
+describe('corn cleaver presentation', () => {
+  it('uses the new icon in the shop without changing cost or bonus', () => {
+    const html = renderToStaticMarkup(<Shop meta={createMetaState({ coins: 120 })} {...actions} />);
+    const card = itemCard(html, 'weapon_corn_cleaver');
+    expect(card).toContain('equipment/corn-cleaver.png');
+    expect(card).toContain('购买 · 120');
+    expect(card).toContain('+8 裁决伤害');
+    expect(itemCard(html, 'weapon_jelly_fork')).not.toContain('corn-cleaver.png');
+  });
+
+  it('uses the same icon for equipped and owned corn knives only', () => {
+    const meta = createMetaState({ equippedWeaponId: 'weapon_corn_cleaver', purchasedShopItemIds: ['weapon_corn_cleaver'] });
+    const equipped = renderToStaticMarkup(<EquipmentPanel meta={meta} go={() => {}} />);
+    expect(equipped.match(/<img[^>]*corn-cleaver\.png/g)).toHaveLength(2);
+    const unequipped = renderToStaticMarkup(<EquipmentPanel meta={{ ...meta, equippedWeaponId: null }} go={() => {}} />);
+    expect(unequipped.match(/<img[^>]*corn-cleaver\.png/g)).toHaveLength(1);
+    expect(unequipped).toContain('基础厨刀');
+  });
+});
+
 describe('one-use shop supplies', () => {
   it('keeps each approved icon and offers repeat purchases while showing stock', () => {
     const meta = createMetaState({ coins: 1000, ownedItems: [

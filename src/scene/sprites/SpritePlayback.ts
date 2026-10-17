@@ -20,7 +20,7 @@ export class SpritePlayback {
   private time=0;
   private revision=0;
 
-  constructor(private bossKind:Exclude<BossKind,'tomato'>){}
+  constructor(private bossKind:BossKind){}
 
   update(state:CombatState,feedback:CombatFeedback|null,hold:VisualHold|null,reducedMotion=false){
     if(this.battleId!==state.battleId||this.lastTime!==null&&state.time<this.lastTime){

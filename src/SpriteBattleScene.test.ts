@@ -15,7 +15,7 @@ afterEach(()=>vi.unstubAllGlobals());
 const suppliedManifests=import.meta.glob<string>('/public/assets/monster-sprites/*/manifest.json',
   {eager:true,query:'?raw',import:'default'});
 
-async function recordedScene(boss:'carrot'|'cabbage'|'jelly'){
+async function recordedScene(boss:'carrot'|'cabbage'|'jelly'|'tomato'){
   const source=JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]) as SpriteManifest;
   const draws:Array<{src:string;alpha:number}>=[];
   const properties:Record<string,unknown>={globalAlpha:1};
@@ -37,7 +37,7 @@ async function recordedScene(boss:'carrot'|'cabbage'|'jelly'){
   return {scene,draws,source};
 }
 
-it.each(['carrot','cabbage','jelly'] as const)('shows every %s Perfect pose at 60Hz without extending the reaction',async boss=>{
+it.each(['carrot','cabbage','jelly','tomato'] as const)('shows every %s Perfect pose at 60Hz without extending the reaction',async boss=>{
   const {scene,draws,source}=await recordedScene(boss);
   const initial=createCombat(1,boss),event={id:1,kind:'Perfect' as const,time:1000,
     amount:1,position:{x:.5,y:.5},energyGain:0,angle:0,hitStopMs:80};
@@ -53,7 +53,7 @@ it.each(['carrot','cabbage','jelly'] as const)('shows every %s Perfect pose at 6
   }finally{scene.dispose()}
 });
 
-it.each(['carrot','cabbage','jelly'] as const)('shows every %s Good pose at 60Hz within the original 450ms',async boss=>{
+it.each(['carrot','cabbage','jelly','tomato'] as const)('shows every %s Good pose at 60Hz within the original 450ms',async boss=>{
   const {scene,draws,source}=await recordedScene(boss);
   const initial=createCombat(1,boss),event={id:1,kind:'Nice' as const,time:1000,
     amount:1,position:{x:.5,y:.5},energyGain:0,angle:0,hitStopMs:25};
@@ -124,10 +124,10 @@ it('keeps the second circle animating and clickable during the first circle hit 
   }finally{scene.dispose()}
 });
 
-it('settles both real double-circle hits while continuing one body reaction',async()=>{
-  const {scene}=await recordedScene('carrot');
+it.each(['carrot','tomato'] as const)('settles both real %s double-circle hits while continuing one body reaction',async boss=>{
+  const {scene}=await recordedScene(boss);
   try{
-    let state=createCombat(11,'carrot');
+    let state=createCombat(11,boss);
     for(let i=0;i<1000&&(state.phase!=='targetActive'||state.targets.length!==2);i++){
       if(state.phase==='targetActive')for(const target of state.targets)state=tapTarget(state,target.circleId);
       else state=tickCombat(state,20);
@@ -143,6 +143,42 @@ it('settles both real double-circle hits while continuing one body reaction',asy
     expect(state.combo).toBe(before.combo+1);
     expect(playback.age).toBeGreaterThanOrEqual(before.age);
     expect(playback.revision).toBe(before.revision);
+  }finally{scene.dispose()}
+});
+
+it('renders all four tomato verdicts, returns to parry, and finishes without an extra group',async()=>{
+  const {scene}=await recordedScene('tomato');
+  let state=createCombat(7319,'tomato');
+  const verdicts:number[]=[],returns:number[]=[];
+  try{
+    for(let frame=0;frame<10000&&state.phase!=='settle';frame++){
+      const previousStage=state.stageIndex;
+      if(state.phase==='targetActive'){
+        for(const circle of state.targets){
+          scene.render(state);
+          const target=scene.getTargetLayout(circle.targetIndex)!;
+          expect(scene.getTargetAt(target.x,target.y,state)?.circleId).toBe(circle.circleId);
+          state=tapTarget(state,circle.circleId);
+          scene.render(state);
+        }
+      }else if(state.phase==='verdictReady'){
+        verdicts.push(state.stageIndex);
+        state=startVerdict(state);
+      }else if(state.phase==='verdictSlash'){
+        state=applyContinuousCut(state,{x:.5,y:.6},true);
+      }else state=tickCombat(state,20);
+      expect(()=>scene.render(state)).not.toThrow();
+      if(state.stageIndex>previousStage&&state.battle.bossHp>0)returns.push(state.stageIndex);
+    }
+    expect(verdicts).toEqual([0,1,2,3]);
+    expect(returns).toEqual([1,2,3]);
+    expect(state.phase).toBe('settle');
+    expect(state.battle.bossHp).toBe(0);
+    expect(state.battle.playerHp).toBe(3);
+    expect(state.targets).toEqual([]);
+    for(let age=0;age<=1500;age+=20){
+      expect(()=>scene.render({...state,time:state.time+age,elapsed:age})).not.toThrow();
+    }
   }finally{scene.dispose()}
 });
 
@@ -223,7 +259,7 @@ it('draws tight images at their original canvas offset',async()=>{
   }finally{scene.dispose()}
 });
 
-const cases=(['corn','jelly','carrot','cabbage'] as const).flatMap(boss=>
+const cases=(['corn','jelly','carrot','cabbage','tomato'] as const).flatMap(boss=>
   ([[320,568],[390,844],[432,768]] as const).map(([width,height])=>[boss,width,height] as const));
 
 it.each(cases)('%s at %ipx renders and picks a ring, then pauses it',async(boss,width,height)=>{

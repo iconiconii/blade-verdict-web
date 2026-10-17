@@ -24,6 +24,7 @@ MONSTERS = {
     'carrot': '萝卜',
     'cabbage': '包菜',
     'jelly': '紫果冻',
+    'tomato': 'zhanshi9',
 }
 CLIPS = ('Idle', 'Good', 'Perfect', 'Miss')
 SOURCE_SIZE = (960, 960)
@@ -136,10 +137,27 @@ def interior_white_seed_for(monster: str, clip: str, number: int) -> tuple[int, 
     return (445, 425) if (monster, clip, number) == ('carrot', 'Good', 26) else None
 
 
+def indexed_clips(monster: str, directory: Path) -> dict[str, list[tuple[int, Path]]]:
+    if monster != 'tomato':
+        return {clip: source_frames(directory / clip) for clip in CLIPS}
+    # zhanshi9 is one take, not four labelled clips. Keep its neutral bookends
+    # out of the hit cycle, reserve the large flash for Perfect, and never play
+    # a successful-hit animation when the player misses. No new poses are made.
+    frames = source_frames(directory)
+    return {
+        'Idle': [(n, path) for n, path in frames if n <= 26 or n >= 77],
+        'Good': [(n, path) for n, path in frames if 26 <= n <= 77 and n != 29],
+        'Perfect': [(n, path) for n, path in frames if 26 <= n <= 77],
+        'Miss': [(n, path) for n, path in frames if n <= 26 or n >= 77],
+    }
+
+
 def convert_monster(monster: str, source_root: Path, output_root: Path, quality: int,
                     image_scale: float = 1) -> dict:
     source_directory = source_root / MONSTERS[monster]
-    indexed = {clip: source_frames(source_directory / clip) for clip in CLIPS}
+    indexed = indexed_clips(monster, source_directory)
+    if any(not frames for frames in indexed.values()):
+        raise ValueError(f'Missing required animation segment: {source_directory}')
 
     # One union in source coordinates gives every clip the same stable origin.
     # Tight WebP frames later retain their offset within this shared crop.
@@ -166,14 +184,16 @@ def convert_monster(monster: str, source_root: Path, output_root: Path, quality:
     }
     if image_scale != 1:
         manifest['imageScale'] = image_scale
+    written: set[str] = set()
     for clip, frames in indexed.items():
-        clip_destination = destination / clip
+        clip_directory = 'Shared' if monster == 'tomato' else clip
+        clip_destination = destination / clip_directory
         clip_destination.mkdir(parents=True, exist_ok=True)
         entries: list[dict] = []
         for number, source_path in frames:
             image = cleaned_frame(source_path, remove_white_for(monster, clip, number),
                                   interior_white_seed_for(monster, clip, number))
-            relative_file = f'{clip}/{number:05d}.webp'
+            relative_file = f'{clip_directory}/{number:05d}.webp'
             output_path = destination / relative_file
             aligned = image.crop(crop)
             rect = padded_alpha_rect(aligned)
@@ -184,7 +204,9 @@ def convert_monster(monster: str, source_root: Path, output_root: Path, quality:
             export_size = (max(1, int(frame_width * image_scale + .5)),
                            max(1, int(frame_height * image_scale + .5)))
             exported = tight if image_scale == 1 else tight.resize(export_size, Image.Resampling.LANCZOS)
-            exported.save(output_path, format='WEBP', quality=quality, method=5, exact=True)
+            if relative_file not in written:
+                exported.save(output_path, format='WEBP', quality=quality, method=5, exact=True)
+                written.add(relative_file)
             with Image.open(output_path) as decoded:
                 if decoded.format != 'WEBP' or decoded.size != export_size:
                     raise ValueError(f'Invalid converted frame: {output_path}')

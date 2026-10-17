@@ -3,9 +3,10 @@ import { bossKindLabel, newBattle } from '../../domain/v2';
 import { HuntArt } from './HuntScreens';
 import './battle-hud.css';
 import { ItemIcon } from '../index';
+import { WeaponIcon } from '../WeaponIcon';
 
 /** Read-only HUD. The battle simulation remains the only source of time/resources. */
-export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, weaponName = '基础厨刀', onPause, onRelease }: { combat: CombatState; visualMeter: number; readyPulse?: number; bombCount?: number; weaponName?: string; onPause: () => void; onRelease?: () => void }) {
+export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, weaponId = null, weaponName = '基础厨刀', onPause, onRelease }: { combat: CombatState; visualMeter: number; readyPulse?: number; bombCount?: number; weaponId?: string | null; weaponName?: string; onPause: () => void; onRelease?: () => void }) {
   const { battle, bossKind, phase } = combat;
   const maximum = newBattle(bossKind);
   const verdict = phase === 'verdictReady' || phase === 'verdictSlash';
@@ -35,7 +36,7 @@ export function BattleHud({ combat, visualMeter, readyPulse = 0, bombCount = 0, 
     </aside>
     <div className="hunt-item-slots" aria-label="战斗辅具">
       <div className="hunt-item-slot has-weapon" data-testid="weapon-status" aria-label={`装备1：${weaponName}`}>
-        <HuntArt name="item-socket" /><span className="hunt-weapon-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l8.5-8.5m-3-3L14 4l3 3-4.5 4.5M8 13l3 3m-5 4h4"/></svg></span>
+        <HuntArt name="item-socket" /><span className="hunt-weapon-icon"><WeaponIcon weaponId={weaponId} /></span>
         <small>装备1</small><span className="hunt-equipment-detail">{weaponName}</span>
       </div>
       <div className={`hunt-item-slot ${bombCount > 0 || combat.tomatoBombTriggered ? 'has-bomb' : ''}`} data-testid="bomb-status" data-triggered={combat.tomatoBombTriggered} aria-label={`西红柿炸弹：库存 ${bombCount}，${combat.tomatoBombTriggered ? '本次已消耗1个' : bombCount > 0 ? '裁决首刀自动消耗1个' : '前往商店购买或补充'}`}>

@@ -39,6 +39,7 @@ export function Battle(){
   const combat=useGame(s=>s.combat),tutorialSeen=useGame(s=>s.tutorialSeen);
   const bombCount=useGame(s=>consumableCount(s.meta,'upgrade_tomato_bomb'));
   const weaponName=useGame(s=>SHOP_ITEMS.find(item=>item.id===s.meta.equippedWeaponId)?.name??'基础厨刀');
+  const weaponId=useGame(s=>s.meta.equippedWeaponId);
   const {battle,bossKind,phase,targets,feedback,paused}=combat;
   const verdictStage=currentVerdictStage(combat);
   const showReadyCallout=presentation.ready&&presentation.readySince!==null&&combat.time-presentation.readySince<1200;
@@ -85,8 +86,8 @@ export function Battle(){
     const sceneReady=()=>{if(alive){readyRef.current=true;setReady(true);clock.current=performance.now()}};
     const setupScene=async()=>{
       if(battleVisualMode(bossKind)==='three'){
-        // Tomato has no replacement action frames yet; load its Three scene
-        // only for that battle. Other monsters never download the 3D rig.
+        // Retain the legacy renderer for unsupported future content. Supplied
+        // sprite monsters never download the 3D rig.
         const {BattleScene}=await import('./BattleScene');
         if(alive)scene.current=new BattleScene(host.current!,error,sceneReady,bossKind);
       }else scene.current=new SpriteBattleScene(host.current!,error,sceneReady,bossKind);
@@ -202,7 +203,7 @@ export function Battle(){
         </button>
       })}
     </div>
-    <BattleHud combat={combat} visualMeter={presentation.visualMeter} readyPulse={presentation.readyPulse} bombCount={bombCount} weaponName={weaponName} onPause={pauseBattle} onRelease={()=>{unlockAudio();advanceNow();useGame.getState().releaseVerdict(combat.battleId)}}/>
+    <BattleHud combat={combat} visualMeter={presentation.visualMeter} readyPulse={presentation.readyPulse} bombCount={bombCount} weaponId={weaponId} weaponName={weaponName} onPause={pauseBattle} onRelease={()=>{unlockAudio();advanceNow();useGame.getState().releaseVerdict(combat.battleId)}}/>
     {phaseHint&&<div className="phase-ribbon"><span className="phase-dot"/>{phaseHint}{bossKind==='jelly'&&phase==='targetActive'&&resolvedTargets>0&&nextTarget&&targets.length>1&&<span className="phase-next">下一处：{bodyAnchorLabel(nextTarget.anchorId)}</span>}</div>}
     <CircleFeedback events={presentation.events}/>
     {phase==='intro'&&ready&&tutorialSeen&&<div className="ready-go" data-testid="ready-go" aria-live="polite"><small>{combat.elapsed<durations.ready?'BLADE VERDICT':'FIRST STRIKE'}</small><strong>{combat.elapsed<durations.ready?'READY':'GO'}</strong><span>{combat.elapsed<durations.ready?'锁定目标':'点击身体光环'}</span></div>}

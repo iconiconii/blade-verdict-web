@@ -13,9 +13,9 @@ const suppliedManifests=import.meta.glob<string>('/public/assets/monster-sprites
   {eager:true,query:'?raw',import:'default'});
 const suppliedFrames=import.meta.glob('/public/assets/monster-sprites/**/*.webp');
 
-it('ships all four supplied action sets with every referenced frame',()=>{
-  const expected={corn:[97,27,31,29],carrot:[25,28,35,29],cabbage:[64,31,29,21],jelly:[84,30,41,53]};
-  expect(Object.keys(suppliedManifests)).toHaveLength(4);
+it('ships all five supplied action sets with every referenced frame',()=>{
+  const expected={corn:[97,27,31,29],carrot:[25,28,35,29],cabbage:[64,31,29,21],jelly:[84,30,41,53],tomato:[14,16,17,14]};
+  expect(Object.keys(suppliedManifests)).toHaveLength(5);
   for(const [boss,counts] of Object.entries(expected)){
     const root=`/public/assets/monster-sprites/${boss}`;
     const source=suppliedManifests[`${root}/manifest.json`];
@@ -31,10 +31,23 @@ it('ships all four supplied action sets with every referenced frame',()=>{
       }
     }
   }
-  expect(Object.keys(suppliedFrames)).toHaveLength(654);
+  expect(Object.keys(suppliedFrames)).toHaveLength(683);
 });
 
 describe('sprite frame timing and placement',()=>{
+  it('reuses the 29 tomato exports and keeps hit poses out of Idle and Miss',()=>{
+    const source=parseSpriteManifest(JSON.parse(suppliedManifests['/public/assets/monster-sprites/tomato/manifest.json']));
+    const unique=[...new Map(Object.values(source.clips).flat().map(frame=>[frame.file,frame])).values()];
+    expect(unique).toHaveLength(29);
+    expect(unique.reduce((sum,frame)=>sum+decodedFrameBytes(source,frame),0)).toBeLessThan(24*1024*1024);
+    for(const clip of ['Idle','Miss'] as const)expect(source.clips[clip].some(frame=>frame.n>=29&&frame.n<=71)).toBe(false);
+    for(const clip of ['Good','Perfect'] as const)expect(source.clips[clip].at(-1)?.n).toBe(77);
+    expect(source.clips.Good.some(frame=>frame.n===29)).toBe(false);
+    expect(source.clips.Perfect.some(frame=>frame.n===29)).toBe(true);
+    expect(reactionDurationMs('tomato','Good')).toBe(450);
+    expect(reactionDurationMs('tomato','Perfect')).toBe(550);
+  });
+
   it('keeps the complete corn decoded set below the existing budget without moving its geometry',()=>{
     const source=parseSpriteManifest(JSON.parse(suppliedManifests['/public/assets/monster-sprites/corn/manifest.json']));
     expect(source.imageScale).toBe(.5);
@@ -59,13 +72,13 @@ describe('sprite frame timing and placement',()=>{
     expect(sampleFrames(source,'Perfect',550,'carrot').from).toBe(source.clips.Perfect.at(-1));
   });
 
-  it.each(['corn','carrot','cabbage','jelly'] as const)('plays %s Idle exports at an even 24 fps',boss=>{
+  it.each(['corn','carrot','cabbage','jelly','tomato'] as const)('plays %s Idle exports at an even 24 fps',boss=>{
     const supplied=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     supplied.clips.Idle.forEach((frame,index)=>{
       expect(frameAt(supplied,'Idle',(index+.5)*1000/24,boss).n).toBe(frame.n);
     });
   });
-  it.each(['carrot','cabbage'] as const)('does not freeze a sparse %s action on a missing source number',boss=>{
+  it.each(['carrot','cabbage','tomato'] as const)('does not freeze a sparse %s action on a missing source number',boss=>{
     const supplied=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     for(const clip of ['Idle','Good','Perfect','Miss'] as const){
       const duration=clip==='Idle'?5000:reactionDurationMs(boss,clip);
@@ -79,7 +92,7 @@ describe('sprite frame timing and placement',()=>{
     }
   });
 
-  const mobileFramingCases=(['corn','jelly','carrot','cabbage'] as const).flatMap(boss=>
+  const mobileFramingCases=(['corn','jelly','carrot','cabbage','tomato'] as const).flatMap(boss=>
     ([[320,568],[390,844],[432,768]] as const).map(([width,height])=>[boss,width,height] as const));
 
   it.each(mobileFramingCases)('keeps every %s Idle frame inside the %ipx stage', (boss,width,height)=>{
@@ -227,7 +240,7 @@ describe('sprite frame loading',()=>{
     expect(bank.request(manifest.clips.Idle[0])).toBeNull();
   });
 
-  it.each(['corn','carrot','cabbage'] as const)('decodes %s actions before battle and reuses them on later loops',async boss=>{
+  it.each(['corn','carrot','cabbage','tomato'] as const)('decodes %s actions before battle and reuses them on later loops',async boss=>{
     const source=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     const urls:string[]=[];let decodes=0;
     vi.stubGlobal('fetch',async()=>({ok:true,json:async()=>source}));
@@ -240,11 +253,12 @@ describe('sprite frame loading',()=>{
     try{
       await bank.ready();
       const frames=Object.values(source.clips).flat();
-      expect(urls).toHaveLength(frames.length);
-      expect(decodes).toBe(frames.length);
+      const uniqueCount=new Set(frames.map(frame=>frame.file)).size;
+      expect(urls).toHaveLength(uniqueCount);
+      expect(decodes).toBe(uniqueCount);
       for(let cycle=0;cycle<4;cycle++)for(const frame of frames)expect(bank.request(frame),frame.file).not.toBeNull();
       expect(new Set(urls).size).toBe(urls.length);
-      expect(urls).toHaveLength(frames.length);
+      expect(urls).toHaveLength(uniqueCount);
     }finally{bank.dispose()}
   });
 

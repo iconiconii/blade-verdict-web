@@ -13,13 +13,15 @@ export interface SpriteGeometry {
 }
 
 /** The props differ by character, so use the illustrated body rather than the crop edge. */
-const anchors:Record<Exclude<BossKind,'tomato'>,Partial<Record<BodyAnchorId,Point>>>= {
+const anchors:Record<BossKind,Partial<Record<BodyAnchorId,Point>>>= {
   corn:{head:{x:.54,y:.39},belly:{x:.55,y:.62},leftHand:{x:.23,y:.63},rightHand:{x:.80,y:.65},
     leftKnee:{x:.38,y:.84},rightKnee:{x:.70,y:.84},leftShoulder:{x:.36,y:.49},rightShoulder:{x:.72,y:.49}},
   carrot:{head:{x:.62,y:.43},belly:{x:.62,y:.62},leftHand:{x:.28,y:.56},rightHand:{x:.83,y:.62},
     leftKnee:{x:.49,y:.84},rightKnee:{x:.78,y:.83},leftShoulder:{x:.45,y:.49},rightShoulder:{x:.76,y:.50}},
   cabbage:{head:{x:.59,y:.44},belly:{x:.57,y:.66},leftHand:{x:.23,y:.59},rightHand:{x:.86,y:.60},
     leftKnee:{x:.43,y:.84},rightKnee:{x:.78,y:.84},leftShoulder:{x:.39,y:.49},rightShoulder:{x:.76,y:.49}},
+  tomato:{head:{x:.58,y:.44},belly:{x:.58,y:.67},leftHand:{x:.25,y:.58},rightHand:{x:.91,y:.68},
+    leftKnee:{x:.39,y:.91},rightKnee:{x:.80,y:.91},leftShoulder:{x:.36,y:.44},rightShoulder:{x:.80,y:.49}},
   jelly:{head:{x:.60,y:.42},belly:{x:.60,y:.64},leftFin:{x:.29,y:.58},rightFin:{x:.85,y:.58},
     leftJoint:{x:.37,y:.73},rightJoint:{x:.79,y:.73},lowerJoint:{x:.60,y:.82}},
 };
@@ -77,7 +79,7 @@ export function spritePoseBounds(manifest:SpriteManifest,clip:SpriteClip,frame:S
     local[2]+manifest.crop[0],local[3]+manifest.crop[1]];
 }
 
-export function spriteAnchor(geometry:SpriteGeometry,kind:Exclude<BossKind,'tomato'>,anchorId:BodyAnchorId,
+export function spriteAnchor(geometry:SpriteGeometry,kind:BossKind,anchorId:BodyAnchorId,
   poseBounds:SpriteBox=geometry.sourceBody):Point {
   const [left,top,right,bottom]=poseBounds;
   const relative=anchors[kind][anchorId]??anchors[kind].belly??{x:.5,y:.6};

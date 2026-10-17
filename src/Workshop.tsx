@@ -18,6 +18,7 @@ import { assetUrl } from './ui/assets';
 import './ui/migration.css';
 import { dishPresentation } from './ui/dishes';
 import { DishArt } from './ui/DishArt';
+import { WeaponIcon } from './ui/WeaponIcon';
 
 export type WorkshopScreen = Screen;
 type GameState = ReturnType<typeof useGame.getState>;
@@ -146,7 +147,7 @@ function Inventory({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen)
 
 export function EquipmentPanel({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
   const owned = SHOP_ITEMS.filter(item => item.category === 'item' ? consumableCount(meta, item.id) > 0 : meta.purchasedShopItemIds.includes(item.id));
-  return <div className="ws-equipment-layout"><GamePanel material="wood" className="ws-equipped-card"><span className="ws-panel-kicker">CURRENT LOADOUT</span><h2>当前装备</h2><div className="ws-loadout-item"><span className="ws-loadout-icon"><Icon name="sword" size={27} /></span><div><b>{meta.equippedWeaponId ? (SHOP_ITEMS.find(item => item.id === meta.equippedWeaponId)?.name ?? '未知装备') : '基础厨刀'}</b><small>{meta.equippedWeaponId ? '裁决伤害加成已生效' : '没有额外加成'}</small></div></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => { void Promise.resolve(getWorkshopState().equipItem(null)).catch(() => undefined); }}>卸下装备</ActionButton></GamePanel><GamePanel material="wood" className="ws-owned-card"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">OWNED ITEMS</span><h2>已拥有</h2></div><ActionButton variant="quiet" onClick={() => go('shop')}>前往商店 <Icon name="arrow" size={16} /></ActionButton></div>{owned.length ? owned.map(item => <div className="ws-owned-row" key={item.id}>{item.effect ? <ItemIcon name={item.effect === 'tomato-bomb' ? 'tomato' : 'pot'} size={26} /> : <Icon name={item.category === 'weapon' ? 'sword' : 'spark'} size={20} />}<span><b>{item.name}</b><small>{item.description}</small></span><span className="ws-owned-tag">{item.category === 'item' ? `×${consumableCount(meta, item.id)}` : '已拥有'}</span></div>) : <EmptyState title="还没有装备或道具" text="在商店购买武器或补充一次性道具。" action="查看商店" onAction={() => go('shop')} />}</GamePanel></div>;
+  return <div className="ws-equipment-layout"><GamePanel material="wood" className="ws-equipped-card"><span className="ws-panel-kicker">CURRENT LOADOUT</span><h2>当前装备</h2><div className="ws-loadout-item"><span className="ws-loadout-icon"><WeaponIcon weaponId={meta.equippedWeaponId} size={meta.equippedWeaponId === 'weapon_corn_cleaver' ? 44 : 27} /></span><div><b>{meta.equippedWeaponId ? (SHOP_ITEMS.find(item => item.id === meta.equippedWeaponId)?.name ?? '未知装备') : '基础厨刀'}</b><small>{meta.equippedWeaponId ? '裁决伤害加成已生效' : '没有额外加成'}</small></div></div><ActionButton mutates variant="quiet" disabled={!meta.equippedWeaponId} onClick={() => { void Promise.resolve(getWorkshopState().equipItem(null)).catch(() => undefined); }}>卸下装备</ActionButton></GamePanel><GamePanel material="wood" className="ws-owned-card"><div className="ws-panel-heading"><div><span className="ws-panel-kicker">OWNED ITEMS</span><h2>已拥有</h2></div><ActionButton variant="quiet" onClick={() => go('shop')}>前往商店 <Icon name="arrow" size={16} /></ActionButton></div>{owned.length ? owned.map(item => <div className="ws-owned-row" key={item.id}>{item.category === 'weapon' ? <WeaponIcon weaponId={item.id} size={item.id === 'weapon_corn_cleaver' ? 36 : 20} /> : item.effect ? <ItemIcon name={item.effect === 'tomato-bomb' ? 'tomato' : 'pot'} size={26} /> : <Icon name="spark" size={20} />}<span><b>{item.name}</b><small>{item.description}</small></span><span className="ws-owned-tag">{item.category === 'item' ? `×${consumableCount(meta, item.id)}` : '已拥有'}</span></div>) : <EmptyState title="还没有装备或道具" text="在商店购买武器或补充一次性道具。" action="查看商店" onAction={() => go('shop')} />}</GamePanel></div>;
 }
 
 export function Cookbook({ meta, go }: { meta: MetaState; go: (screen: WorkshopScreen) => void }) {
@@ -193,9 +194,11 @@ function ShopCard({ item, owned, equipped, disabled, onAction, actionLabel, feat
   const shortfall = Math.max(0, item.cost - coins);
   const consumable = item.category === 'item' && item.implemented;
   return <GamePanel material="wood" data-testid={`shop-${item.id}`} className={`ui-shop-card ${item.implemented ? '' : 'is-preview'} ${equipped ? 'is-equipped' : ''} ${featured ? 'is-featured' : ''}`}>
-    <div className="ui-shop-card__art">{item.effect
+    <div className="ui-shop-card__art">{item.category === 'weapon'
+      ? <WeaponIcon weaponId={item.id} size={item.id === 'weapon_corn_cleaver' ? 60 : featured ? 38 : 29} />
+      : item.effect
       ? <ItemIcon name={item.effect === 'tomato-bomb' ? 'tomato' : 'pot'} size={54} />
-      : <Icon name={item.category === 'weapon' ? 'sword' : item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} />}</div>
+      : <Icon name={item.category === 'skin' ? 'spark' : 'bag'} size={featured ? 38 : 29} />}</div>
     <div className="ui-shop-card__copy"><span className="ws-panel-kicker">{consumable ? '一次性道具' : item.category === 'weapon' ? 'WEAPON' : item.category === 'skin' ? 'OUTFIT' : 'SUPPLY'}</span><h2>{item.name}</h2><p>{item.description}</p>
       {item.verdictDamageBonus > 0 && <strong className="ws-bonus">+{item.verdictDamageBonus} 裁决伤害</strong>}
       {item.implemented && (consumable || !owned) && shortfall > 0 && <small>还差 {formatPrice(shortfall)} 金币</small>}

@@ -13,11 +13,12 @@ import { neutralTransform, spriteAnchor, spriteContainsPoint, spriteGeometry, sp
 export type { ParryTargetLayout } from './scene/layout';
 
 type Point={x:number;y:number};
-const palette:Record<Exclude<BossKind,'tomato'>,{warm:string;accent:string;fragment:string}>={
+const palette:Record<BossKind,{warm:string;accent:string;fragment:string}>={
   corn:{warm:'#ffd46b',accent:'#72ffe1',fragment:'#e9a932'},
   carrot:{warm:'#ffae68',accent:'#72ffe1',fragment:'#ed812d'},
   cabbage:{warm:'#c9e99a',accent:'#72ffe1',fragment:'#a7cf66'},
   jelly:{warm:'#d5afff',accent:'#9bfff3',fragment:'#aa83e4'},
+  tomato:{warm:'#ffb095',accent:'#72ffe1',fragment:'#ed4935'},
 };
 const clamp=(value:number,min=0,max=1)=>Math.max(min,Math.min(max,value));
 const smooth=(value:number)=>{const t=clamp(value);return t*t*(3-2*t)};
@@ -29,7 +30,7 @@ export class SpriteBattleScene {
   private blendCanvas=document.createElement('canvas');
   private blendCtx:CanvasRenderingContext2D;
   private frameBank:SpriteFrameBank;
-  private bossKind:Exclude<BossKind,'tomato'>;
+  private bossKind:BossKind;
   private feedbackManager=new FeedbackManager();
   private impactPresentation=new ImpactPresentation();
   private width=1;
@@ -47,7 +48,6 @@ export class SpriteBattleScene {
   private disposed=false;
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
-    if(bossKind==='tomato')throw Error('Tomato still uses its existing battle scene');
     this.bossKind=bossKind;
     this.playback=new SpritePlayback(bossKind);
     const ctx=this.canvas.getContext('2d',{alpha:true});
@@ -108,9 +108,9 @@ export class SpriteBattleScene {
   }
 
   private effectHeavyFrame(clip:SpriteClip,frame:{n:number}){
-    // This supplied frame is a full-canvas flash, not a body pose. Other large
+    // These supplied frames are full-canvas flashes, not body poses. Other large
     // frames include essential acting, so they must remain fully visible.
-    return this.bossKind==='corn'&&clip==='Perfect'&&frame.n===27;
+    return clip==='Perfect'&&(this.bossKind==='corn'&&frame.n===27||this.bossKind==='tomato'&&frame.n===29);
   }
 
   private transformation(state:CombatState,reducedMotion:boolean,shake:number):ActorTransform{

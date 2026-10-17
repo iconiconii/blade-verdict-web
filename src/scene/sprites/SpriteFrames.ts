@@ -22,7 +22,7 @@ export interface SpriteManifest {
 }
 
 export const spriteClips:readonly SpriteClip[]=['Idle','Good','Perfect','Miss'];
-export function reactionDurationMs(bossKind:Exclude<BossKind,'tomato'>,clip:SpriteClip){
+export function reactionDurationMs(bossKind:BossKind,clip:SpriteClip){
   if(clip==='Idle')return 0;
   if(clip==='Good')return 450;
   if(bossKind==='jelly')return clip==='Perfect'?620:720;
@@ -61,12 +61,12 @@ export function parseSpriteManifest(value:unknown):SpriteManifest {
   return manifest as SpriteManifest;
 }
 
-export function clipDurationMs(manifest:SpriteManifest,clip:SpriteClip,bossKind:Exclude<BossKind,'tomato'>){
+export function clipDurationMs(manifest:SpriteManifest,clip:SpriteClip,bossKind:BossKind){
   return clip==='Idle'?manifest.clips.Idle.length*1000/24:reactionDurationMs(bossKind,clip);
 }
 
 /** Export IDs identify poses, not dwell times. Each available pose gets one beat. */
-export function frameAt(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:Exclude<BossKind,'tomato'>='corn'):SpriteFrame {
+export function frameAt(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:BossKind='corn'):SpriteFrame {
   const frames=manifest.clips[clip],duration=clipDurationMs(manifest,clip,bossKind);
   const age=clip==='Idle'?((Math.max(0,elapsedMs)%duration)+duration)%duration:
     Math.max(0,Math.min(elapsedMs,duration-0.001));
@@ -74,7 +74,7 @@ export function frameAt(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number
 }
 
 /** Continuous pose sampling: keep durations intact while avoiding hard frame switches. */
-export function sampleFrames(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:Exclude<BossKind,'tomato'>){
+export function sampleFrames(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:BossKind){
   const frames=manifest.clips[clip],duration=clipDurationMs(manifest,clip,bossKind);
   const position=clip==='Idle'?Math.max(0,elapsedMs)%duration/duration*frames.length
     :Math.min(frames.length-1,Math.max(0,elapsedMs)/duration*frames.length);
@@ -103,7 +103,7 @@ export class SpriteFrameBank {
   private readonly maxPending=10;
   private readonly maxPrefetchPending=7;
 
-  constructor(private bossKind:Exclude<BossKind,'tomato'>){
+  constructor(private bossKind:BossKind){
     this.manifestUrl=assetUrl(`assets/monster-sprites/${bossKind}/manifest.json`);
   }
 
@@ -116,7 +116,9 @@ export class SpriteFrameBank {
     // The first visible frame must exist before the battle clock starts.
     await this.load(manifest.clips.Idle[0]);
     if(this.disposed)throw Error('Sprite bank was disposed');
-    const frames=spriteClips.flatMap(clip=>manifest.clips[clip]);
+    // A supplied take can back several clips. Count and decode each physical
+    // image once, rather than inflating the cache budget with clip aliases.
+    const frames=[...new Map(spriteClips.flatMap(clip=>manifest.clips[clip]).map(frame=>[frame.file,frame])).values()];
     const totalBytes=frames.reduce((sum,frame)=>sum+decodedFrameBytes(manifest,frame),0);
     if(frames.every(frame=>frame.rect)&&totalBytes<=this.maxDecodedBytes){
       // Decode the compact active-monster set before its first input window.

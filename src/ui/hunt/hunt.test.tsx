@@ -105,6 +105,7 @@ describe('reference hunt UI', () => {
     expect(html).toContain('未携带');
     expect(html).toContain('装备1');expect(html).toContain('装备2');
     expect(html).toContain('基础厨刀');expect(html).toContain('剩余生命 3/3');
+    expect(html).not.toContain('equipment/corn-cleaver.png');
     expect(html).not.toContain('商店解锁');
     expect(html).not.toContain('icons/tomato.png');
     expect(html).toContain('蓄满后点击释放');expect(html).not.toContain('自动裁决');
@@ -112,8 +113,9 @@ describe('reference hunt UI', () => {
     expect(renderToStaticMarkup(<BattleHud combat={state} visualMeter={100} onPause={()=>{}}/>)).toContain('点击释放裁决');
   });
   it('shows the equipped weapon alongside the carried bomb',()=>{
-    const html=renderToStaticMarkup(<BattleHud combat={createCombat()} visualMeter={0} weaponName="玉米斩骨刀" bombCount={2} onPause={()=>{}}/>);
+    const html=renderToStaticMarkup(<BattleHud combat={createCombat()} visualMeter={0} weaponId="weapon_corn_cleaver" weaponName="玉米斩骨刀" bombCount={2} onPause={()=>{}}/>);
     expect(html).toContain('装备1：玉米斩骨刀');expect(html).toContain('首刀自动 · ×2');
+    expect(html).toContain('equipment/corn-cleaver.png');
     expect(html).not.toContain('未开放');expect(html).not.toContain('果冻快煮器');
   });
 });
