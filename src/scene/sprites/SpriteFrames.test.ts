@@ -1,5 +1,5 @@
 import { afterEach,describe,expect,it,vi } from 'vitest';
-import { frameAt,parseSpriteManifest,reactionDurationMs,SpriteFrameBank,type SpriteClip,type SpriteManifest } from './SpriteFrames';
+import { decodedFrameBytes,frameAt,parseSpriteManifest,reactionDurationMs,sampleFrames,SpriteFrameBank,type SpriteClip,type SpriteManifest } from './SpriteFrames';
 import { spriteAnchor,spriteContainsPoint,spriteGeometry,spritePoseBounds,transformPoint,neutralTransform } from './SpriteGeometry';
 import { swipeContact } from '../../domain/swipe';
 
@@ -35,6 +35,30 @@ it('ships all four supplied action sets with every referenced frame',()=>{
 });
 
 describe('sprite frame timing and placement',()=>{
+  it('keeps the complete corn decoded set below the existing budget without moving its geometry',()=>{
+    const source=parseSpriteManifest(JSON.parse(suppliedManifests['/public/assets/monster-sprites/corn/manifest.json']));
+    expect(source.imageScale).toBe(.5);
+    const bytes=Object.values(source.clips).flat().reduce((sum,frame)=>sum+decodedFrameBytes(source,frame),0);
+    expect(bytes).toBeLessThan(80*1024*1024);
+    expect(spriteGeometry(source,390,844)).toEqual(spriteGeometry({...source,imageScale:1},390,844));
+  });
+
+  it.each([0,-1,2,NaN])('rejects invalid image scale %s',imageScale=>{
+    expect(()=>parseSpriteManifest({...manifest,imageScale})).toThrow('Sprite image scale is invalid');
+  });
+
+  it.each([30,60,120])('samples continuous poses at %i Hz with no clock-dependent reaction length',hz=>{
+    const source=parseSpriteManifest(JSON.parse(suppliedManifests['/public/assets/monster-sprites/carrot/manifest.json']));
+    let previous=-1;
+    for(let age=0;age<550;age+=1000/hz){
+      const pose=sampleFrames(source,'Perfect',age,'carrot');
+      const position=source.clips.Perfect.indexOf(pose.from)+pose.mix;
+      expect(position).toBeGreaterThanOrEqual(previous);previous=position;
+      expect(pose.mix).toBeGreaterThanOrEqual(0);expect(pose.mix).toBeLessThan(1);
+    }
+    expect(sampleFrames(source,'Perfect',550,'carrot').from).toBe(source.clips.Perfect.at(-1));
+  });
+
   it.each(['corn','carrot','cabbage','jelly'] as const)('plays %s Idle exports at an even 24 fps',boss=>{
     const supplied=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     supplied.clips.Idle.forEach((frame,index)=>{
@@ -203,7 +227,7 @@ describe('sprite frame loading',()=>{
     expect(bank.request(manifest.clips.Idle[0])).toBeNull();
   });
 
-  it.each(['carrot','cabbage'] as const)('decodes %s actions before battle and reuses them on later loops',async boss=>{
+  it.each(['corn','carrot','cabbage'] as const)('decodes %s actions before battle and reuses them on later loops',async boss=>{
     const source=parseSpriteManifest(JSON.parse(suppliedManifests[`/public/assets/monster-sprites/${boss}/manifest.json`]));
     const urls:string[]=[];let decodes=0;
     vi.stubGlobal('fetch',async()=>({ok:true,json:async()=>source}));

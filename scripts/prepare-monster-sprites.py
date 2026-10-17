@@ -136,7 +136,8 @@ def interior_white_seed_for(monster: str, clip: str, number: int) -> tuple[int, 
     return (445, 425) if (monster, clip, number) == ('carrot', 'Good', 26) else None
 
 
-def convert_monster(monster: str, source_root: Path, output_root: Path, quality: int) -> dict:
+def convert_monster(monster: str, source_root: Path, output_root: Path, quality: int,
+                    image_scale: float = 1) -> dict:
     source_directory = source_root / MONSTERS[monster]
     indexed = {clip: source_frames(source_directory / clip) for clip in CLIPS}
 
@@ -163,6 +164,8 @@ def convert_monster(monster: str, source_root: Path, output_root: Path, quality:
         'crop': [crop[0], crop[1], crop_width, crop_height],
         'clips': {},
     }
+    if image_scale != 1:
+        manifest['imageScale'] = image_scale
     for clip, frames in indexed.items():
         clip_destination = destination / clip
         clip_destination.mkdir(parents=True, exist_ok=True)
@@ -176,14 +179,19 @@ def convert_monster(monster: str, source_root: Path, output_root: Path, quality:
             rect = padded_alpha_rect(aligned)
             frame_width, frame_height = rect[2] - rect[0], rect[3] - rect[1]
             tight = aligned.crop(rect)
-            tight.save(output_path, format='WEBP', quality=quality, method=5, exact=True)
+            # Preserve the source-space rectangle and body anchors. Only the
+            # decode resolution changes; the renderer still draws at the same size.
+            export_size = (max(1, int(frame_width * image_scale + .5)),
+                           max(1, int(frame_height * image_scale + .5)))
+            exported = tight if image_scale == 1 else tight.resize(export_size, Image.Resampling.LANCZOS)
+            exported.save(output_path, format='WEBP', quality=quality, method=5, exact=True)
             with Image.open(output_path) as decoded:
-                if decoded.format != 'WEBP' or decoded.size != (frame_width, frame_height):
+                if decoded.format != 'WEBP' or decoded.size != export_size:
                     raise ValueError(f'Invalid converted frame: {output_path}')
                 rgba = decoded.convert('RGBA')
-                if ImageChops.difference(tight.getchannel('A'), rgba.getchannel('A')).getbbox():
+                if ImageChops.difference(exported.getchannel('A'), rgba.getchannel('A')).getbbox():
                     raise ValueError(f'Converted frame changed alpha: {output_path}')
-                tight_bbox = visible_bbox(rgba)
+                tight_bbox = visible_bbox(tight)
             if tight_bbox is None:
                 raise ValueError(f'Converted frame became invisible: {output_path}')
             bbox = [tight_bbox[0] + rect[0], tight_bbox[1] + rect[1],
@@ -206,11 +214,16 @@ def main() -> None:
                         / 'public/assets/monster-sprites')
     parser.add_argument('--boss', choices=MONSTERS, action='append', dest='bosses')
     parser.add_argument('--quality', type=int, default=76)
+    parser.add_argument('--image-scale', type=float, default=None,
+                        help='Decode resolution; default corn=.5, other monsters=1. Geometry is unchanged.')
     args = parser.parse_args()
     if not 1 <= args.quality <= 100:
         parser.error('--quality must be between 1 and 100')
+    if args.image_scale is not None and not 0 < args.image_scale <= 1:
+        parser.error('--image-scale must be greater than 0 and at most 1')
     for boss in args.bosses or MONSTERS:
-        manifest = convert_monster(boss, args.source_root, args.output_root, args.quality)
+        image_scale = args.image_scale if args.image_scale is not None else (.5 if boss == 'corn' else 1)
+        manifest = convert_monster(boss, args.source_root, args.output_root, args.quality, image_scale)
         counts = ', '.join(f'{clip}={len(manifest["clips"][clip])}' for clip in CLIPS)
         print(f'{boss}: {counts}; crop={manifest["crop"]}')
 

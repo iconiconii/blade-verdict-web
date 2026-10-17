@@ -50,6 +50,32 @@ it('upgrades a nearby Good to Perfect without accumulating both holds',()=>{
   expect(update(1090,[good,perfect]).age).toBe(10);
 });
 
+it.each(['Nice','Perfect'] as const)('continues an unfinished %s reaction on a second contact instead of rewinding',kind=>{
+  const update=player(),first=hit(1,kind),second=hit(2,kind,1150);
+  update(1000,[first]);
+  const before=update(1140,[first]);
+  const after=update(1150,[first,second]);
+  expect(after.age).toBeGreaterThanOrEqual(before.age);
+  expect(after.revision).toBe(before.revision);
+  expect(update(1800,[first,second]).clip).toBe('Idle');
+});
+
+it('preserves reaction progress when a stronger contact arrives mid-animation',()=>{
+  const update=player(),good=hit(1,'Nice'),perfect=hit(2,'Perfect',1150);
+  update(1000,[good]);
+  const before=update(1150,[good]);
+  const after=update(1150,[good,perfect]);
+  expect(after.clip).toBe('Perfect');
+  expect(after.age/550).toBeCloseTo(before.age/450);
+});
+
+it('does not replace an unfinished Perfect with a weaker body reaction',()=>{
+  const update=player(),perfect=hit(1,'Perfect'),good=hit(2,'Nice',1150),miss=hit(3,'Miss',1200);
+  update(1000,[perfect]);
+  expect(update(1150,[perfect,good]).clip).toBe('Perfect');
+  expect(update(1200,[perfect,good,miss]).clip).toBe('Perfect');
+});
+
 it('does not advance either the clip or its transition while paused',()=>{
   const update=player(),event=hit(1,'Perfect');
   update(1000,[event]);

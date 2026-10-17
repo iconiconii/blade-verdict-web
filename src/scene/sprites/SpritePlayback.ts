@@ -8,6 +8,8 @@ function movingTime(from:number,to:number,hold:VisualHold|null){
   return Math.max(0,to-from-frozen);
 }
 
+const reactionPriority:Record<SpriteClip,number>={Idle:0,Miss:1,Good:2,Perfect:3};
+
 /** Local presentation clock. Never changes combat time, circles or input. */
 export class SpritePlayback {
   private battleId:string|null=null;
@@ -34,7 +36,16 @@ export class SpritePlayback {
       const clip:SpriteClip=result==='Nice'?'Good':result==='Perfect'?'Perfect':result==='Miss'?'Miss':'Idle';
       const age=movingTime(feedback.time,state.time,reducedMotion?null:hold);
       if(clip!=='Idle'&&age<reactionDurationMs(this.bossKind,clip)){
-        this.clip=clip;this.age=age;this.revision++;
+        const duration=reactionDurationMs(this.bossKind,this.clip);
+        if(this.clip==='Idle'||this.age>=duration){
+          this.clip=clip;this.age=age;this.revision++;
+        }else if(reactionPriority[clip]>reactionPriority[this.clip]){
+          // Upgrade the acting at the same point in its recovery. A second
+          // contact still gets its own hit stop/HUD/audio, but never rewinds
+          // an unfinished body reaction or queues stale acting for later.
+          this.age=this.age/duration*reactionDurationMs(this.bossKind,clip);
+          this.clip=clip;this.revision++;
+        }
       }
     }
     const verdict=state.phase==='verdictReady'||state.phase==='verdictSlash'||state.phase==='settle';

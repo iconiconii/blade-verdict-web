@@ -7,6 +7,10 @@
 .ingredient-burst i{position:absolute;left:0;top:0;font-style:normal;font-size:18px;filter:drop-shadow(0 2px 5px #0009);animation:ingredient-fly .42s cubic-bezier(.2,.8,.25,1) calc(var(--burst-index)*42ms) both;--tx:calc((var(--burst-index) - (var(--burst-count) - 1)/2)*26px);--ty:calc(-32px - var(--burst-row,0)*16px)}
 .ingredient-burst--perfect i{font-size:20px;animation-duration:.52s}
 .ingredient-burst--corn i{color:#ffd36b}.ingredient-burst--jelly i{color:#d8bcff}
+.verdict-ingredient-burst i{filter:none;animation:verdict-food-fly .52s linear both;animation-play-state:paused}
+.verdict-ingredient-burst img{display:block;pointer-events:none}
+@keyframes verdict-food-fly{0%{opacity:0;transform:translate(-50%,-50%) scale(.55) rotate(0deg)}15%{opacity:1}40%{opacity:1;transform:translate(calc(-50% + var(--throw-x)*.55),calc(-50% + var(--throw-y))) scale(1) rotate(calc(var(--spin)*.4))}100%{opacity:0;transform:translate(calc(-50% + var(--throw-x)),calc(-50% + var(--land-y))) scale(.65) rotate(var(--spin))}}
+@media(prefers-reduced-motion:reduce){.verdict-ingredient-burst{display:none}}
 .battle--verdictReady .battle-vignette,.battle--verdictSlash .battle-vignette{background:linear-gradient(#051517ee,transparent 48%,#051517dd),radial-gradient(ellipse,transparent 15%,#071f20bb 90%)}
 .battle-top{padding:calc(22px + env(safe-area-inset-top)) max(25px,env(safe-area-inset-right)) 0 max(25px,env(safe-area-inset-left));gap:25px;align-items:flex-start;background:none;pointer-events:none;letter-spacing:normal}
 .battle-top .battle-icon{pointer-events:auto;display:grid;place-items:center;width:44px;height:44px;border:1px solid #ead09b55;background:#08181ca8;border-radius:50%;color:#f4d89b;font-size:24px}

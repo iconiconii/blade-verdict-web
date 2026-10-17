@@ -7,14 +7,16 @@ export interface SpriteFrame {
   /** Source frame identity and order. Missing source numbers are not long holds. */
   n:number;
   file:string;
-  /** Visible bounds in the fixed cropped WebP's local pixel space. */
+  /** Visible bounds in the fixed crop's source coordinates, before image scaling. */
   bbox:SpriteBox;
   /** Tight image rectangle [x, y, width, height] inside the manifest crop. */
   rect?:SpriteBox;
 }
 export interface SpriteManifest {
   sourceSize:[number,number];
-  /** Fixed rectangle in the original canvas. All WebPs use these dimensions. */
+  /** Image pixel resolution only. Crop, rectangles and anchors stay in source space. */
+  imageScale?:number;
+  /** Fixed rectangle in the original canvas; image scaling never moves its origin. */
   crop:[number,number,number,number];
   clips:Record<SpriteClip,SpriteFrame[]>;
 }
@@ -34,6 +36,8 @@ const box=(value:unknown):value is SpriteBox=>Array.isArray(value)&&value.length
 export function parseSpriteManifest(value:unknown):SpriteManifest {
   if(!value||typeof value!=='object')throw Error('Sprite manifest is missing');
   const manifest=value as Partial<SpriteManifest>;
+  if(manifest.imageScale!==undefined&&(!finite(manifest.imageScale)||manifest.imageScale<=0||manifest.imageScale>1))
+    throw Error('Sprite image scale is invalid');
   if(!Array.isArray(manifest.sourceSize)||manifest.sourceSize.length!==2||!manifest.sourceSize.every(finite)
     ||manifest.sourceSize.some(number=>number<=0)||!box(manifest.crop)
     ||manifest.crop[2]<=0||manifest.crop[3]<=0||!manifest.clips)throw Error('Sprite manifest geometry is invalid');
@@ -69,6 +73,20 @@ export function frameAt(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number
   return frames[Math.min(frames.length-1,Math.floor(frames.length*age/duration))];
 }
 
+/** Continuous pose sampling: keep durations intact while avoiding hard frame switches. */
+export function sampleFrames(manifest:SpriteManifest,clip:SpriteClip,elapsedMs:number,bossKind:Exclude<BossKind,'tomato'>){
+  const frames=manifest.clips[clip],duration=clipDurationMs(manifest,clip,bossKind);
+  const position=clip==='Idle'?Math.max(0,elapsedMs)%duration/duration*frames.length
+    :Math.min(frames.length-1,Math.max(0,elapsedMs)/duration*frames.length);
+  const index=Math.min(frames.length-1,Math.floor(position));
+  return {from:frames[index],to:frames[clip==='Idle'?(index+1)%frames.length:Math.min(index+1,frames.length-1)],mix:position-index};
+}
+
+export function decodedFrameBytes(manifest:SpriteManifest,frame:SpriteFrame){
+  const rect=frame.rect??manifest.crop,scale=manifest.imageScale??1;
+  return Math.max(1,Math.round(rect[2]*scale))*Math.max(1,Math.round(rect[3]*scale))*4;
+}
+
 /** Only the current monster is fetched. Tight frames fit a bounded decoded cache. */
 export class SpriteFrameBank {
   readonly manifestUrl:string;
@@ -99,7 +117,7 @@ export class SpriteFrameBank {
     await this.load(manifest.clips.Idle[0]);
     if(this.disposed)throw Error('Sprite bank was disposed');
     const frames=spriteClips.flatMap(clip=>manifest.clips[clip]);
-    const totalBytes=frames.reduce((sum,frame)=>sum+(frame.rect??manifest.crop)[2]*(frame.rect??manifest.crop)[3]*4,0);
+    const totalBytes=frames.reduce((sum,frame)=>sum+decodedFrameBytes(manifest,frame),0);
     if(frames.every(frame=>frame.rect)&&totalBytes<=this.maxDecodedBytes){
       // Decode the compact active-monster set before its first input window.
       // Four workers bound concurrent decoding and leave no cold hit animation.
@@ -120,10 +138,15 @@ export class SpriteFrameBank {
 
   /** Never synthesize a source path from a frame number: clips have sparse IDs. */
   private key(frame:SpriteFrame){return frame.file}
-  private url(frame:SpriteFrame){return assetUrl(`assets/monster-sprites/${this.bossKind}/${frame.file}`)}
+  private url(frame:SpriteFrame){
+    const url=assetUrl(`assets/monster-sprites/${this.bossKind}/${frame.file}`);
+    // A newly scaled manifest must not reuse a browser-cached full-size image.
+    return this.manifest?.imageScale?`${url}?scale=${this.manifest.imageScale}`:url;
+  }
   private imageBytes(image:HTMLImageElement){
-    const frame=this.frameByImage.get(image),rect=frame?.rect??this.manifest?.crop;
-    return rect?rect[2]*rect[3]*4:0;
+    if(image.naturalWidth&&image.naturalHeight)return image.naturalWidth*image.naturalHeight*4;
+    const frame=this.frameByImage.get(image);
+    return frame&&this.manifest?decodedFrameBytes(this.manifest,frame):0;
   }
   private touch(key:string,image:HTMLImageElement){
     if(!this.loaded.has(key))this.decodedBytes+=this.imageBytes(image);

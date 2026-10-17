@@ -4,8 +4,9 @@ import { FeedbackManager } from './feedback/FeedbackManager';
 import { ImpactPresentation } from './scene/ImpactPresentation';
 import type { ParryTargetLayout } from './scene/layout';
 import { verdictMotion } from './scene/verdictMotion';
-import { SpriteFrameBank, clipDurationMs, frameAt, spriteClips, type SpriteBox, type SpriteClip } from './scene/sprites/SpriteFrames';
+import { SpriteFrameBank, sampleFrames, spriteClips, type SpriteBox, type SpriteClip } from './scene/sprites/SpriteFrames';
 import { SpritePlayback } from './scene/sprites/SpritePlayback';
+import { mixSpriteLayers, type SpriteLayer } from './scene/sprites/SpritePose';
 import { neutralTransform, spriteAnchor, spriteContainsPoint, spriteGeometry, spritePoseBounds, transformPoint,
   type ActorTransform, type SpriteGeometry } from './scene/sprites/SpriteGeometry';
 
@@ -25,6 +26,8 @@ const smooth=(value:number)=>{const t=clamp(value);return t*t*(3-2*t)};
 export class SpriteBattleScene {
   private canvas=document.createElement('canvas');
   private ctx:CanvasRenderingContext2D;
+  private blendCanvas=document.createElement('canvas');
+  private blendCtx:CanvasRenderingContext2D;
   private frameBank:SpriteFrameBank;
   private bossKind:Exclude<BossKind,'tomato'>;
   private feedbackManager=new FeedbackManager();
@@ -39,7 +42,8 @@ export class SpriteBattleScene {
   private playback:SpritePlayback;
   private playbackKey='';
   private drawnImage:HTMLImageElement|null=null;
-  private transition:{image:HTMLImageElement;pose:SpriteBox;time:number;duration:number}|null=null;
+  private drawnLayers:SpriteLayer[]=[];
+  private transition:{layers:SpriteLayer[];time:number;duration:number;entry:boolean}|null=null;
   private disposed=false;
 
   constructor(private host:HTMLElement,private onFailure:()=>void,onReady:()=>void,bossKind:BossKind='corn'){
@@ -47,8 +51,10 @@ export class SpriteBattleScene {
     this.bossKind=bossKind;
     this.playback=new SpritePlayback(bossKind);
     const ctx=this.canvas.getContext('2d',{alpha:true});
-    if(!ctx)throw Error('Canvas 2D is unavailable');
+    const blendCtx=this.blendCanvas.getContext('2d',{alpha:true});
+    if(!ctx||!blendCtx)throw Error('Canvas 2D is unavailable');
     this.ctx=ctx;
+    this.blendCtx=blendCtx;
     this.canvas.dataset.scene='sprite-2d';
     this.canvas.setAttribute('aria-hidden','true');
     this.host.appendChild(this.canvas);
@@ -69,6 +75,8 @@ export class SpriteBattleScene {
     this.canvas.width=Math.round(width*dpr);this.canvas.height=Math.round(height*dpr);
     this.canvas.style.width=`${width}px`;this.canvas.style.height=`${height}px`;
     this.ctx.setTransform(dpr,0,0,dpr,0,0);
+    this.blendCanvas.width=this.canvas.width;this.blendCanvas.height=this.canvas.height;
+    this.blendCtx.setTransform(dpr,0,0,dpr,0,0);
     if(this.frameBank?.manifest)this.geometry=spriteGeometry(this.frameBank.manifest,width,height);
   }
 
@@ -116,8 +124,8 @@ export class SpriteBattleScene {
     };
   }
 
-  private drawActorImage(image:HTMLImageElement,opacity=1){
-    const geometry=this.geometry!,manifest=this.frameBank.manifest!,ctx=this.ctx;
+  private drawActorImage(image:HTMLImageElement,opacity=1,ctx=this.ctx){
+    const geometry=this.geometry!,manifest=this.frameBank.manifest!;
     const [cropX,cropY,cropWidth,cropHeight]=manifest.crop;
     const [frameX,frameY,frameWidth,frameHeight]=this.frameBank.frameForImage(image)?.rect??[0,0,cropWidth,cropHeight];
     const pivot=geometry.bodyCenter,transform=this.actorTransform;
@@ -130,6 +138,29 @@ export class SpriteBattleScene {
     ctx.drawImage(image,geometry.origin.x+(cropX+frameX)*geometry.scale,geometry.origin.y+(cropY+frameY)*geometry.scale,
       frameWidth*geometry.scale,frameHeight*geometry.scale);
     ctx.restore();
+  }
+
+  private drawPose(layers:SpriteLayer[]){
+    if(layers.length===1){this.drawActorImage(layers[0].image);return}
+    // Weighted premultiplied colors are composed on transparency, then drawn
+    // once over the garden. Ordinary source-over crossfades dim opaque pixels.
+    const ctx=this.blendCtx;
+    ctx.clearRect(0,0,this.width,this.height);ctx.save();ctx.globalCompositeOperation='lighter';
+    for(const layer of layers)this.drawActorImage(layer.image,layer.weight,ctx);
+    ctx.restore();
+    this.ctx.drawImage(this.blendCanvas,0,0,this.width,this.height);
+  }
+
+  private boundsForLayers(layers:SpriteLayer[]):SpriteBox{
+    const manifest=this.frameBank.manifest!;
+    const bounds:SpriteBox=[0,0,0,0];
+    for(const layer of layers){
+      const frame=this.frameBank.frameForImage(layer.image);
+      const clip=frame&&spriteClips.find(name=>manifest.clips[name].includes(frame));
+      const pose=frame&&clip?spritePoseBounds(manifest,clip,frame):this.geometry!.sourceBody;
+      for(let i=0;i<4;i++)bounds[i]+=pose[i]*layer.weight;
+    }
+    return bounds;
   }
 
   private drawGround(state:CombatState,reducedMotion:boolean){
@@ -269,28 +300,30 @@ export class SpriteBattleScene {
     this.actorTransform=this.transformation(presentation.actor,reducedMotion,presentation.shake);
     const playback=this.playback.update(state,snapshot.actorFeedback,presentation.hold,reducedMotion);
     const {clip,age}=playback;
-    const cycle=clip==='Idle'?Math.floor(age/clipDurationMs(this.frameBank.manifest,clip,this.bossKind)):0;
-    const key=`${playback.revision}:${cycle}`;
+    const key=`${playback.revision}`;
     if(this.playbackKey!==key){
-      this.transition=this.drawnImage&&this.poseBounds
-        ?{image:this.drawnImage,pose:this.poseBounds,time:playback.time,
-          duration:clip==='Idle'?(cycle>0?40:80):24}:null;
+      this.transition=this.drawnLayers.length
+        ?{layers:this.drawnLayers,time:playback.time,duration:80,entry:clip!=='Idle'}:null;
       this.playbackKey=key;
     }
     // Cuts and death keep their existing immediate feedback and split effect.
     if(reducedMotion||state.phase==='verdictSlash'||state.phase==='settle'||state.battle.bossHp<=0)this.transition=null;
-    const blend=this.transition?smooth((playback.time-this.transition.time)/this.transition.duration):1;
+    const progress=this.transition?smooth((playback.time-this.transition.time)/this.transition.duration):1;
+    // Reveal the impact pose immediately, including during hit stop. The
+    // remaining blend uses the same local clock and pauses with the actor.
+    const blend=this.transition?.entry ? .2+.8*progress : progress;
     if(blend>=1)this.transition=null;
-    const frame=frameAt(this.frameBank.manifest,clip,age,this.bossKind);
+    const sample=sampleFrames(this.frameBank.manifest,clip,age,this.bossKind),frame=sample.from;
     const exactImage=this.frameBank.request(frame);
     const effectHeavy=this.effectHeavyFrame(clip,frame);
     const image=effectHeavy?(this.lastImage??exactImage):(exactImage??this.frameBank.nearestLoaded(clip,frame)??this.lastImage);
-    const displayedFrame=this.frameBank.frameForImage(image);
-    const displayedClip=displayedFrame&&spriteClips.find(name=>this.frameBank.manifest!.clips[name].includes(displayedFrame));
-    this.poseBounds=displayedFrame&&displayedClip
-      ?spritePoseBounds(this.frameBank.manifest,displayedClip,displayedFrame):this.geometry.sourceBody;
-    if(this.transition)this.poseBounds=this.transition.pose.map((value,index)=>
-      value+(this.poseBounds![index]-value)*blend) as SpriteBox;
+    let layers:SpriteLayer[]=image?[{image,weight:1}]:[];
+    if(!reducedMotion&&!effectHeavy&&exactImage&&sample.to!==frame&&!this.effectHeavyFrame(clip,sample.to)){
+      const nextImage=this.frameBank.request(sample.to);
+      if(nextImage)layers=mixSpriteLayers(layers,[{image:nextImage,weight:1}],sample.mix);
+    }
+    if(this.transition)layers=mixSpriteLayers(this.transition.layers,layers,blend);
+    this.poseBounds=layers.length?this.boundsForLayers(layers):this.geometry.sourceBody;
     this.frameBank.prefetch(clip,frame,6);
     if(exactImage&&!effectHeavy)this.lastImage=exactImage;
     this.drawGround(state,reducedMotion);
@@ -303,13 +336,13 @@ export class SpriteBattleScene {
       if(finisher&&state.time-finisher.time>=80)
         this.drawFinisherHalves(image,finisher,state.time-finisher.time,reducedMotion);
       else if(state.battle.bossHp>0||finisher){
-        if(this.transition)this.drawActorImage(this.transition.image,1-blend);
-        this.drawActorImage(image,blend);
+        this.drawPose(layers);
       }else{
         const deathAge=state.feedback?Math.max(0,state.time-state.feedback.time):0;
         this.drawActorImage(image,1-smooth((deathAge-150)/700));
       }
-      this.drawnImage=this.transition&&blend<.5?this.transition.image:image;
+      this.drawnLayers=layers;
+      this.drawnImage=layers[0]?.image??image;
     }
     // A handful of supplied Perfect frames are full-canvas starbursts. Keep
     // the previous body pose legible, and treat the artwork as a brief accent.
@@ -324,5 +357,6 @@ export class SpriteBattleScene {
     this.canvas.remove();this.lastImage=null;this.geometry=null;this.targetLayouts=[];
     this.poseBounds=null;
     this.drawnImage=null;this.transition=null;
+    this.drawnLayers=[];this.blendCanvas.width=1;this.blendCanvas.height=1;
   }
 }

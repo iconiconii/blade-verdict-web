@@ -3,10 +3,10 @@ import type { BattleScene } from './BattleScene';
 import { SpriteBattleScene } from './SpriteBattleScene';
 import { currentVerdictStage, durations, verdictDurationFor, verdictRemainingMs, type CombatFeedback } from './domain/combat';
 import { consumableCount, SHOP_ITEMS } from './domain/meta';
-import { bodyAnchorLabel, bossIngredientIcon, ingredientBurstFor, type BossKind, type VerdictPoint } from './domain/v2';
+import { bodyAnchorLabel, type VerdictPoint } from './domain/v2';
 import { useGame } from './store';
 import { swipeContact } from './domain/swipe';
-import { GameButton, ItemIcon, type ItemIconName } from './ui';
+import { GameButton, ItemIcon } from './ui';
 import './ui/migration.css';
 import { BattleHud } from './ui/hunt/BattleHud';
 import { AudioManager } from './audio/AudioManager';
@@ -15,23 +15,14 @@ import { SwingAudioTracker, VerdictEndAudioTracker } from './audio/BattleAudioFe
 import { createBattleAudio, duckMusic } from './audio/GameAudio';
 import { FeedbackManager, type FeedbackSnapshot } from './feedback/FeedbackManager';
 import { CircleFeedback } from './ui/hunt/CircleFeedback';
+import { IngredientBursts } from './ui/hunt/IngredientBursts';
 import { battleVisualMode } from './scene/sprites/battleVisualMode';
 
 const parryLabels={early:'GOOD · 点击即可',nice:'GOOD · 点击即可',perfect:'PERFECT · 甜蜜点',late:'GOOD · 点击即可'} as const;
-const battleIcon=(bossKind:BossKind):ItemIconName=>bossIngredientIcon(bossKind);
 
 const emptyFeedback:FeedbackSnapshot={events:[],newEvents:[],actorFeedback:null,hurtFeedback:null,visualMeter:0,ready:false,readyPulse:0,readySince:null};
 function vibrate(pattern:number|number[]){
   try{if('vibrate' in navigator)navigator.vibrate(pattern)}catch{/* Haptics are optional. */}
-}
-
-function IngredientBurst({feedback,bossKind,origin}:{feedback:CombatFeedback|null;bossKind:BossKind;origin:{x:number;y:number}|null}){
-  if(!feedback||feedback.energyGain<=0||(feedback.kind!=='Nice'&&feedback.kind!=='Perfect')||feedback.pendingRound)return null;
-  const count=ingredientBurstFor(bossKind,feedback.kind);
-  const source=origin??{x:0,y:0};
-  return <div className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${feedback.kind.toLowerCase()}`} style={{left:source.x,top:source.y}} aria-hidden="true">
-    {Array.from({length:count},(_,index)=><i key={`${feedback.id}-${index}`} style={{'--burst-index':index,'--burst-count':count,'--burst-row':index%3} as React.CSSProperties}><ItemIcon name={battleIcon(bossKind)} size={22}/></i>)}
-  </div>;
 }
 
 export function Battle(){
@@ -191,7 +182,7 @@ export function Battle(){
       {showReadyCallout&&<div key={presentation.readyPulse} className="verdict-ready-callout" role="status" aria-live="polite"><strong>裁决就绪</strong><span>点击左下角释放</span></div>}
       {presentation.hurtFeedback&&<div key={presentation.hurtFeedback.id} className="player-hurt-flash" aria-hidden="true"/>}
       {feedback?.finisher&&showFeedback&&<div className="finisher-impact" aria-hidden="true"><i className="finisher-impact__ring"/><i className="finisher-impact__slash finisher-impact__slash--one"/><i className="finisher-impact__slash finisher-impact__slash--two"/><strong>FINISH</strong><span>FINAL CUT · 击杀确认</span></div>}
-      {presentation.events.map(event=><IngredientBurst key={event.id} feedback={event} bossKind={bossKind} origin={feedbackOrigin(event)}/>)}
+      <IngredientBursts events={presentation.events} bossKind={bossKind} time={combat.time} origin={feedbackOrigin}/>
       {presentation.events.filter(event=>event.bombDamage!==undefined).map(event=><div key={`bomb-${event.id}`} data-testid="bomb-feedback" className="bomb-feedback" style={{left:`${event.position.x*100}%`,top:`${event.position.y*100}%`}}>
         <div className="ingredient-burst bomb-fragments" aria-hidden="true">{Array.from({length:7},(_,index)=><i key={index} style={{'--burst-index':index,'--burst-count':7,'--burst-row':index%3} as React.CSSProperties}><ItemIcon name="tomato" size={20}/></i>)}</div>
         <strong>爆炸 −{event.bombDamage}</strong>
