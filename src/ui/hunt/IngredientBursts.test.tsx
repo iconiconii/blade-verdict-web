@@ -51,6 +51,16 @@ it.each(['corn','carrot','cabbage','tomato','jelly'] as const)('renders food aft
   expect(hit.battle.loot).toEqual(before.battle.loot);
 });
 
+it.each([
+  ['corn','🌽'],['carrot','🥕'],['cabbage','🥬'],['tomato','🍅'],['jelly','💎'],
+] as const)('keeps %s food visible before its image finishes loading', (boss,placeholder)=>{
+  const html=render([cutEvent()],160,boss);
+  expect(html).toContain('data-texture-ready="false"');
+  expect(html.match(/class="verdict-food-placeholder"/g)).toHaveLength(6);
+  expect(html).toContain(placeholder);
+  expect(html.match(/<img /g)).toHaveLength(6);
+});
+
 it('keeps the final Cut after leaving verdict and delays its larger burst by the 80ms hold',()=>{
   const before=verdict('corn');
   const hit=applyContinuousCut({...before,battle:{...before.battle,bossHp:1}},{x:.5,y:.5},true);

@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { CombatFeedback } from '../../domain/combat';
 import { bossIngredientIcon, type BossKind } from '../../domain/v2';
-import { ItemIcon } from '../index';
+import { assetUrl } from '../assets';
+import { preloadIngredientIcon } from './ingredientIcon';
 
 interface Props {
   events: CombatFeedback[];
@@ -12,6 +13,17 @@ interface Props {
 
 export const verdictFoodLimits = { perCut:6, finisher:12, bursts:5, particles:30, flightMs:520, finisherHoldMs:80 } as const;
 const foodIconSize = { cut:80, finisher:96 } as const;
+const foodPlaceholder:Record<BossKind,string>={corn:'🌽',carrot:'🥕',cabbage:'🥬',tomato:'🍅',jelly:'💎'};
+
+function FoodIcon({bossKind,src,size}:{bossKind:BossKind;src:string;size:number}){
+  const [readySrc,setReadySrc]=useState<string|null>(null);
+  const textureReady=readySrc===src;
+  return <span className="verdict-food-icon" data-texture-ready={textureReady} style={{width:size,height:size,fontSize:size*.85}}>
+    {!textureReady&&<span className="verdict-food-placeholder">{foodPlaceholder[bossKind]}</span>}
+    <img className="gui-item-icon" src={src} alt="" width={size} height={size} draggable={false}
+      onLoad={event=>setReadySrc(event.currentTarget.naturalWidth>0?src:null)} onError={()=>setReadySrc(null)}/>
+  </span>;
+}
 
 /** Visual budget only. Never ties Cut particles to energy gain or inventory rewards. */
 export function selectVerdictBursts(events:readonly CombatFeedback[],time:number){
@@ -33,11 +45,14 @@ export function selectVerdictBursts(events:readonly CombatFeedback[],time:number
 }
 
 export function IngredientBursts({events,bossKind,time,origin}:Props){
+  const icon=bossIngredientIcon(bossKind),src=assetUrl(`assets/ui-kit/icons/${icon}.png`);
+  useEffect(()=>preloadIngredientIcon(src),[src]);
   const cuts=selectVerdictBursts(events,time);
   // Ingredient flight is verdict-only; parries retain their other feedback.
   return <>{cuts.map(({event,count,age})=>{
     const source=origin(event)??{x:0,y:0};
     const hold=event.finisher?verdictFoodLimits.finisherHoldMs:0;
+    const iconSize=event.finisher?foodIconSize.finisher:foodIconSize.cut;
     return <div key={`cut-${event.id}`} className={`ingredient-burst verdict-ingredient-burst${event.finisher?' is-finisher':''}`}
       data-testid="verdict-ingredient-burst" data-event-id={event.id} data-finisher={!!event.finisher}
       style={{left:source.x,top:source.y}} aria-hidden="true">
@@ -50,7 +65,7 @@ export function IngredientBursts({events,bossKind,time,origin}:Props){
         return <i key={index} style={{animationDelay:`${hold-age}ms`,animationDuration:`${verdictFoodLimits.flightMs}ms`,
           '--throw-x':`${fan+drift}px`,'--throw-y':`${arc}px`,'--land-y':`${72+(index%3)*28}px`,
           '--spin':`${(index%2?-1:1)*(90+index*22)}deg`} as CSSProperties}>
-          <ItemIcon name={bossIngredientIcon(bossKind)} size={event.finisher?foodIconSize.finisher:foodIconSize.cut}/>
+          <FoodIcon bossKind={bossKind} src={src} size={iconSize}/>
         </i>;
       })}
     </div>;
