@@ -61,7 +61,7 @@
 .battle--storybook .battle-modal h2 { font: 900 25px/1.4 'PingFang SC', sans-serif; color: #fff6dc; }
 .battle--storybook .battle-modal p { color: #ffe7bc; font-size: 13px; }
 .battle--storybook .battle-modal small { color: #e6c18d; }
-.battle--storybook .ingredient-burst img { width: 22px; height: 22px; }
+.battle--storybook .bomb-fragments img { width: 22px; height: 22px; }
 @media (prefers-reduced-motion: reduce) { .hunt-health-well i, .hunt-charge-well i, .hunt-player-health i { transition: none; } }
 @keyframes verdict-ready-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 @keyframes verdict-ready-medallion { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }

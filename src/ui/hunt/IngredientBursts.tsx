@@ -11,6 +11,7 @@ interface Props {
 }
 
 export const verdictFoodLimits = { perCut:3, finisher:8, bursts:6, particles:24, flightMs:520, finisherHoldMs:80 } as const;
+const foodIconSize = { parry:34, cut:40, finisher:48 } as const;
 
 /** Visual budget only. Never ties Cut particles to energy gain or inventory rewards. */
 export function selectVerdictBursts(events:readonly CombatFeedback[],time:number){
@@ -37,7 +38,7 @@ export function IngredientBursts({events,bossKind,time,origin}:Props){
     if(event.energyGain<=0||(event.kind!=='Nice'&&event.kind!=='Perfect')||event.pendingRound)return null;
     const count=ingredientBurstFor(bossKind,event.kind),source=origin(event)??{x:0,y:0};
     return <div key={event.id} className={`ingredient-burst ingredient-burst--${bossKind} ingredient-burst--${event.kind.toLowerCase()}`} style={{left:source.x,top:source.y}} aria-hidden="true">
-      {Array.from({length:count},(_,index)=><i key={index} style={{'--burst-index':index,'--burst-count':count,'--burst-row':index%3} as CSSProperties}><ItemIcon name={bossIngredientIcon(bossKind)} size={22}/></i>)}
+      {Array.from({length:count},(_,index)=><i key={index} style={{'--burst-index':index,'--burst-count':count,'--burst-row':index%3} as CSSProperties}><ItemIcon name={bossIngredientIcon(bossKind)} size={foodIconSize.parry}/></i>)}
     </div>;
   })}{cuts.map(({event,count,age})=>{
     const source=origin(event)??{x:0,y:0};
@@ -53,7 +54,7 @@ export function IngredientBursts({events,bossKind,time,origin}:Props){
         return <i key={index} style={{animationDelay:`${hold-age}ms`,animationDuration:`${verdictFoodLimits.flightMs}ms`,
           '--throw-x':`${fan+drift}px`,'--throw-y':`${arc}px`,'--land-y':`${64+(index%3)*18}px`,
           '--spin':`${(index%2?-1:1)*(90+index*22)}deg`} as CSSProperties}>
-          <ItemIcon name={bossIngredientIcon(bossKind)} size={event.finisher?30:26}/>
+          <ItemIcon name={bossIngredientIcon(bossKind)} size={event.finisher?foodIconSize.finisher:foodIconSize.cut}/>
         </i>;
       })}
     </div>;

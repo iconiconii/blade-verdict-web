@@ -10,6 +10,18 @@ const render=(events:CombatFeedback[],time=0,bossKind:BossKind='corn')=>renderTo
   <IngredientBursts events={events} bossKind={bossKind} time={time} origin={()=>({x:150,y:250})}/>);
 const cutEvent=()=>applyContinuousCut(verdict('corn'),{x:.5,y:.5},true).feedback!;
 
+it.each([
+  {kind:'Nice',energyGain:1,finisher:false,size:34,count:3},
+  {kind:'Perfect',energyGain:1,finisher:false,size:34,count:8},
+  {kind:'Cut',energyGain:0,finisher:false,size:40,count:3},
+  {kind:'Cut',energyGain:0,finisher:true,size:48,count:8},
+] as const)('enlarges $kind food to $size px while retaining $count particles',({kind,energyGain,finisher,size,count})=>{
+  const html=render([{...cutEvent(),kind,energyGain,finisher}]);
+  const images=html.match(/<img [^>]+>/g)??[];
+  expect(images).toHaveLength(count);
+  for(const image of images)expect(image).toContain(`width="${size}" height="${size}"`);
+});
+
 function verdict(boss:BossKind){
   const base=createCombat(7319,boss),stage=currentVerdictStage(base);
   return startVerdict({...base,phase:'verdictReady',stageGroupsResolved:stage?.groupCount??0,
